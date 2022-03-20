@@ -43,11 +43,11 @@ export async function getListing(
   const program = getProgram(getProvider(connection, anchor.Wallet));
   const listingAccount = await program.account.listing.fetch(listing);
 
-  const whitelist = (await import("../public/whitelist.json")).default;
+  // const whitelist = (await import("../public/whitelist.json")).default;
 
-  if (!whitelist.includes(listingAccount.mint.toBase58())) {
-    throw new Error("Mint not whitelisted");
-  }
+  // if (!whitelist.includes(listingAccount.mint.toBase58())) {
+  //   throw new Error("Mint not whitelisted");
+  // }
 
   const metadataPDA = await Metadata.getPDA(listingAccount.mint);
   const metadataAccount = await Metadata.load(connection, metadataPDA);
@@ -68,7 +68,7 @@ export async function getListings(
   const whitelist = (await import("../public/whitelist.json")).default;
 
   const filteredListings = listings
-    .filter((listing) => whitelist.includes(listing.account.mint.toBase58()))
+    // .filter((listing) => whitelist.includes(listing.account.mint.toBase58()))
     .sort((a, b) => a.account.amount.toNumber() - b.account.amount.toNumber());
 
   const metadataAddresses = await Promise.all(
@@ -124,8 +124,9 @@ export async function getNFTs(
 
   const whitelist = (await import("../public/whitelist.json")).default;
 
-  const filteredAccounts = tokenAccounts.filter((account) =>
-    whitelist.includes(account.data.mint.toBase58())
+  const filteredAccounts = tokenAccounts.filter(
+    (account) => true
+    // whitelist.includes(account.data.mint.toBase58())
   );
 
   const metadataAddresses = await Promise.all(
@@ -249,7 +250,7 @@ export async function findListingAddress(
       Buffer.from("listing"),
       mint.toBuffer(),
       borrower.toBuffer(),
-      new anchor.BN(discriminator).toBuffer(),
+      new anchor.BN(discriminator).toArrayLike(Buffer),
     ],
     programId
   );
