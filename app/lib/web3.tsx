@@ -169,15 +169,18 @@ class ListingOptions {
   public amount: anchor.BN;
   public duration: anchor.BN;
   public basisPoints: number;
+  public discriminator: number;
 
   constructor(options: {
     amount: number;
     duration: number;
     basisPoints: number;
+    discriminator: number;
   }) {
     this.amount = new anchor.BN(options.amount);
     this.duration = new anchor.BN(options.duration);
     this.basisPoints = options.basisPoints;
+    this.discriminator = options.discriminator;
   }
 }
 
@@ -195,8 +198,10 @@ export async function createListing(
   const provider = getProvider(connection, wallet as typeof anchor.Wallet);
   const program = getProgram(provider);
 
-  const [listingAccount] = await anchor.web3.PublicKey.findProgramAddress(
-    [Buffer.from("listing"), mint.toBuffer(), wallet.publicKey.toBuffer()],
+  const [listingAccount, discriminator] = await findListingAddress(
+    connection,
+    mint,
+    wallet.publicKey,
     program.programId
   );
 
@@ -205,32 +210,63 @@ export async function createListing(
     program.programId
   );
 
-  const listingOptions = new ListingOptions(options);
+  const listingOptions = new ListingOptions({
+    ...options,
+    discriminator,
+  });
 
-  let listing;
+  await program.rpc.initListing(listingOptions, {
+    accounts: {
+      escrowAccount,
+      listingAccount,
+      mint,
+      borrowerDepositTokenAccount,
+      borrower: wallet.publicKey,
+      tokenProgram: splToken.TOKEN_PROGRAM_ID,
+      rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+      systemProgram: anchor.web3.SystemProgram.programId,
+    },
+  });
+}
 
-  try {
-    listing = await program.account.listing.fetch(listingAccount);
-  } catch {}
+function getDiscriminator(excluded: number) {
+  let n = Math.floor(Math.random() * 255);
+  if (n >= excluded) n++;
+  return n;
+}
 
-  const accounts = {
-    escrowAccount,
-    listingAccount,
-    mint,
-    borrowerDepositTokenAccount,
-    borrower: wallet.publicKey,
-    tokenProgram: splToken.TOKEN_PROGRAM_ID,
-    rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-    systemProgram: anchor.web3.SystemProgram.programId,
-  };
+export async function findListingAddress(
+  connection: anchor.web3.Connection,
+  mint: anchor.web3.PublicKey,
+  borrower: anchor.web3.PublicKey,
+  programId: anchor.web3.PublicKey,
+  excluded: number = 256
+): Promise<[anchor.web3.PublicKey, number]> {
+  const discriminator = getDiscriminator(excluded);
 
-  if (!listing) {
-    await program.rpc.initListing(listingOptions, { accounts });
-  } else {
-    await program.rpc.makeListing(listingOptions, {
-      accounts,
-    });
+  const [listingAccount] = await anchor.web3.PublicKey.findProgramAddress(
+    [
+      Buffer.from("listing"),
+      mint.toBuffer(),
+      borrower.toBuffer(),
+      new anchor.BN(discriminator).toBuffer(),
+    ],
+    programId
+  );
+
+  const account = await connection.getAccountInfo(listingAccount);
+
+  if (account === null) {
+    return [listingAccount, discriminator];
   }
+
+  return findListingAddress(
+    connection,
+    mint,
+    borrower,
+    programId,
+    discriminator
+  );
 }
 
 export async function createLoan(
