@@ -145,19 +145,15 @@ describe("dexloan_listings", () => {
       },
     });
 
-    const listing = await borrower.program.account.listing.fetch(
-      borrower.listingAccount
-    );
     const borrowerTokenAccount = await borrower.mint.getAccountInfo(
       borrower.associatedAddress.address
     );
     const escrowTokenAccount = await borrower.mint.getAccountInfo(
-      listing.escrow
+      borrower.escrowAccount
     );
 
     assert.equal(borrowerTokenAccount.amount.toNumber(), 1);
     assert.equal(escrowTokenAccount.amount.toNumber(), 0);
-    assert.equal(listing.state, 4);
   });
 
   it("Allows loans an overdue loan to be repossessed", async () => {
@@ -214,6 +210,67 @@ describe("dexloan_listings", () => {
     assert.equal(escrowTokenAccount.amount.toNumber(), 0);
     assert.equal(lenderTokenAccount.amount.toNumber(), 1);
     assert.equal(defaultedListing.state, 5);
+  });
+
+  it.only("Will allow accounts to be closed once overdue loans are repossessed", async () => {
+    const options = {
+      amount: anchor.web3.LAMPORTS_PER_SOL,
+      basisPoints: 500,
+      duration: 1, // 1 second
+    };
+    const borrower = await helpers.initListing(connection, options);
+
+    const lender = await helpers.createLoan(connection, borrower);
+
+    await wait(1); // ensure 1 second passes
+
+    const listing = await borrower.program.account.listing.fetch(
+      borrower.listingAccount
+    );
+
+    const token = new splToken.Token(
+      lender.provider.connection,
+      listing.mint,
+      splToken.TOKEN_PROGRAM_ID,
+      lender.keypair
+    );
+
+    const tokenAccountInfo = await token.getOrCreateAssociatedAccountInfo(
+      lender.keypair.publicKey
+    );
+
+    await lender.program.rpc.repossessCollateral({
+      accounts: {
+        escrowAccount: listing.escrow,
+        lender: lender.keypair.publicKey,
+        lenderTokenAccount: tokenAccountInfo.address,
+        listingAccount: borrower.listingAccount,
+        mint: listing.mint,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+      },
+    });
+
+    const updatedListing = await borrower.program.account.listing.fetch(
+      borrower.listingAccount
+    );
+
+    console.log("updatedListing: ", updatedListing);
+
+    await borrower.program.rpc.closeAccount({
+      accounts: {
+        borrower: borrower.keypair.publicKey,
+        listingAccount: borrower.listingAccount,
+      },
+    });
+
+    try {
+      await borrower.program.account.listing.fetch(borrower.listingAccount);
+    } catch (err) {
+      assert.equal(err.message, "Account not found");
+    }
   });
 
   it("Will not allow a loan to be repossessed if not overdue", async () => {

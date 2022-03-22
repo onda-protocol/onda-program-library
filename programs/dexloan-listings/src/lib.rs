@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_lang::AccountsClose;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 
 declare_id!("H6FCxCy2KCPJwCoUb9eQCSv41WZBKQaYfB6x5oFajzfj");
@@ -19,6 +20,7 @@ pub mod dexloan_listings {
         listing.mint = ctx.accounts.mint.key();
         listing.escrow = ctx.accounts.escrow_account.key();
         listing.escrow_bump = *ctx.bumps.get("escrow_account").unwrap();
+        listing.discriminator = options.discriminator;
         // List
         listing.amount = options.amount;
         listing.basis_points = options.basis_points;
@@ -52,11 +54,15 @@ pub mod dexloan_listings {
         let seeds = &[
             b"escrow",
             ctx.accounts.mint.to_account_info().key.as_ref(),
-            &[ctx.accounts.listing_account.escrow_bump],
+            &[listing.escrow_bump],
         ];
         let signer = &[&seeds[..]];
         let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
         anchor_spl::token::transfer(cpi_ctx, 1)?;
+
+        ctx.accounts.listing_account.close(
+            ctx.accounts.borrower.to_account_info()
+        )?;
         
         Ok(())
     }
@@ -124,11 +130,15 @@ pub mod dexloan_listings {
         let seeds = &[
             b"escrow",
             ctx.accounts.mint.to_account_info().key.as_ref(),
-            &[ctx.accounts.listing_account.escrow_bump],
+            &[listing.escrow_bump],
         ];
         let signer = &[&seeds[..]];
         let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
         anchor_spl::token::transfer(cpi_ctx, 1)?;
+
+        ctx.accounts.listing_account.close(
+            ctx.accounts.borrower.to_account_info()
+        )?;
 
         Ok(())
     }
@@ -156,12 +166,24 @@ pub mod dexloan_listings {
         let seeds = &[
             b"escrow",
             ctx.accounts.mint.to_account_info().key.as_ref(),
-            &[ctx.accounts.listing_account.escrow_bump],
+            &[listing.escrow_bump],
         ];
         let signer = &[&seeds[..]];
         let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
         anchor_spl::token::transfer(cpi_ctx, 1)?;
         
+        Ok(())
+    }
+
+    pub fn close_account(ctx: Context<CloseAccount>) -> Result<()> {
+        let listing = &mut ctx.accounts.listing_account;
+
+        if listing.state != ListingState::Defaulted as u8 {
+            return Err(ErrorCode::InvalidState.into())
+        }
+
+        listing.close(ctx.accounts.borrower.to_account_info())?;
+
         Ok(())
     }
 }
@@ -309,6 +331,17 @@ pub struct RepossessCollateral<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
+#[derive(Accounts)]
+pub struct CloseAccount<'info> {
+    #[account(mut)]
+    pub borrower: Signer<'info>,
+    #[account(
+        mut,
+        constraint = listing_account.borrower == *borrower.key,
+    )]
+    pub listing_account: Box<Account<'info, Listing>>,
+}
+
 const LISTING_SIZE: usize = 8 + // key
 1 + // state
 8 + // amount
@@ -321,7 +354,8 @@ const LISTING_SIZE: usize = 8 + // key
 32 + // mint
 1 + // bump
 1 + // escrow bump
-220; // padding
+1 + // disriminator
+120; // padding
 
 #[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone)]
 pub enum ListingState {
@@ -355,6 +389,7 @@ pub struct Listing {
     /// Misc
     pub bump: u8,
     pub escrow_bump: u8,
+    pub discriminator: u8,
 }
 
 #[error]
