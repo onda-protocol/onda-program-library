@@ -4,6 +4,7 @@ import { useConnection, useAnchorWallet } from "@solana/wallet-adapter-react";
 import type { NextPage } from "next";
 import { useState } from "react";
 import * as utils from "../utils";
+import * as web3 from "../lib/web3";
 import {
   useBorrowingsQuery,
   useFinalizedQuery,
@@ -161,13 +162,9 @@ const Manage: NextPage = () => {
                   item && (
                     <FinishedCard
                       key={item.listing.publicKey?.toBase58()}
-                      amount={item.listing.account.amount.toNumber()}
-                      basisPoints={item.listing.account.basisPoints}
-                      duration={item.listing.account.duration.toNumber()}
-                      escrow={item.listing.account.escrow}
+                      state={item.listing.account.state}
                       listing={item.listing.publicKey}
                       name={item.metadata.data?.data?.name}
-                      mint={item.listing.account.mint}
                       uri={item.metadata.data?.data?.uri}
                     />
                   )
@@ -438,47 +435,41 @@ const ListedCard: React.FC<ListingCardProps> = ({
 };
 
 interface FinishedCardProps {
-  amount: number;
-  basisPoints: number;
-  duration: number;
   name: string;
-  escrow: anchor.web3.PublicKey;
   listing: anchor.web3.PublicKey;
-  mint: anchor.web3.PublicKey;
+  state: web3.ListingState;
   uri: string;
 }
 
 const FinishedCard: React.FC<FinishedCardProps> = ({
-  amount,
-  basisPoints,
-  duration,
-  escrow,
   listing,
-  mint,
   name,
+  state,
   uri,
 }) => {
   const router = useRouter();
   const [dialog, setDialog] = useState(false);
   const mutation = useCloseAccountMutation(() => setDialog(false));
 
+  function getStatusText() {
+    switch (state) {
+      case web3.ListingState.Repaid:
+        return <>Loan was repaid</>;
+
+      case web3.ListingState.Cancelled:
+        return <>Listing cancelled</>;
+
+      case web3.ListingState.Defaulted:
+        return <>NFT was repossessed</>;
+    }
+  }
+
   return (
     <>
       <Card uri={uri}>
         <Typography>
           <Heading size="S">{name}</Heading>
-          <Body size="S">
-            Borrowing&nbsp;
-            <strong>
-              {amount / anchor.web3.LAMPORTS_PER_SOL}
-              &nbsp;SOL
-            </strong>
-            &nbsp;for&nbsp;
-            {utils.toMonths(duration)}
-            &nbsp;months&nbsp;@&nbsp;
-            <strong>{basisPoints / 100}%</strong>
-            &nbsp;APY.&nbsp;
-          </Body>
+          <Body size="S">{getStatusText()}</Body>
         </Typography>
         <Divider size="S" marginTop="size-600" />
         <Flex direction="row" justifyContent="right">
