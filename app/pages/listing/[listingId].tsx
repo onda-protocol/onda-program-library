@@ -123,7 +123,7 @@ const Listing: NextPage = () => {
     }
     return null;
   }
-  console.log("listing", listingQuery);
+
   function renderCloseAccountButton() {
     if (
       pubkey &&
