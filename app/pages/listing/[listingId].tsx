@@ -11,7 +11,7 @@ import {
 } from "@adobe/react-spectrum";
 import type { NextPage } from "next";
 import { useRouter } from "next/router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as utils from "../../utils";
 import { ListingState } from "../../lib/web3";
 import { useListingQuery, useMetadataFileQuery } from "../../hooks/query";
@@ -44,7 +44,7 @@ const Listing: NextPage = () => {
     ? new anchor.web3.PublicKey(listingId as string)
     : undefined;
   const listingQuery = useListingQuery(connection, pubkey);
-
+  console.log(listingQuery);
   if (listingQuery.isLoading) {
     return <LoadingPlaceholder />;
   }
@@ -283,6 +283,19 @@ const Listing: NextPage = () => {
     }
   }
 
+  if (listingQuery.error instanceof Error) {
+    return (
+      <Main>
+        <View marginTop="size-400">
+          <Flex direction="column" alignItems="center">
+            <Heading size="M">404 Error</Heading>
+            <Body>{listingQuery.error.message}</Body>
+          </Flex>
+        </View>
+      </Main>
+    );
+  }
+
   return (
     <Main>
       <Flex direction="row">
@@ -485,6 +498,7 @@ interface CloseAcccountButtonProps {
 export const CloseAccountButton: React.FC<CloseAcccountButtonProps> = ({
   listing,
 }) => {
+  const router = useRouter();
   const [dialog, setDialog] = useState(false);
   const mutation = useCloseAccountMutation(() => setDialog(false));
   const anchorWallet = useAnchorWallet();
@@ -497,6 +511,12 @@ export const CloseAccountButton: React.FC<CloseAcccountButtonProps> = ({
       handleConnect(() => setDialog(true));
     }
   }
+
+  useEffect(() => {
+    if (mutation.isSuccess) {
+      router.replace("/manage");
+    }
+  }, [router, mutation.isSuccess]);
 
   return (
     <>
