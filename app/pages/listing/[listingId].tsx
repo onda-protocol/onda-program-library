@@ -17,6 +17,7 @@ import { ListingState } from "../../lib/web3";
 import { useListingQuery, useMetadataFileQuery } from "../../hooks/query";
 import {
   useCancelMutation,
+  useCloseAccountMutation,
   useLoanMutation,
   useRepaymentMutation,
   useRepossessMutation,
@@ -26,6 +27,7 @@ import { LoadingPlaceholder } from "../../components/progress";
 import { Main } from "../../components/layout";
 import {
   CancelDialog,
+  CloseAccountDialog,
   LoanDialog,
   RepayDialog,
   RepossessDialog,
@@ -132,6 +134,17 @@ const Listing: NextPage = () => {
     return null;
   }
 
+  function renderCloseAccountButton() {
+    if (
+      pubkey &&
+      listing?.borrower.toBase58() === anchorWallet?.publicKey.toBase58()
+    ) {
+      return <CloseAccountButton listing={pubkey} />;
+    }
+
+    return null;
+  }
+
   function renderByState() {
     if (listing === undefined) return null;
 
@@ -234,14 +247,35 @@ const Listing: NextPage = () => {
         );
 
       case ListingState.Repaid:
-        return <Body>Listing has ended. The loan was repaid.</Body>;
+        return (
+          <>
+            <View marginBottom="size-300">
+              <Body>Listing has ended. The loan was repaid.</Body>
+            </View>
+            <View>{renderCloseAccountButton()}</View>
+          </>
+        );
 
       case ListingState.Cancelled:
-        return <Body>Listing cancelled.</Body>;
+        return (
+          <>
+            <View marginBottom="size-300">
+              <Body>Listing cancelled.</Body>
+            </View>
+            <View>{renderCloseAccountButton()}</View>
+          </>
+        );
 
       case ListingState.Defaulted:
         return (
-          <Body>Listing has ended. The NFT was repossessed by the lender.</Body>
+          <>
+            <View marginBottom="size-300">
+              <Body>
+                Listing has ended. The NFT was repossessed by the lender.
+              </Body>
+            </View>
+            <View>{renderCloseAccountButton()}</View>
+          </>
         );
 
       default:
@@ -405,7 +439,11 @@ interface RepossessButtonProps {
   listing: anchor.web3.PublicKey;
 }
 
-const RepossessButton = ({ mint, escrow, listing }: RepossessButtonProps) => {
+const RepossessButton: React.FC<RepossessButtonProps> = ({
+  mint,
+  escrow,
+  listing,
+}) => {
   const [dialog, setDialog] = useState(false);
   const mutation = useRepossessMutation(() => setDialog(false));
   const anchorWallet = useAnchorWallet();
@@ -432,6 +470,45 @@ const RepossessButton = ({ mint, escrow, listing }: RepossessButtonProps) => {
           mutation.mutate({
             mint,
             escrow,
+            listing,
+          })
+        }
+      />
+    </>
+  );
+};
+
+interface CloseAcccountButtonProps {
+  listing: anchor.web3.PublicKey;
+}
+
+export const CloseAccountButton: React.FC<CloseAcccountButtonProps> = ({
+  listing,
+}) => {
+  const [dialog, setDialog] = useState(false);
+  const mutation = useCloseAccountMutation(() => setDialog(false));
+  const anchorWallet = useAnchorWallet();
+  const [handleConnect] = useWalletConnect();
+
+  async function onClose() {
+    if (anchorWallet) {
+      setDialog(true);
+    } else {
+      handleConnect(() => setDialog(true));
+    }
+  }
+
+  return (
+    <>
+      <Button variant="cta" minWidth="size-2000" onPress={() => onClose()}>
+        Close listing account
+      </Button>
+      <CloseAccountDialog
+        open={dialog}
+        loading={mutation.isLoading}
+        onRequestClose={() => setDialog(false)}
+        onConfirm={() =>
+          mutation.mutate({
             listing,
           })
         }

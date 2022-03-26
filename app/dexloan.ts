@@ -238,6 +238,22 @@ export type DexloanListings = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "closeAccount",
+      "accounts": [
+        {
+          "name": "borrower",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "listingAccount",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": []
     }
   ],
   "accounts": [
@@ -288,6 +304,10 @@ export type DexloanListings = {
           },
           {
             "name": "escrowBump",
+            "type": "u8"
+          },
+          {
+            "name": "discriminator",
             "type": "u8"
           }
         ]
@@ -597,6 +617,22 @@ export const IDL: DexloanListings = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "closeAccount",
+      "accounts": [
+        {
+          "name": "borrower",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "listingAccount",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": []
     }
   ],
   "accounts": [
@@ -647,6 +683,10 @@ export const IDL: DexloanListings = {
           },
           {
             "name": "escrowBump",
+            "type": "u8"
+          },
+          {
+            "name": "discriminator",
             "type": "u8"
           }
         ]

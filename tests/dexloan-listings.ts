@@ -106,9 +106,6 @@ describe("dexloan_listings", () => {
       },
     });
 
-    const listing = await borrower.program.account.listing.fetch(
-      borrower.listingAccount
-    );
     const lenderPostRepaymentBalance = await connection.getBalance(
       lender.keypair.publicKey
     );
@@ -116,13 +113,12 @@ describe("dexloan_listings", () => {
       borrower.associatedAddress.address
     );
     const escrowTokenAccount = await borrower.mint.getAccountInfo(
-      listing.escrow
+      borrower.escrowAccount
     );
 
     assert.equal(borrowerTokenAccount.amount.toNumber(), 1);
     assert.equal(escrowTokenAccount.amount.toNumber(), 0);
     assert(lenderPostRepaymentBalance > lenderPreRepaymentBalance);
-    assert.equal(listing.state, 3);
   });
 
   it("Allows loans to be cancelled", async () => {
@@ -212,7 +208,7 @@ describe("dexloan_listings", () => {
     assert.equal(defaultedListing.state, 5);
   });
 
-  it.only("Will allow accounts to be closed once overdue loans are repossessed", async () => {
+  it("Will allow accounts to be closed once overdue loans are repossessed", async () => {
     const options = {
       amount: anchor.web3.LAMPORTS_PER_SOL,
       basisPoints: 500,
@@ -253,12 +249,6 @@ describe("dexloan_listings", () => {
       },
     });
 
-    const updatedListing = await borrower.program.account.listing.fetch(
-      borrower.listingAccount
-    );
-
-    console.log("updatedListing: ", updatedListing);
-
     await borrower.program.rpc.closeAccount({
       accounts: {
         borrower: borrower.keypair.publicKey,
@@ -269,7 +259,10 @@ describe("dexloan_listings", () => {
     try {
       await borrower.program.account.listing.fetch(borrower.listingAccount);
     } catch (err) {
-      assert.equal(err.message, "Account not found");
+      assert.equal(
+        err.message,
+        `Account does not exist ${borrower.listingAccount.toBase58()}`
+      );
     }
   });
 
@@ -453,10 +446,6 @@ describe("dexloan_listings", () => {
       },
     });
 
-    const listing = await borrower.program.account.listing.fetch(
-      borrower.listingAccount
-    );
-
     const listingOptions = new helpers.ListingOptions();
     listingOptions.amount = new anchor.BN(anchor.web3.LAMPORTS_PER_SOL * 2);
     listingOptions.basisPoints = new anchor.BN(5000);
@@ -467,9 +456,9 @@ describe("dexloan_listings", () => {
         accounts: {
           borrower: borrower.keypair.publicKey,
           borrowerDepositTokenAccount: borrower.associatedAddress.address,
-          escrowAccount: listing.escrow,
+          escrowAccount: borrower.escrowAccount,
           listingAccount: borrower.listingAccount,
-          mint: listing.mint,
+          mint: borrower.mint.publicKey,
           tokenProgram: splToken.TOKEN_PROGRAM_ID,
           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           systemProgram: anchor.web3.SystemProgram.programId,
@@ -504,10 +493,6 @@ describe("dexloan_listings", () => {
       },
     });
 
-    const listing = await borrower.program.account.listing.fetch(
-      borrower.listingAccount
-    );
-
     const [nextListingAddress, discriminator] =
       await helpers.findListingAddress(
         connection,
@@ -526,9 +511,9 @@ describe("dexloan_listings", () => {
       accounts: {
         borrower: borrower.keypair.publicKey,
         borrowerDepositTokenAccount: borrower.associatedAddress.address,
-        escrowAccount: listing.escrow,
+        escrowAccount: borrower.escrowAccount,
         listingAccount: nextListingAddress,
-        mint: listing.mint,
+        mint: borrower.mint.publicKey,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
         systemProgram: anchor.web3.SystemProgram.programId,

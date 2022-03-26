@@ -3,6 +3,8 @@ import * as splToken from "@solana/spl-token";
 import { TokenAccount } from "@metaplex-foundation/mpl-core";
 import { Metadata } from "@metaplex-foundation/mpl-token-metadata";
 import { AnchorWallet, WalletContextState } from "@solana/wallet-adapter-react";
+import bs58 from "bs58";
+
 import idl from "../idl.json";
 import type { DexloanListings } from "../dexloan";
 
@@ -58,7 +60,7 @@ export async function getListing(
   };
 }
 
-export async function getListings(
+export async function fetchListings(
   connection: anchor.web3.Connection,
   filter: anchor.web3.GetProgramAccountsFilter[] = []
 ) {
@@ -101,12 +103,48 @@ export async function getListings(
     .filter(Boolean);
 }
 
+export async function fetchListingsByBorrowerAndState(
+  connection: anchor.web3.Connection,
+  owner: anchor.web3.PublicKey,
+  state: ListingState
+) {
+  return fetchListings(connection, [
+    {
+      memcmp: {
+        // filter active
+        offset: 7 + 1,
+        bytes: bs58.encode(new anchor.BN(state).toArrayLike(Buffer)),
+      },
+    },
+    {
+      memcmp: {
+        // filter borrower
+        offset: 7 + 1 + 8 + 1,
+        bytes: owner.toBase58(),
+      },
+    },
+  ]);
+}
+
+export async function fetchFinalizedListingsByBorrower(
+  connection: anchor.web3.Connection,
+  owner: anchor.web3.PublicKey
+) {
+  const [defaulted, cancelled, repaid] = await Promise.all([
+    fetchListingsByBorrowerAndState(connection, owner, ListingState.Defaulted),
+    fetchListingsByBorrowerAndState(connection, owner, ListingState.Cancelled),
+    fetchListingsByBorrowerAndState(connection, owner, ListingState.Repaid),
+  ]);
+
+  return [...defaulted, ...cancelled, ...repaid];
+}
+
 export interface NFTResult {
   accountInfo: TokenAccount;
   metadata: Metadata;
 }
 
-export async function getNFTs(
+export async function fetchNFTs(
   connection: anchor.web3.Connection,
   pubkey: anchor.web3.PublicKey
 ): Promise<NFTResult[]> {
@@ -355,6 +393,22 @@ export async function repayLoan(
       systemProgram: anchor.web3.SystemProgram.programId,
       tokenProgram: splToken.TOKEN_PROGRAM_ID,
       clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+    },
+  });
+}
+
+export async function closeAccount(
+  connection: anchor.web3.Connection,
+  wallet: AnchorWallet,
+  listingAccount: anchor.web3.PublicKey
+): Promise<void> {
+  const provider = getProvider(connection, wallet as typeof anchor.Wallet);
+  const program = getProgram(provider);
+
+  await program.rpc.closeAccount({
+    accounts: {
+      listingAccount,
+      borrower: wallet.publicKey,
     },
   });
 }

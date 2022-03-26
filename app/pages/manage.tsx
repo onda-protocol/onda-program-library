@@ -1,23 +1,18 @@
 import * as anchor from "@project-serum/anchor";
-import {
-  Button,
-  Divider,
-  Flex,
-  StatusLight,
-  View,
-  Link as SpectrumLink,
-} from "@adobe/react-spectrum";
+import { Button, Divider, Flex, View } from "@adobe/react-spectrum";
 import { useConnection, useAnchorWallet } from "@solana/wallet-adapter-react";
 import type { NextPage } from "next";
 import { useState } from "react";
 import * as utils from "../utils";
 import {
-  useLoansQuery,
   useBorrowingsQuery,
+  useFinalizedQuery,
   useListingsByOwnerQuery,
+  useLoansQuery,
 } from "../hooks/query";
 import {
   useCancelMutation,
+  useCloseAccountMutation,
   useRepaymentMutation,
   useRepossessMutation,
 } from "../hooks/mutation";
@@ -28,6 +23,7 @@ import { Typography, Body, Heading } from "../components/typography";
 import { Main } from "../components/layout";
 import {
   CancelDialog,
+  CloseAccountDialog,
   RepayDialog,
   RepossessDialog,
 } from "../components/dialog";
@@ -40,6 +36,7 @@ const Manage: NextPage = () => {
   const loansQueryResult = useLoansQuery(connection, anchorWallet);
   const borrowingsQueryResult = useBorrowingsQuery(connection, anchorWallet);
   const listingsQueryResult = useListingsByOwnerQuery(connection, anchorWallet);
+  const finalizedQueryResult = useFinalizedQuery(connection, anchorWallet);
 
   if (!anchorWallet) {
     return (
@@ -54,7 +51,8 @@ const Manage: NextPage = () => {
   if (
     loansQueryResult.isLoading ||
     borrowingsQueryResult.isLoading ||
-    listingsQueryResult.isLoading
+    listingsQueryResult.isLoading ||
+    finalizedQueryResult.isLoading
   ) {
     return <LoadingPlaceholder />;
   }
@@ -133,6 +131,35 @@ const Manage: NextPage = () => {
                 (item) =>
                   item && (
                     <ListedCard
+                      key={item.listing.publicKey?.toBase58()}
+                      amount={item.listing.account.amount.toNumber()}
+                      basisPoints={item.listing.account.basisPoints}
+                      duration={item.listing.account.duration.toNumber()}
+                      escrow={item.listing.account.escrow}
+                      listing={item.listing.publicKey}
+                      name={item.metadata.data?.data?.name}
+                      mint={item.listing.account.mint}
+                      uri={item.metadata.data?.data?.uri}
+                    />
+                  )
+              )}
+            </CardFlexContainer>
+          </>
+        ) : null}
+
+        {finalizedQueryResult.data?.length ? (
+          <>
+            <View marginBottom="size-200" marginTop="size-600">
+              {borrowingsQueryResult.data?.length ? <Divider size="M" /> : null}
+              <Typography>
+                <Heading>Finished</Heading>
+              </Typography>
+            </View>
+            <CardFlexContainer>
+              {finalizedQueryResult.data?.map(
+                (item) =>
+                  item && (
+                    <FinishedCard
                       key={item.listing.publicKey?.toBase58()}
                       amount={item.listing.account.amount.toNumber()}
                       basisPoints={item.listing.account.basisPoints}
@@ -402,6 +429,82 @@ const ListedCard: React.FC<ListingCardProps> = ({
             escrow,
             listing,
             mint,
+          })
+        }
+        onRequestClose={() => setDialog(false)}
+      />
+    </>
+  );
+};
+
+interface FinishedCardProps {
+  amount: number;
+  basisPoints: number;
+  duration: number;
+  name: string;
+  escrow: anchor.web3.PublicKey;
+  listing: anchor.web3.PublicKey;
+  mint: anchor.web3.PublicKey;
+  uri: string;
+}
+
+const FinishedCard: React.FC<FinishedCardProps> = ({
+  amount,
+  basisPoints,
+  duration,
+  escrow,
+  listing,
+  mint,
+  name,
+  uri,
+}) => {
+  const router = useRouter();
+  const [dialog, setDialog] = useState(false);
+  const mutation = useCloseAccountMutation(() => setDialog(false));
+
+  return (
+    <>
+      <Card uri={uri}>
+        <Typography>
+          <Heading size="S">{name}</Heading>
+          <Body size="S">
+            Borrowing&nbsp;
+            <strong>
+              {amount / anchor.web3.LAMPORTS_PER_SOL}
+              &nbsp;SOL
+            </strong>
+            &nbsp;for&nbsp;
+            {utils.toMonths(duration)}
+            &nbsp;months&nbsp;@&nbsp;
+            <strong>{basisPoints / 100}%</strong>
+            &nbsp;APY.&nbsp;
+          </Body>
+        </Typography>
+        <Divider size="S" marginTop="size-600" />
+        <Flex direction="row" justifyContent="right">
+          <Button
+            variant="secondary"
+            marginY="size-200"
+            marginEnd="size-100"
+            onPress={() => router.push(`/listing/${listing.toBase58()}`)}
+          >
+            View
+          </Button>
+          <Button
+            marginY="size-200"
+            variant="primary"
+            onPress={() => setDialog(true)}
+          >
+            Close
+          </Button>
+        </Flex>
+      </Card>
+      <CloseAccountDialog
+        open={dialog}
+        loading={mutation.isLoading}
+        onConfirm={() =>
+          mutation.mutate({
+            listing,
           })
         }
         onRequestClose={() => setDialog(false)}

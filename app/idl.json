@@ -238,6 +238,22 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "closeAccount",
+      "accounts": [
+        {
+          "name": "borrower",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "listingAccount",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": []
     }
   ],
   "accounts": [
@@ -288,6 +304,10 @@
           },
           {
             "name": "escrowBump",
+            "type": "u8"
+          },
+          {
+            "name": "discriminator",
             "type": "u8"
           }
         ]

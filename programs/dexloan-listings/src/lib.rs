@@ -178,10 +178,6 @@ pub mod dexloan_listings {
     pub fn close_account(ctx: Context<CloseAccount>) -> Result<()> {
         let listing = &mut ctx.accounts.listing_account;
 
-        if listing.state != ListingState::Defaulted as u8 {
-            return Err(ErrorCode::InvalidState.into())
-        }
-
         listing.close(ctx.accounts.borrower.to_account_info())?;
 
         Ok(())
@@ -338,6 +334,8 @@ pub struct CloseAccount<'info> {
     #[account(
         mut,
         constraint = listing_account.borrower == *borrower.key,
+        constraint = listing_account.state != ListingState::Listed as u8,
+        constraint = listing_account.state != ListingState::Active as u8,
     )]
     pub listing_account: Box<Account<'info, Listing>>,
 }
@@ -361,7 +359,9 @@ const LISTING_SIZE: usize = 8 + // key
 pub enum ListingState {
     Listed = 1,
     Active = 2,
+    // deprecated
     Repaid = 3,
+    // deprecated
     Cancelled = 4,
     Defaulted = 5,
 }
