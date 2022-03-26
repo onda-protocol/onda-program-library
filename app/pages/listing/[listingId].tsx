@@ -408,6 +408,7 @@ interface RepayButtonProps extends CancelButtonProps {
 }
 
 const RepayButton = ({ mint, escrow, listing, lender }: RepayButtonProps) => {
+  const router = useRouter();
   const [dialog, setDialog] = useState(false);
   const mutation = useRepaymentMutation(() => setDialog(false));
   const anchorWallet = useAnchorWallet();
@@ -420,6 +421,12 @@ const RepayButton = ({ mint, escrow, listing, lender }: RepayButtonProps) => {
       handleConnect(() => setDialog(true));
     }
   }
+
+  useEffect(() => {
+    if (mutation.isSuccess) {
+      router.replace("/manage");
+    }
+  }, [router, mutation.isSuccess]);
 
   return (
     <>
