@@ -3,11 +3,10 @@ import { Button, Divider, Flex } from "@adobe/react-spectrum";
 import { useConnection, useAnchorWallet } from "@solana/wallet-adapter-react";
 import type { NextPage } from "next";
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import type { Listing } from "../types";
 import * as utils from "../utils";
-import { fetchAllListings } from "../lib/web3";
 import { useListingsQuery } from "../hooks/query";
 import { useWalletConnect } from "../components/button";
 import { Card, CardFlexContainer } from "../components/card";
