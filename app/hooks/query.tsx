@@ -48,7 +48,7 @@ export function useListingQuery(
   return useQuery(
     ["listing", listing?.toBase58()],
     () => {
-      if (listing) return web3.getListing(connection, listing);
+      if (listing) return web3.fetchListing(connection, listing);
     },
     { enabled: Boolean(listing) }
   );

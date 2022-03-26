@@ -38,7 +38,7 @@ export enum ListingState {
   Defaulted = 5,
 }
 
-export async function getListing(
+export async function fetchListing(
   connection: anchor.web3.Connection,
   listing: anchor.web3.PublicKey
 ) {
@@ -102,6 +102,20 @@ export async function fetchListings(
     })
     .filter(Boolean);
 }
+
+export const fetchActiveListings = (connection: anchor.web3.Connection) => {
+  return fetchListings(connection, [
+    {
+      memcmp: {
+        // filter active
+        offset: 7 + 1,
+        bytes: bs58.encode(
+          new anchor.BN(ListingState.Active).toArrayLike(Buffer)
+        ),
+      },
+    },
+  ]);
+};
 
 export async function fetchListingsByBorrowerAndState(
   connection: anchor.web3.Connection,

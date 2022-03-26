@@ -454,13 +454,13 @@ const FinishedCard: React.FC<FinishedCardProps> = ({
   function getStatusText() {
     switch (state) {
       case web3.ListingState.Repaid:
-        return <>Loan was repaid</>;
+        return <>Loan was repaid.</>;
 
       case web3.ListingState.Cancelled:
-        return <>Listing cancelled</>;
+        return <>Listing cancelled.</>;
 
       case web3.ListingState.Defaulted:
-        return <>NFT was repossessed</>;
+        return <>The NFT was repossessed by the lender.</>;
     }
   }
 

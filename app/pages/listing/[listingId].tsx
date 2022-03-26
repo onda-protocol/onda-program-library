@@ -1,20 +1,12 @@
 import * as anchor from "@project-serum/anchor";
 import { useAnchorWallet, useConnection } from "@solana/wallet-adapter-react";
-import {
-  Button,
-  Divider,
-  Flex,
-  Image,
-  View,
-  Link as SpectrumLink,
-  ProgressCircle,
-} from "@adobe/react-spectrum";
+import { Button, Divider, Flex, View, Well } from "@adobe/react-spectrum";
 import type { NextPage } from "next";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import * as utils from "../../utils";
 import { ListingState } from "../../lib/web3";
-import { useListingQuery, useMetadataFileQuery } from "../../hooks/query";
+import { useListingQuery } from "../../hooks/query";
 import {
   useCancelMutation,
   useCloseAccountMutation,
@@ -33,6 +25,8 @@ import {
   RepossessDialog,
 } from "../../components/dialog";
 import { useWalletConnect } from "../../components/button";
+import { ExplorerLink } from "../../components/link";
+import { ListingImage } from "../../components/image";
 
 const Listing: NextPage = () => {
   const router = useRouter();
@@ -44,10 +38,6 @@ const Listing: NextPage = () => {
     ? new anchor.web3.PublicKey(listingId as string)
     : undefined;
   const listingQuery = useListingQuery(connection, pubkey);
-  console.log(listingQuery);
-  if (listingQuery.isLoading) {
-    return <LoadingPlaceholder />;
-  }
 
   const listing = listingQuery.data?.listing;
   const metadata = listingQuery.data?.metadata;
@@ -133,7 +123,7 @@ const Listing: NextPage = () => {
     }
     return null;
   }
-
+  console.log("listing", listingQuery);
   function renderCloseAccountButton() {
     if (
       pubkey &&
@@ -183,20 +173,7 @@ const Listing: NextPage = () => {
                 SOL.
               </Body>
             </View>
-            <View marginBottom="size-300">
-              <Body>
-                <SpectrumLink>
-                  <a
-                    href={`https://explorer.solana.com/address/${listing?.mint.toBase58()}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    View mint
-                  </a>
-                </SpectrumLink>
-              </Body>
-            </View>
-            <View>{renderListedButton()}</View>
+            <View marginY="size-200">{renderListedButton()}</View>
           </>
         );
 
@@ -229,20 +206,7 @@ const Listing: NextPage = () => {
                 SOL currently owed. Repayment {getRepaymentText()}
               </Body>
             </View>
-            <View paddingBottom="size-300">
-              <Body>
-                <SpectrumLink>
-                  <a
-                    href={`https://explorer.solana.com/address/${listing?.mint.toBase58()}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    View mint
-                  </a>
-                </SpectrumLink>
-              </Body>
-            </View>
-            <View>{renderActiveButton()}</View>
+            <View marginY="size-200">{renderActiveButton()}</View>
           </>
         );
 
@@ -252,7 +216,7 @@ const Listing: NextPage = () => {
             <View marginBottom="size-300">
               <Body>Listing has ended. The loan was repaid.</Body>
             </View>
-            <View>{renderCloseAccountButton()}</View>
+            <View marginY="size-200">{renderCloseAccountButton()}</View>
           </>
         );
 
@@ -262,7 +226,7 @@ const Listing: NextPage = () => {
             <View marginBottom="size-300">
               <Body>Listing cancelled.</Body>
             </View>
-            <View>{renderCloseAccountButton()}</View>
+            <View marginY="size-200">{renderCloseAccountButton()}</View>
           </>
         );
 
@@ -274,13 +238,17 @@ const Listing: NextPage = () => {
                 Listing has ended. The NFT was repossessed by the lender.
               </Body>
             </View>
-            <View>{renderCloseAccountButton()}</View>
+            <View marginY="size-200">{renderCloseAccountButton()}</View>
           </>
         );
 
       default:
         return null;
     }
+  }
+
+  if (listingQuery.isLoading) {
+    return <LoadingPlaceholder />;
   }
 
   if (listingQuery.error instanceof Error) {
@@ -298,7 +266,7 @@ const Listing: NextPage = () => {
 
   return (
     <Main>
-      <Flex direction="row">
+      <Flex direction="row" wrap="wrap">
         <Flex flex={1} direction="column" justifyContent="center">
           <View padding="size-100">
             <ListingImage uri={metadata?.data.data.uri} />
@@ -313,6 +281,35 @@ const Listing: NextPage = () => {
               <Divider size="M" />
             </View>
             {renderByState()}
+          </View>
+          <View>
+            {listing?.borrower && (
+              <Well>
+                Borrower
+                <br />
+                <ExplorerLink address={listing.borrower}>
+                  {listing.borrower?.toBase58()}
+                </ExplorerLink>
+              </Well>
+            )}
+            {listing?.lender && listing.state !== ListingState.Listed && (
+              <Well>
+                Lender
+                <br />
+                <ExplorerLink address={listing.lender}>
+                  {listing.lender.toBase58()}
+                </ExplorerLink>
+              </Well>
+            )}
+            {listing?.mint && (
+              <Well>
+                Mint
+                <br />
+                <ExplorerLink address={listing.mint}>
+                  {listing.mint.toBase58()}
+                </ExplorerLink>
+              </Well>
+            )}
           </View>
         </Flex>
       </Flex>
@@ -534,42 +531,6 @@ export const CloseAccountButton: React.FC<CloseAcccountButtonProps> = ({
         }
       />
     </>
-  );
-};
-
-interface ListingImageProps {
-  uri: string | undefined;
-}
-
-const ListingImage: React.FC<ListingImageProps> = ({ uri }) => {
-  const metadataFileQuery = useMetadataFileQuery(uri);
-
-  return (
-    <View
-      flex={1}
-      maxWidth={475}
-      maxHeight={475}
-      borderRadius="large"
-      overflow="hidden"
-    >
-      {metadataFileQuery.data?.image ? (
-        <Image
-          height="100%"
-          width="100%"
-          src={metadataFileQuery.data?.image}
-          alt="NFT"
-        />
-      ) : (
-        <Flex
-          height={568}
-          width={568}
-          alignItems="center"
-          justifyContent="center"
-        >
-          <ProgressCircle aria-label="Loading…" isIndeterminate />
-        </Flex>
-      )}
-    </View>
   );
 };
 
