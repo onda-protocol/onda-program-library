@@ -86,6 +86,10 @@ const Listings: NextPage = () => {
                       <Button
                         variant="cta"
                         marginY="size-200"
+                        isDisabled={
+                          item.listing.account.borrower.toBase58() ===
+                          anchorWallet?.publicKey.toBase58()
+                        }
                         onPress={() => onCreateLoan(item)}
                       >
                         Lend
