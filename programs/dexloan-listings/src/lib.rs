@@ -31,47 +31,78 @@ pub mod dexloan_listings {
         listing.borrower = ctx.accounts.borrower.key();
         // Transfer
         let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_accounts = anchor_spl::token::Transfer {
-            from: ctx.accounts.borrower_deposit_token_account.to_account_info(),
-            to: ctx.accounts.escrow_account.to_account_info(),
+        let cpi_accounts = anchor_spl::token::Approve {
+            to: ctx.accounts.borrower_deposit_token_account.to_account_info(),
+            delegate: ctx.accounts.escrow_account.to_account_info(),
             authority: ctx.accounts.borrower.to_account_info(),
         };
         let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-        anchor_spl::token::transfer(cpi_ctx, 1)?;
+        anchor_spl::token::approve(cpi_ctx, 1)?;
 
         Ok(())
     }
 
     pub fn cancel_listing(ctx: Context<CancelListing>) -> Result<()> {
         let listing = &mut ctx.accounts.listing_account;
+        let escrow = &mut ctx.accounts.escrow_account;
         
         listing.state = ListingState::Cancelled as u8;
 
-        let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_accounts = anchor_spl::token::Transfer {
-            from: ctx.accounts.escrow_account.to_account_info(),
-            to: ctx.accounts.borrower_deposit_token_account.to_account_info(),
-            authority: ctx.accounts.escrow_account.to_account_info(),
-        };
-        let seeds = &[
-            ESCROW_PREFIX.as_bytes(),
-            ctx.accounts.mint.to_account_info().key.as_ref(),
-            &[listing.escrow_bump],
-        ];
-        let signer = &[&seeds[..]];
-        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
-        anchor_spl::token::transfer(cpi_ctx, 1)?;
+
+        if escrow.amount == 1 {
+            let cpi_program = ctx.accounts.token_program.to_account_info();
+            let cpi_accounts = anchor_spl::token::Transfer {
+                from: ctx.accounts.escrow_account.to_account_info(),
+                to: ctx.accounts.borrower_deposit_token_account.to_account_info(),
+                authority: ctx.accounts.escrow_account.to_account_info(),
+            };
+            let seeds = &[
+                ESCROW_PREFIX.as_bytes(),
+                ctx.accounts.mint.to_account_info().key.as_ref(),
+                &[listing.escrow_bump],
+            ];
+            let signer = &[&seeds[..]];
+            let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
+            anchor_spl::token::transfer(cpi_ctx, 1)?;
+        } else {
+            let cpi_program = ctx.accounts.token_program.to_account_info();
+            let cpi_accounts = anchor_spl::token::Revoke {
+                source: ctx.accounts.borrower_deposit_token_account.to_account_info(),
+                authority: ctx.accounts.borrower.to_account_info(),
+            };
+            let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+            anchor_spl::token::revoke(cpi_ctx)?;
+        }
         
         Ok(())
     }
 
     pub fn make_loan(ctx: Context<MakeLoan>) -> Result<()> {
         let listing = &mut ctx.accounts.listing_account;
+        let escrow = &mut ctx.accounts.escrow_account;
 
         listing.state = ListingState::Active as u8;
         listing.lender = ctx.accounts.lender.key();
         listing.start_date = ctx.accounts.clock.unix_timestamp;
 
+        // Transfer to escrow if not already held there
+        if escrow.amount == 0 {
+            let cpi_program = ctx.accounts.token_program.to_account_info();
+            let cpi_accounts = anchor_spl::token::Transfer {
+                from: ctx.accounts.borrower_deposit_token_account.to_account_info(),
+                to: ctx.accounts.escrow_account.to_account_info(),
+                authority: ctx.accounts.escrow_account.to_account_info(),
+            };
+            let seeds = &[
+                ESCROW_PREFIX.as_bytes(),
+                ctx.accounts.mint.to_account_info().key.as_ref(),
+                &[listing.escrow_bump],
+            ];
+            let signer = &[&seeds[..]];
+            let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
+            anchor_spl::token::transfer(cpi_ctx, 1)?;
+        }
+        
         anchor_lang::solana_program::program::invoke(
             &anchor_lang::solana_program::system_instruction::transfer(
                 &listing.lender,
@@ -283,6 +314,14 @@ pub struct MakeLoan<'info> {
         constraint = listing_account.state == ListingState::Listed as u8,
     )]
     pub listing_account: Account<'info, Listing>,
+    #[account(
+        mut,
+        seeds = [ESCROW_PREFIX.as_bytes(), mint.key().as_ref()],
+        bump = listing_account.escrow_bump,
+    )]
+    pub escrow_account: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub borrower_deposit_token_account: Account<'info, TokenAccount>,
     pub mint: Account<'info, Mint>,
     /// Misc
     pub system_program: Program<'info, System>,

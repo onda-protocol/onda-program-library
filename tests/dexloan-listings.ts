@@ -30,12 +30,13 @@ describe("dexloan_listings", () => {
       listing.escrow
     );
 
+    assert.equal(borrowerTokenAccount.delegate, listing.escrow.toBase58());
     assert.equal(listing.borrower, borrower.keypair.publicKey.toString());
     assert.equal(listing.basisPoints, options.basisPoints);
     assert.equal(listing.duration.toNumber(), options.duration);
     assert.equal(listing.mint.toBase58(), borrower.mint.toBase58());
-    assert.equal(borrowerTokenAccount.amount, BigInt(0));
-    assert.equal(escrowTokenAccount.amount, BigInt(1));
+    assert.equal(borrowerTokenAccount.amount, BigInt(1));
+    assert.equal(escrowTokenAccount.amount, BigInt(0));
     assert.equal(escrowTokenAccount.mint.toBase58(), borrower.mint.toBase58());
     assert.equal(listing.state, 1);
     assert.equal(
@@ -63,7 +64,17 @@ describe("dexloan_listings", () => {
     const borrowerPostLoanBalance = await connection.getBalance(
       borrower.keypair.publicKey
     );
+    const borrowerTokenAccount = await splToken.getAccount(
+      connection,
+      borrower.associatedAddress
+    );
+    const escrowTokenAccount = await splToken.getAccount(
+      connection,
+      listing.escrow
+    );
 
+    assert.equal(borrowerTokenAccount.amount, BigInt(0));
+    assert.equal(escrowTokenAccount.amount, BigInt(1));
     assert.equal(
       borrowerPreLoanBalance + options.amount,
       borrowerPostLoanBalance
@@ -130,18 +141,23 @@ describe("dexloan_listings", () => {
     };
     const borrower = await helpers.initListing(connection, options);
 
-    await borrower.program.methods
-      .cancelListing()
-      .accounts({
-        listingAccount: borrower.listingAccount,
-        escrowAccount: borrower.escrowAccount,
-        borrower: borrower.keypair.publicKey,
-        borrowerDepositTokenAccount: borrower.associatedAddress,
-        mint: borrower.mint,
-        systemProgram: anchor.web3.SystemProgram.programId,
-        tokenProgram: splToken.TOKEN_PROGRAM_ID,
-      })
-      .rpc();
+    try {
+      await borrower.program.methods
+        .cancelListing()
+        .accounts({
+          listingAccount: borrower.listingAccount,
+          escrowAccount: borrower.escrowAccount,
+          borrower: borrower.keypair.publicKey,
+          borrowerDepositTokenAccount: borrower.associatedAddress,
+          mint: borrower.mint,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        })
+        .rpc();
+    } catch (error) {
+      console.log(error.logs);
+      assert.fail(error);
+    }
 
     const borrowerTokenAccount = await splToken.getAccount(
       connection,
@@ -151,7 +167,7 @@ describe("dexloan_listings", () => {
       connection,
       borrower.escrowAccount
     );
-
+    assert.equal(borrowerTokenAccount.delegate, null);
     assert.equal(borrowerTokenAccount.amount, BigInt(1));
     assert.equal(escrowTokenAccount.amount, BigInt(0));
   });
@@ -177,18 +193,6 @@ describe("dexloan_listings", () => {
       })
       .rpc();
 
-    const borrowerTokenAccount = await splToken.getAccount(
-      connection,
-      borrower.associatedAddress
-    );
-    const escrowTokenAccount = await splToken.getAccount(
-      connection,
-      borrower.escrowAccount
-    );
-
-    assert.equal(borrowerTokenAccount.amount, BigInt(1));
-    assert.equal(escrowTokenAccount.amount, BigInt(0));
-
     const listingOptions = new helpers.ListingOptions();
     listingOptions.amount = new anchor.BN(options.amount);
     listingOptions.basisPoints = new anchor.BN(options.basisPoints);
@@ -210,6 +214,21 @@ describe("dexloan_listings", () => {
 
     const listing = await borrower.program.account.listing.fetch(
       borrower.listingAccount
+    );
+    const borrowerTokenAccount = await splToken.getAccount(
+      connection,
+      borrower.associatedAddress
+    );
+    const escrowTokenAccount = await splToken.getAccount(
+      connection,
+      borrower.escrowAccount
+    );
+
+    assert.equal(borrowerTokenAccount.amount, BigInt(1));
+    assert.equal(escrowTokenAccount.amount, BigInt(0));
+    assert.equal(
+      borrowerTokenAccount.delegate.toBase58(),
+      listing.escrow.toBase58()
     );
     assert.equal(listing.state, 1);
     assert.equal(

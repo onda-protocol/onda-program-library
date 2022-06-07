@@ -28,8 +28,7 @@ export async function requestAirdrop(
   connection: anchor.web3.Connection,
   publicKey: anchor.web3.PublicKey
 ): Promise<void> {
-  const blockhashWithExpiryBlockHeight =
-    await await connection.getLatestBlockhash();
+  const blockhashWithExpiryBlockHeight = await connection.getLatestBlockhash();
   const signature = await connection.requestAirdrop(
     publicKey,
     anchor.web3.LAMPORTS_PER_SOL * 20
@@ -130,19 +129,24 @@ export async function initListing(
   listingOptions.basisPoints = new anchor.BN(options.basisPoints);
   listingOptions.duration = new anchor.BN(options.duration);
 
-  await program.methods
-    .initListing(listingOptions)
-    .accounts({
-      mint,
-      escrowAccount,
-      listingAccount,
-      borrower: keypair.publicKey,
-      borrowerDepositTokenAccount: associatedAddress,
-      tokenProgram: splToken.TOKEN_PROGRAM_ID,
-      rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-      systemProgram: anchor.web3.SystemProgram.programId,
-    })
-    .rpc();
+  try {
+    await program.methods
+      .initListing(listingOptions)
+      .accounts({
+        mint,
+        escrowAccount,
+        listingAccount,
+        borrower: keypair.publicKey,
+        borrowerDepositTokenAccount: associatedAddress,
+        tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+  } catch (error) {
+    console.log(error.logs);
+    throw error;
+  }
 
   return {
     mint,
@@ -161,18 +165,25 @@ export async function createLoan(connection: anchor.web3.Connection, borrower) {
   const program = getProgram(provider);
   await requestAirdrop(connection, keypair.publicKey);
 
-  await program.methods
-    .makeLoan()
-    .accounts({
-      listingAccount: borrower.listingAccount,
-      borrower: borrower.keypair.publicKey,
-      lender: keypair.publicKey,
-      mint: borrower.mint,
-      systemProgram: anchor.web3.SystemProgram.programId,
-      tokenProgram: splToken.TOKEN_PROGRAM_ID,
-      clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-    })
-    .rpc();
+  try {
+    await program.methods
+      .makeLoan()
+      .accounts({
+        listingAccount: borrower.listingAccount,
+        borrower: borrower.keypair.publicKey,
+        lender: keypair.publicKey,
+        mint: borrower.mint,
+        escrowAccount: borrower.escrowAccount,
+        borrowerDepositTokenAccount: borrower.associatedAddress,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+      })
+      .rpc();
+  } catch (error) {
+    console.log(error.logs);
+    throw error;
+  }
 
   return {
     keypair,
