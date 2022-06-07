@@ -21,20 +21,36 @@ pub mod dexloan_listings {
         // Init
         listing.mint = ctx.accounts.mint.key();
         listing.escrow = ctx.accounts.escrow_account.key();
+        listing.authority = ctx.accounts.authority.key();
         listing.bump = *ctx.bumps.get("listing_account").unwrap();
         listing.escrow_bump = *ctx.bumps.get("escrow_account").unwrap();
         // List
         listing.amount = options.amount;
-        listing.basis_points = options.basis_points;
-        listing.duration = options.duration;
+        listing.listing_type = options.listing_type;
         listing.state = ListingState::Listed as u8;
-        listing.borrower = ctx.accounts.borrower.key();
+
+        match listing.listing_type {
+            // Loan
+            0 => {
+                listing.basis_points = options.basis_points;
+                listing.duration = options.duration;
+            },
+            // Call Option
+            1 => {
+                listing.end_date = options.end_date;
+                listing.strike_price = options.strike_price;
+            },
+            _ => {
+                return Err(ErrorCode::InvalidListingType.into());
+            }                
+        }
+
         // Transfer
         let cpi_program = ctx.accounts.token_program.to_account_info();
         let cpi_accounts = anchor_spl::token::Approve {
-            to: ctx.accounts.borrower_deposit_token_account.to_account_info(),
+            to: ctx.accounts.deposit_token_account.to_account_info(),
             delegate: ctx.accounts.escrow_account.to_account_info(),
-            authority: ctx.accounts.borrower.to_account_info(),
+            authority: ctx.accounts.authority.to_account_info(),
         };
         let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
         anchor_spl::token::approve(cpi_ctx, 1)?;
@@ -43,75 +59,49 @@ pub mod dexloan_listings {
     }
 
     pub fn cancel_listing(ctx: Context<CancelListing>) -> Result<()> {
-        let listing = &mut ctx.accounts.listing_account;
-        let escrow = &mut ctx.accounts.escrow_account;
-        
-        listing.state = ListingState::Cancelled as u8;
-
-
-        if escrow.amount == 1 {
-            let cpi_program = ctx.accounts.token_program.to_account_info();
-            let cpi_accounts = anchor_spl::token::Transfer {
-                from: ctx.accounts.escrow_account.to_account_info(),
-                to: ctx.accounts.borrower_deposit_token_account.to_account_info(),
-                authority: ctx.accounts.escrow_account.to_account_info(),
-            };
-            let seeds = &[
-                ESCROW_PREFIX.as_bytes(),
-                ctx.accounts.mint.to_account_info().key.as_ref(),
-                &[listing.escrow_bump],
-            ];
-            let signer = &[&seeds[..]];
-            let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
-            anchor_spl::token::transfer(cpi_ctx, 1)?;
-        } else {
-            let cpi_program = ctx.accounts.token_program.to_account_info();
-            let cpi_accounts = anchor_spl::token::Revoke {
-                source: ctx.accounts.borrower_deposit_token_account.to_account_info(),
-                authority: ctx.accounts.borrower.to_account_info(),
-            };
-            let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-            anchor_spl::token::revoke(cpi_ctx)?;
-        }
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_accounts = anchor_spl::token::Revoke {
+            source: ctx.accounts.deposit_token_account.to_account_info(),
+            authority: ctx.accounts.borrower.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+        anchor_spl::token::revoke(cpi_ctx)?;
         
         Ok(())
     }
 
-    pub fn make_loan(ctx: Context<MakeLoan>) -> Result<()> {
+    pub fn take_listing(ctx: Context<TakeListing>) -> Result<()> {
         let listing = &mut ctx.accounts.listing_account;
-        let escrow = &mut ctx.accounts.escrow_account;
 
         listing.state = ListingState::Active as u8;
-        listing.lender = ctx.accounts.lender.key();
+        listing.buyer = ctx.accounts.buyer.key();
         listing.start_date = ctx.accounts.clock.unix_timestamp;
 
-        // Transfer to escrow if not already held there
-        if escrow.amount == 0 {
-            let cpi_program = ctx.accounts.token_program.to_account_info();
-            let cpi_accounts = anchor_spl::token::Transfer {
-                from: ctx.accounts.borrower_deposit_token_account.to_account_info(),
-                to: ctx.accounts.escrow_account.to_account_info(),
-                authority: ctx.accounts.escrow_account.to_account_info(),
-            };
-            let seeds = &[
-                ESCROW_PREFIX.as_bytes(),
-                ctx.accounts.mint.to_account_info().key.as_ref(),
-                &[listing.escrow_bump],
-            ];
-            let signer = &[&seeds[..]];
-            let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
-            anchor_spl::token::transfer(cpi_ctx, 1)?;
-        }
+
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_accounts = anchor_spl::token::Transfer {
+            from: ctx.accounts.deposit_token_account.to_account_info(),
+            to: ctx.accounts.escrow_account.to_account_info(),
+            authority: ctx.accounts.escrow_account.to_account_info(),
+        };
+        let seeds = &[
+            ESCROW_PREFIX.as_bytes(),
+            ctx.accounts.mint.to_account_info().key.as_ref(),
+            &[listing.escrow_bump],
+        ];
+        let signer = &[&seeds[..]];
+        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
+        anchor_spl::token::transfer(cpi_ctx, 1)?;
         
         anchor_lang::solana_program::program::invoke(
             &anchor_lang::solana_program::system_instruction::transfer(
-                &listing.lender,
-                &listing.borrower,
+                &listing.authority,
+                &listing.buyer,
                 listing.amount,
             ),
             &[
-                ctx.accounts.lender.to_account_info(),
-                ctx.accounts.borrower.to_account_info(),
+                ctx.accounts.authority.to_account_info(),
+                ctx.accounts.buyer.to_account_info(),
             ]
         )?;
 
@@ -136,8 +126,6 @@ pub mod dexloan_listings {
         msg!("Interest due: {} LAMPORTS", interest_due);
         msg!("Total amount due: {} LAMPORTS", amount_due);
 
-        listing.state = ListingState::Repaid as u8;
-
         anchor_lang::solana_program::program::invoke(
             &anchor_lang::solana_program::system_instruction::transfer(
                 &listing.borrower,
@@ -153,7 +141,7 @@ pub mod dexloan_listings {
         let cpi_program = ctx.accounts.token_program.to_account_info();
         let cpi_accounts = anchor_spl::token::Transfer {
             from: ctx.accounts.escrow_account.to_account_info(),
-            to: ctx.accounts.borrower_deposit_token_account.to_account_info(),
+            to: ctx.accounts.deposit_token_account.to_account_info(),
             authority: ctx.accounts.escrow_account.to_account_info(),
         };
         let seeds = &[
@@ -168,23 +156,51 @@ pub mod dexloan_listings {
         Ok(())
     }
 
-    pub fn repossess_collateral(ctx: Context<RepossessCollateral>) -> Result<()> {
+    pub fn exercise_option(ctx: Context<ExerciseOption>) -> Result<()> {
         let listing = &mut ctx.accounts.listing_account;
 
-        let unix_timestamp = ctx.accounts.clock.unix_timestamp as u64;
-        let loan_start_date = listing.start_date as u64;
-        let loan_duration = unix_timestamp - loan_start_date;
+        match listing.listing_type {
+            // Loan
+            0 => {
+                let unix_timestamp = ctx.accounts.clock.unix_timestamp as u64;
+                let loan_start_date = listing.start_date as u64;
+                let loan_duration = unix_timestamp - loan_start_date;
 
-        if listing.duration > loan_duration  {
-            return Err(ErrorCode::NotOverdue.into())
+                if listing.duration > loan_duration  {
+                    return Err(ErrorCode::NotOverdue.into())
+                }
+            },
+            // Call Option
+            1 => {
+                let unix_timestamp = ctx.accounts.clock.unix_timestamp;
+
+                if unix_timestamp > listing.end_date {
+                    return Err(ErrorCode::OptionExpired.into())
+                }
+
+                anchor_lang::solana_program::program::invoke(
+                    &anchor_lang::solana_program::system_instruction::transfer(
+                        &listing.buyer,
+                        &listing.authority,
+                        listing.amount,
+                    ),
+                    &[
+                        ctx.accounts.authority.to_account_info(),
+                        ctx.accounts.buyer.to_account_info(),
+                    ]
+                )?;
+            },
+            _ => {
+                return Err(ErrorCode::InvalidListingType.into());
+            }
         }
         
-        listing.state = ListingState::Defaulted as u8;
+        listing.state = ListingState::Exercised as u8;
 
         let cpi_program = ctx.accounts.token_program.to_account_info();
         let cpi_accounts = anchor_spl::token::Transfer {
             from: ctx.accounts.escrow_account.to_account_info(),
-            to: ctx.accounts.lender_token_account.to_account_info(),
+            to: ctx.accounts.buyer_token_account.to_account_info(),
             authority: ctx.accounts.escrow_account.to_account_info(),
         };
         let seeds = &[
@@ -213,7 +229,10 @@ pub mod dexloan_listings {
 pub struct ListingOptions {
     amount: u64,
     duration: u64,
+    end_date: i64,
     basis_points: u32,
+    strike_price: u64,
+    listing_type: u8,
 }
 
 #[derive(Accounts)]
@@ -221,31 +240,31 @@ pub struct ListingOptions {
 pub struct InitListing<'info> {
     /// The person who is listing the loan
     #[account(mut)]
-    pub borrower: Signer<'info>,
+    pub authority: Signer<'info>,
     #[account(
         mut,
-        constraint = borrower_deposit_token_account.mint == mint.key(),
-        constraint = borrower_deposit_token_account.owner == borrower.key(),
-        constraint = borrower_deposit_token_account.amount == 1
+        constraint = deposit_token_account.mint == mint.key(),
+        constraint = deposit_token_account.owner == authority.key(),
+        constraint = deposit_token_account.amount == 1
     )]
-    pub borrower_deposit_token_account: Account<'info, TokenAccount>,
+    pub deposit_token_account: Account<'info, TokenAccount>,
     /// The new listing account
     #[account(
         init,
-        payer = borrower,
+        payer = authority,
         seeds = [
             LISTING_PREFIX.as_bytes(),
             mint.key().as_ref(),
-            borrower.key().as_ref(),
+            authority.key().as_ref(),
         ],
         bump,
         space = LISTING_SIZE,
     )]
-    pub listing_account: Account<'info, Listing>,
+    pub listing_account: Account<'info, ListingV2>,
     /// This is where we'll store the borrower's token
     #[account(
         init_if_needed,
-        payer = borrower,
+        payer = authority,
         seeds = [ESCROW_PREFIX.as_bytes(), mint.key().as_ref()],
         bump,
         token::mint = mint,
@@ -264,7 +283,7 @@ pub struct InitListing<'info> {
 pub struct CancelListing<'info> {
     pub borrower: Signer<'info>,
     #[account(mut)]
-    pub borrower_deposit_token_account: Account<'info, TokenAccount>,
+    pub deposit_token_account: Account<'info, TokenAccount>,
     #[account(
         mut,
         seeds = [
@@ -293,27 +312,27 @@ pub struct CancelListing<'info> {
 }
 
 #[derive(Accounts)]
-pub struct MakeLoan<'info> {
+pub struct TakeListing<'info> {
     /// CHECK: contrained on listing_account
     #[account(mut)]
-    pub borrower: AccountInfo<'info>,
+    pub authority: AccountInfo<'info>,
     #[account(mut)]
-    pub lender: Signer<'info>,
+    pub buyer: Signer<'info>,
     /// The listing the loan is being issued against
     #[account(
         mut,
         seeds = [
             LISTING_PREFIX.as_bytes(),
             mint.key().as_ref(),
-            borrower.key().as_ref(),
+            authority.key().as_ref(),
         ],
         bump = listing_account.bump,
-        constraint = listing_account.borrower == borrower.key(),
-        constraint = listing_account.borrower != lender.key(),
+        constraint = listing_account.authority == authority.key(),
+        constraint = listing_account.authority != buyer.key(),
         constraint = listing_account.mint == mint.key(),
         constraint = listing_account.state == ListingState::Listed as u8,
     )]
-    pub listing_account: Account<'info, Listing>,
+    pub listing_account: Account<'info, ListingV2>,
     #[account(
         mut,
         seeds = [ESCROW_PREFIX.as_bytes(), mint.key().as_ref()],
@@ -321,7 +340,7 @@ pub struct MakeLoan<'info> {
     )]
     pub escrow_account: Account<'info, TokenAccount>,
     #[account(mut)]
-    pub borrower_deposit_token_account: Account<'info, TokenAccount>,
+    pub deposit_token_account: Account<'info, TokenAccount>,
     pub mint: Account<'info, Mint>,
     /// Misc
     pub system_program: Program<'info, System>,
@@ -334,7 +353,7 @@ pub struct RepayLoan<'info> {
     #[account(mut)]
     pub borrower: Signer<'info>,
     #[account(mut)]
-    pub borrower_deposit_token_account: Account<'info, TokenAccount>,
+    pub deposit_token_account: Account<'info, TokenAccount>,
     #[account(
         mut,
         seeds = [ESCROW_PREFIX.as_bytes(), mint.key().as_ref()],
@@ -368,7 +387,9 @@ pub struct RepayLoan<'info> {
 }
 
 #[derive(Accounts)]
-pub struct RepossessCollateral<'info> {
+pub struct ExerciseOption<'info> {
+    #[account(mut)]
+    authority: AccountInfo<'info>,
     #[account(
         mut,
         seeds = [ESCROW_PREFIX.as_bytes(), mint.key().as_ref()],
@@ -376,17 +397,23 @@ pub struct RepossessCollateral<'info> {
     )]
     pub escrow_account: Account<'info, TokenAccount>,
     #[account(mut)]
-    pub lender: Signer<'info>,
+    pub buyer: Signer<'info>,
     #[account(mut)]
-    pub lender_token_account: Account<'info, TokenAccount>,
+    pub buyer_token_account: Account<'info, TokenAccount>,
     #[account(
         mut,
-        constraint = listing_account.lender == lender.key(),
+        seeds = [
+            LISTING_PREFIX.as_bytes(),
+            mint.key().as_ref(),
+            authority.key().as_ref(),
+        ],
+        bump = listing_account.bump,
+        constraint = listing_account.buyer == buyer.key(),
         constraint = listing_account.escrow == escrow_account.key(),
         constraint = listing_account.mint == mint.key(),
         constraint = listing_account.state == ListingState::Active as u8,
     )]
-    pub listing_account: Account<'info, Listing>,
+    pub listing_account: Account<'info, ListingV2>,
     pub mint: Account<'info, Mint>,
     /// Misc
     pub system_program: Program<'info, System>,
@@ -426,11 +453,12 @@ const LISTING_SIZE: usize = 8 + // key
 pub enum ListingState {
     Listed = 1,
     Active = 2,
-    // deprecated
-    Repaid = 3,
-    // deprecated
-    Cancelled = 4,
-    Defaulted = 5,
+    Exercised = 5,
+}
+
+pub enum ListingType {
+    Loan = 0,
+    CallOption = 1,
 }
 
 #[account]
@@ -456,6 +484,60 @@ pub struct Listing {
     /// Misc
     pub bump: u8,
     pub escrow_bump: u8,
+    // New fields
+    // The type of the listing
+    // 0: loan, 1: call
+    pub listing_type: u8,
+    // The exercise price of the call option
+    pub exercise_price: u64,
+}
+
+const LISTING_V2_SIZE: usize = 8 + // key
+1 + // state
+8 + // amount
+8 + // strike_price
+32 + // authority
+32 + // buyer
+4 + // basis_points
+8 + // duration
+8 + // start_date
+8 + // end_date
+32 + // escrow
+32 + // mint
+1 + // bump
+1 + // escrow bump
+90; // padding
+
+#[account]
+pub struct ListingV2 {
+    /// Whether the loan is active
+    pub state: u8,
+    /// The amount of the loan
+    pub amount: u64,
+    /// The exercise price of the call option
+    pub strike_price: u64,
+    /// The NFT holder
+    pub authority: Pubkey,
+    /// The issuer of the loan or the buyer of the call option
+    pub buyer: Pubkey,
+    /// Annualized return
+    pub basis_points: u32,
+    /// Duration of the loan in seconds
+    pub duration: u64,
+    /// The start date of the loan
+    pub start_date: i64,
+    /// The end date of the option
+    pub end_date: i64,
+    /// The escrow where the collateral NFT is held
+    pub escrow: Pubkey,
+    /// The mint of the token being used for collateral
+    pub mint: Pubkey,
+    // The type of the listing
+    // 0: loan, 1: call
+    pub listing_type: u8,
+    /// Misc
+    pub bump: u8,
+    pub escrow_bump: u8,
 }
 
 #[error_code]
@@ -464,4 +546,8 @@ pub enum ErrorCode {
     NotOverdue,
     #[msg("Invalid state")]
     InvalidState,
+    #[msg("Invalid listing type")]
+    InvalidListingType,
+    #[msg("Option expired")]
+    OptionExpired,
 }
