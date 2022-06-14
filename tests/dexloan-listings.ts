@@ -16,7 +16,7 @@ describe("dexloan_listings", () => {
       basisPoints: 500,
       duration: 30 * 24 * 60 * 60, // 30 days
     };
-    const borrower = await helpers.initListing(connection, options);
+    const borrower = await helpers.initLoan(connection, options);
 
     const listing = await borrower.program.account.listing.fetch(
       borrower.listingAccount
@@ -51,7 +51,7 @@ describe("dexloan_listings", () => {
       basisPoints: 500,
       duration: 30 * 24 * 60 * 60, // 30 days
     };
-    const borrower = await helpers.initListing(connection, options);
+    const borrower = await helpers.initLoan(connection, options);
     const borrowerPreLoanBalance = await connection.getBalance(
       borrower.keypair.publicKey
     );
@@ -96,25 +96,26 @@ describe("dexloan_listings", () => {
       basisPoints: 700,
       duration: 30 * 24 * 60 * 60, // 30 days
     };
-    const borrower = await helpers.initListing(connection, options);
+    const borrower = await helpers.initLoan(connection, options);
     const lender = await helpers.createLoan(connection, borrower);
     const lenderPreRepaymentBalance = await connection.getBalance(
       lender.keypair.publicKey
     );
 
-    await borrower.program.rpc.repayLoan({
-      accounts: {
+    await borrower.program.methods
+      .repayLoan()
+      .accounts({
         listingAccount: borrower.listingAccount,
         escrowAccount: borrower.escrowAccount,
         borrower: borrower.keypair.publicKey,
-        borrowerDepositTokenAccount: borrower.associatedAddress,
+        depositTokenAccount: borrower.associatedAddress,
         lender: lender.keypair.publicKey,
         mint: borrower.mint,
         systemProgram: anchor.web3.SystemProgram.programId,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-      },
-    });
+      })
+      .rpc();
 
     const lenderPostRepaymentBalance = await connection.getBalance(
       lender.keypair.publicKey
@@ -139,7 +140,7 @@ describe("dexloan_listings", () => {
       basisPoints: 500,
       duration: 30 * 24 * 60 * 60, // 30 days
     };
-    const borrower = await helpers.initListing(connection, options);
+    const borrower = await helpers.initLoan(connection, options);
 
     try {
       await borrower.program.methods
@@ -148,7 +149,7 @@ describe("dexloan_listings", () => {
           listingAccount: borrower.listingAccount,
           escrowAccount: borrower.escrowAccount,
           borrower: borrower.keypair.publicKey,
-          borrowerDepositTokenAccount: borrower.associatedAddress,
+          depositTokenAccount: borrower.associatedAddress,
           mint: borrower.mint,
           systemProgram: anchor.web3.SystemProgram.programId,
           tokenProgram: splToken.TOKEN_PROGRAM_ID,
@@ -178,7 +179,7 @@ describe("dexloan_listings", () => {
       basisPoints: 500,
       duration: 30 * 24 * 60 * 60, // 30 days
     };
-    const borrower = await helpers.initListing(connection, options);
+    const borrower = await helpers.initLoan(connection, options);
 
     await borrower.program.methods
       .cancelListing()
@@ -186,25 +187,24 @@ describe("dexloan_listings", () => {
         listingAccount: borrower.listingAccount,
         escrowAccount: borrower.escrowAccount,
         borrower: borrower.keypair.publicKey,
-        borrowerDepositTokenAccount: borrower.associatedAddress,
+        depositTokenAccount: borrower.associatedAddress,
         mint: borrower.mint,
         systemProgram: anchor.web3.SystemProgram.programId,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
       })
       .rpc();
 
-    const listingOptions = new helpers.ListingOptions();
-    listingOptions.amount = new anchor.BN(options.amount);
-    listingOptions.basisPoints = new anchor.BN(options.basisPoints);
-    listingOptions.duration = new anchor.BN(options.duration);
+    const amount = new anchor.BN(options.amount);
+    const basisPoints = new anchor.BN(options.basisPoints);
+    const duration = new anchor.BN(options.duration);
 
     await borrower.program.methods
-      .initListing(listingOptions)
+      .initLoan(amount, basisPoints, duration)
       .accounts({
         escrowAccount: borrower.escrowAccount,
         listingAccount: borrower.listingAccount,
         borrower: borrower.keypair.publicKey,
-        borrowerDepositTokenAccount: borrower.associatedAddress,
+        depositTokenAccount: borrower.associatedAddress,
         mint: borrower.mint,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
@@ -238,29 +238,27 @@ describe("dexloan_listings", () => {
   });
 
   it("Does NOT allow an active listing to be reinitialized", async () => {
-    const options = {
-      amount: anchor.web3.LAMPORTS_PER_SOL,
-      basisPoints: 500,
-      duration: 60,
-    };
-    const borrower = await helpers.initListing(connection, options);
+    const amount = anchor.web3.LAMPORTS_PER_SOL;
+    const basisPoints = 500;
+    const duration = 60;
+
+    const borrower = await helpers.initLoan(connection, {
+      amount,
+      basisPoints,
+      duration,
+    });
     await helpers.createLoan(connection, borrower);
 
     const listing = await borrower.program.account.listing.fetch(
       borrower.listingAccount
     );
 
-    const listingOptions = new helpers.ListingOptions();
-    listingOptions.amount = new anchor.BN(options.amount);
-    listingOptions.basisPoints = new anchor.BN(options.basisPoints);
-    listingOptions.duration = new anchor.BN(options.duration);
-
     try {
       await borrower.program.methods
-        .initListing(listingOptions)
+        .initLoan(amount, basisPoints, duration)
         .accounts({
           borrower: borrower.keypair.publicKey,
-          borrowerDepositTokenAccount: borrower.associatedAddress,
+          depositTokenAccount: borrower.associatedAddress,
           escrowAccount: listing.escrow,
           listingAccount: borrower.listingAccount,
           mint: listing.mint,
@@ -281,7 +279,7 @@ describe("dexloan_listings", () => {
       basisPoints: 500,
       duration: 1, // 1 second
     };
-    const borrower = await helpers.initListing(connection, options);
+    const borrower = await helpers.initLoan(connection, options);
 
     const lender = await helpers.createLoan(connection, borrower);
 
@@ -335,7 +333,7 @@ describe("dexloan_listings", () => {
       basisPoints: 500,
       duration: 1, // 1 second
     };
-    const borrower = await helpers.initListing(connection, options);
+    const borrower = await helpers.initLoan(connection, options);
 
     const lender = await helpers.createLoan(connection, borrower);
 
@@ -391,7 +389,7 @@ describe("dexloan_listings", () => {
       basisPoints: 500,
       duration: 60 * 60, // 1 hour
     };
-    const borrower = await helpers.initListing(connection, options);
+    const borrower = await helpers.initLoan(connection, options);
 
     const lender = await helpers.createLoan(connection, borrower);
 
@@ -434,7 +432,7 @@ describe("dexloan_listings", () => {
       basisPoints: 500,
       duration: 1, // 1 second
     };
-    const borrower = await helpers.initListing(connection, options);
+    const borrower = await helpers.initLoan(connection, options);
 
     const lender = await helpers.createLoan(connection, borrower);
 

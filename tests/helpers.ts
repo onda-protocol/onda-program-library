@@ -84,12 +84,6 @@ export async function mintNFT(
   return { mint, associatedAddress: associatedAddress.address };
 }
 
-export class ListingOptions {
-  public amount;
-  public basisPoints;
-  public duration;
-}
-
 export async function findListingAddress(
   mint: anchor.web3.PublicKey,
   borrower: anchor.web3.PublicKey
@@ -102,7 +96,7 @@ export async function findListingAddress(
   return listingAccount;
 }
 
-export async function initListing(
+export async function initLoan(
   connection: anchor.web3.Connection,
   options: {
     amount: number;
@@ -124,20 +118,19 @@ export async function initListing(
     program.programId
   );
 
-  const listingOptions = new ListingOptions();
-  listingOptions.amount = new anchor.BN(options.amount);
-  listingOptions.basisPoints = new anchor.BN(options.basisPoints);
-  listingOptions.duration = new anchor.BN(options.duration);
+  const amount = new anchor.BN(options.amount);
+  const basisPoints = new anchor.BN(options.basisPoints);
+  const duration = new anchor.BN(options.duration);
 
   try {
     await program.methods
-      .initListing(listingOptions)
+      .initLoan(amount, basisPoints, duration)
       .accounts({
         mint,
         escrowAccount,
         listingAccount,
         borrower: keypair.publicKey,
-        borrowerDepositTokenAccount: associatedAddress,
+        depositTokenAccount: associatedAddress,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
         systemProgram: anchor.web3.SystemProgram.programId,
@@ -174,7 +167,7 @@ export async function createLoan(connection: anchor.web3.Connection, borrower) {
         lender: keypair.publicKey,
         mint: borrower.mint,
         escrowAccount: borrower.escrowAccount,
-        borrowerDepositTokenAccount: borrower.associatedAddress,
+        depositTokenAccount: borrower.associatedAddress,
         systemProgram: anchor.web3.SystemProgram.programId,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
