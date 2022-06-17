@@ -96,6 +96,18 @@ export async function findListingAddress(
   return listingAccount;
 }
 
+export async function findCallOptionAddress(
+  mint: anchor.web3.PublicKey,
+  seller: anchor.web3.PublicKey
+): Promise<anchor.web3.PublicKey> {
+  const [callOptionAccount] = await anchor.web3.PublicKey.findProgramAddress(
+    [Buffer.from("call_option"), mint.toBuffer(), seller.toBuffer()],
+    PROGRAM_ID
+  );
+
+  return callOptionAccount;
+}
+
 export async function initLoan(
   connection: anchor.web3.Connection,
   options: {
@@ -182,5 +194,108 @@ export async function createLoan(connection: anchor.web3.Connection, borrower) {
     keypair,
     provider,
     program,
+  };
+}
+
+export async function initCallOption(
+  connection: anchor.web3.Connection,
+  options: {
+    amount: number;
+    strikePrice: number;
+    expiry: number;
+  }
+) {
+  const keypair = anchor.web3.Keypair.generate();
+  const provider = getProvider(connection, keypair);
+  const program = getProgram(provider);
+  await requestAirdrop(connection, keypair.publicKey);
+
+  const { mint, associatedAddress } = await mintNFT(connection, keypair);
+
+  const callOptionAccount = await findCallOptionAddress(
+    mint,
+    keypair.publicKey
+  );
+
+  const [escrowAccount] = await anchor.web3.PublicKey.findProgramAddress(
+    [Buffer.from("escrow"), mint.toBuffer()],
+    program.programId
+  );
+  const amount = new anchor.BN(options.amount);
+  const strikePrice = new anchor.BN(options.strikePrice);
+  const expiry = new anchor.BN(options.expiry);
+
+  try {
+    await program.methods
+      .initCallOption(amount, strikePrice, expiry)
+      .accounts({
+        mint,
+        escrowAccount,
+        callOptionAccount,
+        seller: keypair.publicKey,
+        depositTokenAccount: associatedAddress,
+        tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+      })
+      .rpc();
+  } catch (error) {
+    console.log(error.logs);
+    throw error;
+  }
+
+  return {
+    mint,
+    keypair,
+    provider,
+    program,
+    callOptionAccount,
+    escrowAccount,
+    associatedAddress,
+  };
+}
+
+export async function buyCallOption(
+  connection: anchor.web3.Connection,
+  seller
+) {
+  const keypair = anchor.web3.Keypair.generate();
+  const provider = getProvider(connection, keypair);
+  const program = getProgram(provider);
+  await requestAirdrop(connection, keypair.publicKey);
+
+  const associatedAddress = await splToken.getOrCreateAssociatedTokenAccount(
+    connection,
+    keypair,
+    seller.mint,
+    keypair.publicKey
+  );
+
+  try {
+    await program.methods
+      .buyCallOption()
+      .accounts({
+        callOptionAccount: seller.callOptionAccount,
+        seller: seller.keypair.publicKey,
+        buyer: keypair.publicKey,
+        mint: seller.mint,
+        escrowAccount: seller.escrowAccount,
+        depositTokenAccount: seller.associatedAddress,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+      })
+      .rpc();
+  } catch (error) {
+    console.log(error.logs);
+    throw error;
+  }
+
+  return {
+    keypair,
+    provider,
+    program,
+    associatedAddress: associatedAddress.address,
   };
 }

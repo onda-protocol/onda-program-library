@@ -26,7 +26,7 @@ pub mod dexloan_listings {
         listing.escrow = ctx.accounts.escrow_account.key();
         listing.bump = *ctx.bumps.get("listing_account").unwrap();
         listing.escrow_bump = *ctx.bumps.get("escrow_account").unwrap();
-        // List
+        //
         listing.amount = amount;
         listing.basis_points = basis_points;
         listing.duration = duration;
@@ -52,13 +52,20 @@ pub mod dexloan_listings {
         expiry: i64
     ) -> Result<()> {
         let call_option = &mut ctx.accounts.call_option_account;
+        let unix_timestamp = ctx.accounts.clock.unix_timestamp;
+        msg!("unix_timestamp: {} seconds", unix_timestamp);
+        msg!("expiry: {} seconds", expiry);
+        if unix_timestamp > expiry {
+            return Err(ErrorCode::InvalidExpiry.into())
+        }
+
         // Init
         call_option.escrow = ctx.accounts.escrow_account.key();
         call_option.seller = ctx.accounts.seller.key();
         call_option.mint = ctx.accounts.mint.key();
         call_option.bump = *ctx.bumps.get("call_option_account").unwrap();
         call_option.escrow_bump = *ctx.bumps.get("escrow_account").unwrap();
-        // List
+        //
         call_option.amount = amount;
         call_option.expiry = expiry;
         call_option.strike_price = strike_price;
@@ -274,7 +281,7 @@ pub mod dexloan_listings {
 
         msg!("Strike price: {} lamports", call_option.strike_price);
 
-        if call_option.expiry > unix_timestamp {
+        if unix_timestamp > call_option.expiry {
             return Err(ErrorCode::OptionExpired.into())
         }
 
@@ -394,7 +401,6 @@ pub struct InitLoan<'info> {
 #[derive(Accounts)]
 #[instruction(amount: u64, strike_price: u64, expiry: i64)]
 pub struct InitCallOption<'info> {
-    /// The person who is listing the loan
     #[account(mut)]
     pub seller: Signer<'info>,
     #[account(
@@ -404,7 +410,6 @@ pub struct InitCallOption<'info> {
         constraint = deposit_token_account.amount == 1
     )]
     pub deposit_token_account: Account<'info, TokenAccount>,
-    /// The new listing account
     #[account(
         init,
         payer = seller,
@@ -417,7 +422,6 @@ pub struct InitCallOption<'info> {
         space = CALL_OPTION_SIZE,
     )]
     pub call_option_account: Account<'info, CallOption>,
-    /// This is where we'll store the borrower's token
     #[account(
         init_if_needed,
         payer = seller,
@@ -432,6 +436,7 @@ pub struct InitCallOption<'info> {
     /// Misc
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
+    pub clock: Sysvar<'info, Clock>,
     pub rent: Sysvar<'info, Rent>,
 }
 
@@ -521,7 +526,7 @@ pub struct BuyCallOption<'info> {
     #[account(
         mut,
         seeds = [
-            LISTING_PREFIX.as_bytes(),
+            CALL_OPTION_PREFIX.as_bytes(),
             mint.key().as_ref(),
             seller.key().as_ref(),
         ],
@@ -792,6 +797,8 @@ const CALL_OPTION_SIZE: usize = 8 + // key
 pub enum ErrorCode {
     #[msg("This loan is not overdue")]
     NotOverdue,
+    #[msg("Invalid expiry")]
+    InvalidExpiry,
     #[msg("Invalid state")]
     InvalidState,
     #[msg("Invalid listing type")]
