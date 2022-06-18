@@ -1,16 +1,16 @@
 use anchor_lang::prelude::*;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq)]
-pub enum LoanState {
-    Listed,
-    Active,
-    Defaulted,
+pub enum ListingState {
+    Listed = 1,
+    Active = 2,
+    Defaulted = 5,
 }
 
 #[account]
-pub struct Loan {
+pub struct Listing {
     /// Whether the loan is active
-    pub state: LoanState,
+    pub state: u8,
     /// The amount of the loan
     pub amount: u64,
     /// The NFT holder
@@ -32,21 +32,6 @@ pub struct Loan {
     pub escrow_bump: u8,
 }
 
-impl Loan {
-    pub fn space() -> usize {
-        8 + // key
-        1 + // state
-        8 + // amount
-        32 + // borrower
-        32 + // lender
-        4 + // basis_points
-        8 + // duration
-        8 + // start_date
-        32 + // escrow
-        32 + // mint
-        1 + // bump
-        1 // escrow bump
-    }
-
-    pub const PREFIX: &'static [u8] = b"loan";
+impl Listing {
+    pub const PREFIX: &'static [u8] = b"listing";
 }

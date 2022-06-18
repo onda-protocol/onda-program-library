@@ -4,11 +4,9 @@ use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{CallOption, CallOptionState};
 use crate::error::{ErrorCode};
 
-declare_id!("H6FCxCy2KCPJwCoUb9eQCSv41WZBKQaYfB6x5oFajzfj");
-
 const ESCROW_PREFIX: &'static [u8] = b"escrow";
 
-pub fn init_call_option(
+pub fn init(
     ctx: Context<InitCallOption>,
     amount: u64,
     strike_price: u64,
@@ -46,7 +44,7 @@ pub fn init_call_option(
     Ok(())
 }
 
-pub fn buy_call_option(ctx: Context<BuyCallOption>) -> Result<()> {
+pub fn buy(ctx: Context<BuyCallOption>) -> Result<()> {
     let call_option = &mut ctx.accounts.call_option_account;
 
     call_option.state = CallOptionState::Active;
@@ -82,7 +80,7 @@ pub fn buy_call_option(ctx: Context<BuyCallOption>) -> Result<()> {
     Ok(())
 }
 
-pub fn exercise_call_option(ctx: Context<ExerciseOption>) -> Result<()> {
+pub fn exercise(ctx: Context<ExerciseCallOption>) -> Result<()> {
     let call_option = &mut ctx.accounts.call_option_account;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
@@ -125,7 +123,7 @@ pub fn exercise_call_option(ctx: Context<ExerciseOption>) -> Result<()> {
     Ok(())
 }
 
-pub fn close_call_option(ctx: Context<CloseCallOption>) -> Result<()> {
+pub fn close(ctx: Context<CloseCallOption>) -> Result<()> {
     let call_option = &mut ctx.accounts.call_option_account;
     let escrow_account = &ctx.accounts.escrow_account;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
@@ -307,7 +305,7 @@ pub struct CloseCallOption<'info> {
 }
 
 #[derive(Accounts)]
-pub struct ExerciseOption<'info> {
+pub struct ExerciseCallOption<'info> {
     /// CHECK: contrained on listing_account
     #[account(mut)]
     pub seller: AccountInfo<'info>,

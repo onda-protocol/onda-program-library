@@ -1,7 +1,6 @@
 use anchor_lang::prelude::*;
-use anchor_lang::AccountsClose;
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{Listing, ListingState};
+use crate::state::{Loan, LoanState};
 use crate::error::{ErrorCode};
 
 declare_id!("H6FCxCy2KCPJwCoUb9eQCSv41WZBKQaYfB6x5oFajzfj");
@@ -9,23 +8,23 @@ declare_id!("H6FCxCy2KCPJwCoUb9eQCSv41WZBKQaYfB6x5oFajzfj");
 pub const ESCROW_PREFIX: &'static [u8] = b"escrow";
 pub const SECONDS_PER_YEAR: f64 = 31_536_000.0; 
 
-pub fn init_loan(
+pub fn init(
     ctx: Context<InitLoan>,
     amount: u64,
     basis_points: u32,
     duration: u64
 ) -> Result<()> {
-    let listing = &mut ctx.accounts.listing_account;
+    let listing = &mut ctx.accounts.loan_account;
     // Init
     listing.mint = ctx.accounts.mint.key();
     listing.escrow = ctx.accounts.escrow_account.key();
-    listing.bump = *ctx.bumps.get("listing_account").unwrap();
+    listing.bump = *ctx.bumps.get("loan_account").unwrap();
     listing.escrow_bump = *ctx.bumps.get("escrow_account").unwrap();
     //
     listing.amount = amount;
     listing.basis_points = basis_points;
     listing.duration = duration;
-    listing.state = ListingState::Listed as u8;
+    listing.state = LoanState::Listed;
     listing.borrower = ctx.accounts.borrower.key();
     // Transfer
     let cpi_program = ctx.accounts.token_program.to_account_info();
@@ -40,8 +39,8 @@ pub fn init_loan(
     Ok(())
 }
 
-pub fn cancel_listing(ctx: Context<CancelListing>) -> Result<()> {
-    let listing = &ctx.accounts.listing_account;
+pub fn close(ctx: Context<CloseLoan>) -> Result<()> {
+    let listing = &ctx.accounts.loan_account;
     let borrower = &ctx.accounts.borrower;
     let escrow_account = &ctx.accounts.escrow_account;
     let deposit_token_account = &ctx.accounts.deposit_token_account;
@@ -75,10 +74,10 @@ pub fn cancel_listing(ctx: Context<CancelListing>) -> Result<()> {
     Ok(())
 }
 
-pub fn make_loan(ctx: Context<MakeLoan>) -> Result<()> {
-    let listing = &mut ctx.accounts.listing_account;
+pub fn lend(ctx: Context<Lend>) -> Result<()> {
+    let listing = &mut ctx.accounts.loan_account;
 
-    listing.state = ListingState::Active as u8;
+    listing.state = LoanState::Active;
     listing.lender = ctx.accounts.lender.key();
     listing.start_date = ctx.accounts.clock.unix_timestamp;
     // Transfer token to escrow
@@ -112,8 +111,8 @@ pub fn make_loan(ctx: Context<MakeLoan>) -> Result<()> {
     Ok(())
 }
 
-pub fn repay_loan(ctx: Context<RepayLoan>) -> Result<()> {
-    let listing = &mut ctx.accounts.listing_account;
+pub fn repay(ctx: Context<RepayLoan>) -> Result<()> {
+    let listing = &mut ctx.accounts.loan_account;
 
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
     let loan_start_date = listing.start_date;
@@ -160,8 +159,8 @@ pub fn repay_loan(ctx: Context<RepayLoan>) -> Result<()> {
     Ok(())
 }
 
-pub fn repossess_collateral(ctx: Context<RepossessCollateral>) -> Result<()> {
-    let listing = &mut ctx.accounts.listing_account;
+pub fn repossess(ctx: Context<Repossess>) -> Result<()> {
+    let listing = &mut ctx.accounts.loan_account;
 
     let unix_timestamp = ctx.accounts.clock.unix_timestamp as u64;
     let loan_start_date = listing.start_date as u64;
@@ -175,7 +174,7 @@ pub fn repossess_collateral(ctx: Context<RepossessCollateral>) -> Result<()> {
         return Err(ErrorCode::NotOverdue.into())
     }
     
-    listing.state = ListingState::Defaulted as u8;
+    listing.state = LoanState::Defaulted;
 
     let cpi_program = ctx.accounts.token_program.to_account_info();
     let cpi_accounts = anchor_spl::token::Transfer {
@@ -193,14 +192,6 @@ pub fn repossess_collateral(ctx: Context<RepossessCollateral>) -> Result<()> {
     let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
     anchor_spl::token::transfer(cpi_ctx, 1)?;
     
-    Ok(())
-}
-
-pub fn close_account(ctx: Context<CloseAccount>) -> Result<()> {
-    let listing = &mut ctx.accounts.listing_account;
-
-    listing.close(ctx.accounts.borrower.to_account_info())?;
-
     Ok(())
 }
 
@@ -223,14 +214,14 @@ pub struct InitLoan<'info> {
         init,
         payer = borrower,
         seeds = [
-            Listing::PREFIX,
+            Loan::PREFIX,
             mint.key().as_ref(),
             borrower.key().as_ref(),
         ],
         bump,
-        space = Listing::space(),
+        space = Loan::space(),
     )]
-    pub listing_account: Account<'info, Listing>,
+    pub loan_account: Account<'info, Loan>,
     /// This is where we'll store the borrower's token
     #[account(
         init_if_needed,
@@ -250,7 +241,7 @@ pub struct InitLoan<'info> {
 }
 
 #[derive(Accounts)]
-pub struct CancelListing<'info> {
+pub struct CloseLoan<'info> {
     pub borrower: Signer<'info>,
     #[account(
         mut,
@@ -260,22 +251,22 @@ pub struct CancelListing<'info> {
     #[account(
         mut,
         seeds = [
-            Listing::PREFIX,
+            Loan::PREFIX,
             mint.key().as_ref(),
             borrower.key().as_ref(),
         ],
-        bump = listing_account.bump,
-        constraint = listing_account.borrower == *borrower.key,
-        constraint = listing_account.escrow == escrow_account.key(),
-        constraint = listing_account.mint == mint.key(),
-        constraint = listing_account.state == ListingState::Listed as u8,
+        bump = loan_account.bump,
+        constraint = loan_account.borrower == *borrower.key,
+        constraint = loan_account.escrow == escrow_account.key(),
+        constraint = loan_account.mint == mint.key(),
+        constraint = loan_account.state == LoanState::Listed,
         close = borrower
     )]
-    pub listing_account: Account<'info, Listing>,
+    pub loan_account: Account<'info, Loan>,
     #[account(
         mut,
         seeds = [ESCROW_PREFIX, mint.key().as_ref()],
-        bump = listing_account.escrow_bump,
+        bump = loan_account.escrow_bump,
     )]
     pub escrow_account: Account<'info, TokenAccount>,
     pub mint: Account<'info, Mint>,
@@ -285,8 +276,8 @@ pub struct CancelListing<'info> {
 }
 
 #[derive(Accounts)]
-pub struct MakeLoan<'info> {
-    /// CHECK: contrained on listing_account
+pub struct Lend<'info> {
+    /// CHECK: contrained on loan_account
     #[account(mut)]
     pub borrower: AccountInfo<'info>,
     #[account(mut)]
@@ -295,21 +286,21 @@ pub struct MakeLoan<'info> {
     #[account(
         mut,
         seeds = [
-            Listing::PREFIX,
+            Loan::PREFIX,
             mint.key().as_ref(),
             borrower.key().as_ref(),
         ],
-        bump = listing_account.bump,
-        constraint = listing_account.borrower == borrower.key(),
-        constraint = listing_account.borrower != lender.key(),
-        constraint = listing_account.mint == mint.key(),
-        constraint = listing_account.state == ListingState::Listed as u8,
+        bump = loan_account.bump,
+        constraint = loan_account.borrower == borrower.key(),
+        constraint = loan_account.borrower != lender.key(),
+        constraint = loan_account.mint == mint.key(),
+        constraint = loan_account.state == LoanState::Listed,
     )]
-    pub listing_account: Account<'info, Listing>,
+    pub loan_account: Account<'info, Loan>,
     #[account(
         mut,
         seeds = [ESCROW_PREFIX, mint.key().as_ref()],
-        bump = listing_account.escrow_bump,
+        bump = loan_account.escrow_bump,
     )]
     pub escrow_account: Account<'info, TokenAccount>,
     #[account(
@@ -338,28 +329,28 @@ pub struct RepayLoan<'info> {
     #[account(
         mut,
         seeds = [ESCROW_PREFIX, mint.key().as_ref()],
-        bump = listing_account.escrow_bump,
+        bump = loan_account.escrow_bump,
     )]
     pub escrow_account: Account<'info, TokenAccount>,
-    /// CHECK: contrained on listing_account
+    /// CHECK: contrained on loan_account
     #[account(mut)]
     pub lender: AccountInfo<'info>,
     #[account(
         mut,
         seeds = [
-            Listing::PREFIX,
+            Loan::PREFIX,
             mint.key().as_ref(),
             borrower.key().as_ref(),
         ],
-        bump = listing_account.bump,
-        constraint = listing_account.borrower == borrower.key(),
-        constraint = listing_account.lender == lender.key(),
-        constraint = listing_account.escrow == escrow_account.key(),
-        constraint = listing_account.mint == mint.key(),
-        constraint = listing_account.state == ListingState::Active as u8,
+        bump = loan_account.bump,
+        constraint = loan_account.borrower == borrower.key(),
+        constraint = loan_account.lender == lender.key(),
+        constraint = loan_account.escrow == escrow_account.key(),
+        constraint = loan_account.mint == mint.key(),
+        constraint = loan_account.state == LoanState::Active,
         close = borrower
     )]
-    pub listing_account: Box<Account<'info, Listing>>,
+    pub loan_account: Box<Account<'info, Loan>>,
     pub mint: Box<Account<'info, Mint>>,
     /// Misc
     pub system_program: Program<'info, System>,
@@ -368,11 +359,11 @@ pub struct RepayLoan<'info> {
 }
 
 #[derive(Accounts)]
-pub struct RepossessCollateral<'info> {
+pub struct Repossess<'info> {
     #[account(
         mut,
         seeds = [ESCROW_PREFIX, mint.key().as_ref()],
-        bump = listing_account.escrow_bump,
+        bump = loan_account.escrow_bump,
     )]
     pub escrow_account: Account<'info, TokenAccount>,
     #[account(mut)]
@@ -381,29 +372,16 @@ pub struct RepossessCollateral<'info> {
     pub lender_token_account: Account<'info, TokenAccount>,
     #[account(
         mut,
-        constraint = listing_account.lender == lender.key(),
-        constraint = listing_account.escrow == escrow_account.key(),
-        constraint = listing_account.mint == mint.key(),
-        constraint = listing_account.state == ListingState::Active as u8,
+        constraint = loan_account.lender == lender.key(),
+        constraint = loan_account.escrow == escrow_account.key(),
+        constraint = loan_account.mint == mint.key(),
+        constraint = loan_account.state == LoanState::Active,
     )]
-    pub listing_account: Account<'info, Listing>,
+    pub loan_account: Account<'info, Loan>,
     pub mint: Account<'info, Mint>,
     /// Misc
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub clock: Sysvar<'info, Clock>,
     pub rent: Sysvar<'info, Rent>,
-}
-
-#[derive(Accounts)]
-pub struct CloseAccount<'info> {
-    #[account(mut)]
-    pub borrower: Signer<'info>,
-    #[account(
-        mut,
-        constraint = listing_account.borrower == borrower.key(),
-        constraint = listing_account.state != ListingState::Listed as u8,
-        constraint = listing_account.state != ListingState::Active as u8,
-    )]
-    pub listing_account: Account<'info, Listing>,
 }
