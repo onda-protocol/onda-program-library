@@ -119,6 +119,7 @@ export async function initLoan(
   const keypair = anchor.web3.Keypair.generate();
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
+
   await requestAirdrop(connection, keypair.publicKey);
 
   const { mint, associatedAddress } = await mintNFT(connection, keypair);

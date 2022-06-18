@@ -505,7 +505,7 @@ describe("dexloan_listings", () => {
     });
   });
 
-  describe.only("Call Options", () => {
+  describe("Call Options", () => {
     it("Will allow a call option to be created", async () => {
       const options = {
         amount: 1_000_000,
@@ -611,7 +611,7 @@ describe("dexloan_listings", () => {
     assert.equal(buyerTokenAccount.amount, BigInt(1));
   });
 
-  it.only("Will NOT allow a call option to be exercised if expired", async () => {
+  it("Will NOT allow a call option to be exercised if expired", async () => {
     const options = {
       amount: 1_000_000,
       strikePrice: anchor.web3.LAMPORTS_PER_SOL,
