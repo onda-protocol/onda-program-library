@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::program_option::{COption};
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{CallOption, CallOptionState};
 use crate::error::{ErrorCode};
@@ -126,27 +127,38 @@ pub fn exercise_call_option(ctx: Context<ExerciseOption>) -> Result<()> {
 
 pub fn close_call_option(ctx: Context<CloseCallOption>) -> Result<()> {
     let call_option = &mut ctx.accounts.call_option_account;
+    let escrow_account = &ctx.accounts.escrow_account;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
-
-    if call_option.expiry > unix_timestamp {
+    
+    if call_option.state == CallOptionState::Active && call_option.expiry > unix_timestamp {
         return Err(ErrorCode::OptionNotExpired.into())
     }
 
     let cpi_program = ctx.accounts.token_program.to_account_info();
-    let cpi_accounts = anchor_spl::token::Transfer {
-        from: ctx.accounts.escrow_account.to_account_info(),
-        to: ctx.accounts.deposit_token_account.to_account_info(),
-        authority: ctx.accounts.escrow_account.to_account_info(),
-    };
-    let seeds = &[
-        ESCROW_PREFIX,
-        ctx.accounts.mint.to_account_info().key.as_ref(),
-        &[call_option.escrow_bump],
-    ];
-    let signer = &[&seeds[..]];
 
-    let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
-    anchor_spl::token::transfer(cpi_ctx, 1)?;
+    if escrow_account.amount == 0 {
+        let cpi_accounts = anchor_spl::token::Revoke {
+            source: ctx.accounts.deposit_token_account.to_account_info(),
+            authority:  ctx.accounts.seller.to_account_info()
+        };
+        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+        anchor_spl::token::revoke(cpi_ctx)?;
+    } else {
+        let cpi_accounts = anchor_spl::token::Transfer {
+            from: escrow_account.to_account_info(),
+            to: ctx.accounts.deposit_token_account.to_account_info(),
+            authority: escrow_account.to_account_info(),
+        };
+        let seeds = &[
+            ESCROW_PREFIX,
+            ctx.accounts.mint.to_account_info().key.as_ref(),
+            &[call_option.escrow_bump],
+        ];
+        let signer = &[&seeds[..]];
+    
+        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
+        anchor_spl::token::transfer(cpi_ctx, 1)?;
+    }
 
     Ok(())
 }
@@ -234,9 +246,9 @@ pub struct BuyCallOption<'info> {
     #[account(
         mut,
         constraint = deposit_token_account.amount == 1,
-        constraint = deposit_token_account.owner == seller.key(),
+        constraint = deposit_token_account.delegate == COption::Some(escrow_account.key()),
         associated_token::mint = mint,
-        associated_token::authority = escrow_account,
+        associated_token::authority = seller,
     )]
     pub deposit_token_account: Account<'info, TokenAccount>,
     
@@ -265,7 +277,7 @@ pub struct CloseCallOption<'info> {
         bump = call_option_account.bump,
         constraint = call_option_account.seller == seller.key(),
         constraint = call_option_account.mint == mint.key(),
-        constraint = call_option_account.state == CallOptionState::Listed,
+        constraint = call_option_account.state != CallOptionState::Exercised,
         close = seller
     )]
     
@@ -280,10 +292,9 @@ pub struct CloseCallOption<'info> {
    
     #[account(
         mut,
-        constraint = deposit_token_account.amount == 1,
-        constraint = deposit_token_account.owner == seller.key(),
+        // constraint = deposit_token_account.delegate == COption::Some(escrow_account.key()),
         associated_token::mint = mint,
-        associated_token::authority = escrow_account
+        associated_token::authority = seller
     )]
     pub deposit_token_account: Account<'info, TokenAccount>,
     
@@ -329,9 +340,8 @@ pub struct ExerciseOption<'info> {
 
     #[account(
         mut,
-        constraint = buyer_token_account.owner == buyer.key(),
         associated_token::mint = mint,
-        associated_token::authority = seller
+        associated_token::authority = buyer
     )]
     pub buyer_token_account: Account<'info, TokenAccount>,
     

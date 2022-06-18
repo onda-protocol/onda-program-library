@@ -505,7 +505,7 @@ describe("dexloan_listings", () => {
     });
   });
 
-  describe("Call Options", () => {
+  describe.only("Call Options", () => {
     it("Will allow a call option to be created", async () => {
       const options = {
         amount: 1_000_000,
@@ -534,7 +534,7 @@ describe("dexloan_listings", () => {
       assert.equal(callOption.strikePrice.toNumber(), options.strikePrice);
       assert.equal(callOption.expiry.toNumber(), options.expiry);
       assert.equal(callOption.mint.toBase58(), seller.mint.toBase58());
-      assert.equal(callOption.state, 1);
+      assert.deepEqual(callOption.state, { listed: {} });
       assert.equal(sellerTokenAccount.amount, BigInt(1));
       assert.equal(escrowTokenAccount.amount, BigInt(0));
       assert.equal(
@@ -544,7 +544,7 @@ describe("dexloan_listings", () => {
     });
   });
 
-  it("Will allow a call option to be sold", async () => {
+  it("Will allow a call option to be bought", async () => {
     const options = {
       amount: 1_000_000,
       strikePrice: anchor.web3.LAMPORTS_PER_SOL,
@@ -569,7 +569,7 @@ describe("dexloan_listings", () => {
       callOption.seller.toBase58(),
       seller.keypair.publicKey.toBase58()
     );
-    assert.equal(callOption.state, 2);
+    assert.deepEqual(callOption.state, { active: {} });
     assert.equal(sellerTokenAccount.amount, BigInt(0));
     assert.equal(escrowTokenAccount.amount, BigInt(1));
   });
@@ -607,7 +607,7 @@ describe("dexloan_listings", () => {
       buyer.associatedAddress
     );
 
-    assert.equal(callOption.state, 4);
+    assert.deepEqual(callOption.state, { exercised: {} });
     assert.equal(buyerTokenAccount.amount, BigInt(1));
   });
 
@@ -615,7 +615,7 @@ describe("dexloan_listings", () => {
     const options = {
       amount: 1_000_000,
       strikePrice: anchor.web3.LAMPORTS_PER_SOL,
-      expiry: Math.round(Date.now() / 1000) + 2, // 2 days
+      expiry: Math.round(Date.now() / 1000) + 2, // 2 seconds
     };
     const seller = await helpers.initCallOption(connection, options);
     const buyer = await helpers.buyCallOption(connection, seller);
@@ -643,6 +643,77 @@ describe("dexloan_listings", () => {
     } catch (error) {
       assert.ok(error.message.includes("Option expired"));
     }
+  });
+
+  it("Will allow a call option to be closed if not active", async () => {
+    const options = {
+      amount: 1_000_000,
+      strikePrice: anchor.web3.LAMPORTS_PER_SOL,
+      expiry: Math.round(Date.now() / 1000) + 30 * 24 * 60 * 2, // 2 days
+    };
+    const seller = await helpers.initCallOption(connection, options);
+
+    await seller.program.methods
+      .closeCallOption()
+      .accounts({
+        depositTokenAccount: seller.associatedAddress,
+        callOptionAccount: seller.callOptionAccount,
+        escrowAccount: seller.escrowAccount,
+        mint: seller.mint,
+        clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+      })
+      .rpc();
+
+    try {
+      await seller.program.account.callOption.fetch(seller.callOptionAccount);
+      assert.fail();
+    } catch (error) {
+      assert.ok(error.message.includes("Account does not exist"));
+    }
+    const sellerTokenAccount = await splToken.getAccount(
+      connection,
+      seller.associatedAddress
+    );
+
+    assert.equal(sellerTokenAccount.amount, BigInt(1));
+    assert.equal(sellerTokenAccount.delegate, null);
+  });
+
+  it("Will allow a call option to be closed if expired", async () => {
+    const options = {
+      amount: 1_000_000,
+      strikePrice: anchor.web3.LAMPORTS_PER_SOL,
+      expiry: Math.round(Date.now() / 1000) + 2, // 2 seconds
+    };
+    const seller = await helpers.initCallOption(connection, options);
+    await helpers.buyCallOption(connection, seller);
+
+    await wait(2);
+
+    await seller.program.methods
+      .closeCallOption()
+      .accounts({
+        depositTokenAccount: seller.associatedAddress,
+        callOptionAccount: seller.callOptionAccount,
+        escrowAccount: seller.escrowAccount,
+        mint: seller.mint,
+        clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+      })
+      .rpc();
+
+    try {
+      await seller.program.account.callOption.fetch(seller.callOptionAccount);
+      assert.fail();
+    } catch (error) {
+      assert.ok(error.message.includes("Account does not exist"));
+    }
+    const sellerTokenAccount = await splToken.getAccount(
+      connection,
+      seller.associatedAddress
+    );
+
+    assert.equal(sellerTokenAccount.amount, BigInt(1));
+    assert.equal(sellerTokenAccount.delegate, null);
   });
 });
 
