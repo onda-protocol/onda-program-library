@@ -1,19 +1,47 @@
 use anchor_lang::prelude::*;
 use anchor_lang::AccountsClose;
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{Listing, ListingState, Loan, LoanState};
-use crate::error::{ErrorCode};
+use crate::state::{Listing, Loan, LoanState};
 
 pub fn close(ctx: Context<CloseListing>) -> Result<()> {
-  let listing = &mut ctx.accounts.loan_account;
+    let listing = &mut ctx.accounts.loan_account;
 
-  listing.close(ctx.accounts.borrower.to_account_info())?;
+    listing.close(ctx.accounts.borrower.to_account_info())?;
 
-  Ok(())
+    Ok(())
 }
 
 pub fn migrate(ctx: Context<MigrateListing>) -> Result<()> {
-  Ok(())
+    let listing = &mut ctx.accounts.listing_account;
+    let loan = &mut ctx.accounts.loan_account;
+    
+    match listing.state {
+        1 => {
+            loan.state = LoanState::Listed;
+        },
+        2 => {
+            loan.state = LoanState::Active;
+        },
+        5 => {
+            loan.state = LoanState::Defaulted;
+        },
+        _ => {
+            return Err(ErrorCode::InvalidState.into())
+        }
+    }
+
+    loan.amount = listing.amount;
+    loan.borrower = listing.borrower;
+    loan.lender = listing.lender;
+    loan.basis_points = listing.basis_points;
+    loan.duration = listing.duration;
+    loan.start_date = listing.start_date;
+    loan.escrow = listing.escrow;
+    loan.escrow_bump = listing.escrow_bump;
+    loan.mint = listing.mint;
+    loan.bump = *ctx.bumps.get("loan_account").unwrap();
+
+    Ok(())
 }
 
 #[derive(Accounts)]
@@ -61,9 +89,7 @@ pub struct MigrateListing<'info> {
     pub loan_account: Account<'info, Loan>,
     /// This is where we'll store the borrower's token
     #[account(
-        init_if_needed,
-        payer = payer,
-        seeds = [ESCROW_PREFIX, mint.key().as_ref()],
+        seeds = [b"escrow", mint.key().as_ref()],
         bump,
         token::mint = mint,
         token::authority = escrow_account,
@@ -75,4 +101,10 @@ pub struct MigrateListing<'info> {
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub rent: Sysvar<'info, Rent>,
+}
+
+#[error_code]
+pub enum ErrorCode {
+    #[msg("Invalid state")]
+    InvalidState,
 }

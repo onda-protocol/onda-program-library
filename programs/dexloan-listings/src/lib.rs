@@ -58,8 +58,8 @@ pub mod dexloan_listings {
         instructions::call_option::close(ctx)
     }
 
-    pub fn migrate_listing(ctx: Context<CloseListing>) -> Result<()> {
-        instructions::listing::close(ctx)
+    pub fn migrate_listing(ctx: Context<MigrateListing>) -> Result<()> {
+        instructions::listing::migrate(ctx)
     }
 
     pub fn close_listing(ctx: Context<CloseListing>) -> Result<()> {
