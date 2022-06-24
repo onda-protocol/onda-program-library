@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::AccountsClose;
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{Listing, Loan, LoanState};
+use crate::state::{Listing, ListingState, Loan, LoanState};
 
 pub fn close(ctx: Context<CloseListing>) -> Result<()> {
     let listing = &mut ctx.accounts.loan_account;
@@ -11,36 +11,24 @@ pub fn close(ctx: Context<CloseListing>) -> Result<()> {
     Ok(())
 }
 
-pub fn migrate(ctx: Context<MigrateListing>) -> Result<()> {
+pub fn cancel_listing(ctx: Context<CancelListing>) -> Result<()> {
     let listing = &mut ctx.accounts.listing_account;
-    let loan = &mut ctx.accounts.loan_account;
+
+    let cpi_program = ctx.accounts.token_program.to_account_info();
+    let cpi_accounts = anchor_spl::token::Transfer {
+        from: ctx.accounts.escrow_account.to_account_info(),
+        to: ctx.accounts.borrower_deposit_token_account.to_account_info(),
+        authority: ctx.accounts.escrow_account.to_account_info(),
+    };
+    let seeds = &[
+        b"escrow",
+        ctx.accounts.mint.to_account_info().key.as_ref(),
+        &[listing.escrow_bump],
+    ];
+    let signer = &[&seeds[..]];
+    let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
+    anchor_spl::token::transfer(cpi_ctx, 1)?;
     
-    match listing.state {
-        1 => {
-            loan.state = LoanState::Listed;
-        },
-        2 => {
-            loan.state = LoanState::Active;
-        },
-        5 => {
-            loan.state = LoanState::Defaulted;
-        },
-        _ => {
-            return Err(ErrorCode::InvalidState.into())
-        }
-    }
-
-    loan.amount = listing.amount;
-    loan.borrower = listing.borrower;
-    loan.lender = listing.lender;
-    loan.basis_points = listing.basis_points;
-    loan.duration = listing.duration;
-    loan.start_date = listing.start_date;
-    loan.escrow = listing.escrow;
-    loan.escrow_bump = listing.escrow_bump;
-    loan.mint = listing.mint;
-    loan.bump = *ctx.bumps.get("loan_account").unwrap();
-
     Ok(())
 }
 
@@ -58,49 +46,38 @@ pub struct CloseListing<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(amount: u64, basis_points: u32, duration: u64)]
-pub struct MigrateListing<'info> {
-    /// The person who is listing the loan
-    #[account(mut)]
-    pub payer: Signer<'info>,
+pub struct CancelListing<'info> {
+    pub borrower: Signer<'info>,
     #[account(
         mut,
-        constraint = deposit_token_account.mint == mint.key(),
-        constraint = deposit_token_account.owner == listing_account.borrower.key(),
-        constraint = deposit_token_account.amount == 1
+        associated_token::mint = mint,
+        associated_token::authority = borrower,
     )]
-    pub deposit_token_account: Account<'info, TokenAccount>,
-
-    #[account(mut)]
-    pub listing_account: Account<'info, Listing>,
-
-    /// The new listing account
+    pub borrower_deposit_token_account: Account<'info, TokenAccount>,
     #[account(
-        init,
-        payer = payer,
+        mut,
         seeds = [
-            Loan::PREFIX,
-            listing_account.mint.as_ref(),
-            listing_account.borrower.as_ref(),
+            Listing::PREFIX,
+            mint.key().as_ref(),
+            borrower.key().as_ref(),
         ],
-        bump,
-        space = Loan::space(),
+        bump = listing_account.bump,
+        constraint = listing_account.escrow == escrow_account.key(),
+        constraint = listing_account.mint == mint.key(),
+        constraint = listing_account.state == ListingState::Listed as u8,
+        close = borrower
     )]
-    pub loan_account: Account<'info, Loan>,
-    /// This is where we'll store the borrower's token
+    pub listing_account: Account<'info, Listing>,
     #[account(
+        mut,
         seeds = [b"escrow", mint.key().as_ref()],
-        bump,
-        token::mint = mint,
-        token::authority = escrow_account,
+        bump = listing_account.escrow_bump,
     )]
     pub escrow_account: Account<'info, TokenAccount>,
-    #[account(constraint = mint.supply == 1)]
     pub mint: Account<'info, Mint>,
     /// Misc
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
-    pub rent: Sysvar<'info, Rent>,
 }
 
 #[error_code]
