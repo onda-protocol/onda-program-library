@@ -14,8 +14,10 @@ pub fn init(
 ) -> Result<()> {
     let call_option = &mut ctx.accounts.call_option_account;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
+    
     msg!("unix_timestamp: {} seconds", unix_timestamp);
     msg!("expiry: {} seconds", expiry);
+    
     if unix_timestamp > expiry {
         return Err(ErrorCode::InvalidExpiry.into())
     }

@@ -11,7 +11,7 @@ describe("dexloan_listings", () => {
   );
 
   describe("Loans", () => {
-    it("Creates a dexloan listing", async () => {
+    it("Creates a dexloan loan", async () => {
       const options = {
         amount: anchor.web3.LAMPORTS_PER_SOL,
         basisPoints: 500,
@@ -19,8 +19,8 @@ describe("dexloan_listings", () => {
       };
       const borrower = await helpers.initLoan(connection, options);
 
-      const listing = await borrower.program.account.listing.fetch(
-        borrower.listingAccount
+      const loan = await borrower.program.account.loan.fetch(
+        borrower.loanAccount
       );
       const borrowerTokenAccount = await splToken.getAccount(
         connection,
@@ -28,21 +28,21 @@ describe("dexloan_listings", () => {
       );
       const escrowTokenAccount = await splToken.getAccount(
         connection,
-        listing.escrow
+        loan.escrow
       );
 
-      assert.equal(borrowerTokenAccount.delegate, listing.escrow.toBase58());
-      assert.equal(listing.borrower, borrower.keypair.publicKey.toString());
-      assert.equal(listing.basisPoints, options.basisPoints);
-      assert.equal(listing.duration.toNumber(), options.duration);
-      assert.equal(listing.mint.toBase58(), borrower.mint.toBase58());
+      assert.equal(borrowerTokenAccount.delegate, loan.escrow.toBase58());
+      assert.equal(loan.borrower, borrower.keypair.publicKey.toString());
+      assert.equal(loan.basisPoints, options.basisPoints);
+      assert.equal(loan.duration.toNumber(), options.duration);
+      assert.equal(loan.mint.toBase58(), borrower.mint.toBase58());
       assert.equal(borrowerTokenAccount.amount, BigInt(1));
       assert.equal(escrowTokenAccount.amount, BigInt(0));
       assert.equal(
         escrowTokenAccount.mint.toBase58(),
         borrower.mint.toBase58()
       );
-      assert.equal(listing.state, 1);
+      assert.deepEqual(loan.state, { listed: {} });
       assert.equal(
         escrowTokenAccount.owner.toBase58(),
         borrower.escrowAccount.toBase58()
@@ -62,8 +62,8 @@ describe("dexloan_listings", () => {
 
       const lender = await helpers.createLoan(connection, borrower);
 
-      const listing = await borrower.program.account.listing.fetch(
-        borrower.listingAccount
+      const loan = await borrower.program.account.loan.fetch(
+        borrower.loanAccount
       );
       const borrowerPostLoanBalance = await connection.getBalance(
         borrower.keypair.publicKey
@@ -74,7 +74,7 @@ describe("dexloan_listings", () => {
       );
       const escrowTokenAccount = await splToken.getAccount(
         connection,
-        listing.escrow
+        loan.escrow
       );
 
       assert.equal(borrowerTokenAccount.amount, BigInt(0));
@@ -83,14 +83,10 @@ describe("dexloan_listings", () => {
         borrowerPreLoanBalance + options.amount,
         borrowerPostLoanBalance
       );
-      assert.equal(
-        listing.lender.toBase58(),
-        lender.keypair.publicKey.toBase58()
-      );
-      assert.equal(listing.state, 2);
+      assert.equal(loan.lender.toBase58(), lender.keypair.publicKey.toBase58());
+      assert.deepEqual(loan.state, { active: {} });
       assert(
-        listing.startDate.toNumber() > 0 &&
-          listing.startDate.toNumber() < Date.now()
+        loan.startDate.toNumber() > 0 && loan.startDate.toNumber() < Date.now()
       );
     });
 
@@ -109,7 +105,7 @@ describe("dexloan_listings", () => {
       await borrower.program.methods
         .repayLoan()
         .accounts({
-          listingAccount: borrower.listingAccount,
+          loanAccount: borrower.loanAccount,
           escrowAccount: borrower.escrowAccount,
           borrower: borrower.keypair.publicKey,
           depositTokenAccount: borrower.associatedAddress,
@@ -138,7 +134,7 @@ describe("dexloan_listings", () => {
       assert(lenderPostRepaymentBalance > lenderPreRepaymentBalance);
     });
 
-    it("Allows listings to be cancelled", async () => {
+    it("Allows loans to be closed", async () => {
       const options = {
         amount: anchor.web3.LAMPORTS_PER_SOL,
         basisPoints: 500,
@@ -148,9 +144,9 @@ describe("dexloan_listings", () => {
 
       try {
         await borrower.program.methods
-          .cancelListing()
+          .closeLoan()
           .accounts({
-            listingAccount: borrower.listingAccount,
+            loanAccount: borrower.loanAccount,
             escrowAccount: borrower.escrowAccount,
             borrower: borrower.keypair.publicKey,
             depositTokenAccount: borrower.associatedAddress,
@@ -177,7 +173,7 @@ describe("dexloan_listings", () => {
       assert.equal(escrowTokenAccount.amount, BigInt(0));
     });
 
-    it("Allows listings to be reinitialized after being cancelled", async () => {
+    it("Allows loans to be reinitialized after being closed", async () => {
       const options = {
         amount: anchor.web3.LAMPORTS_PER_SOL,
         basisPoints: 500,
@@ -186,9 +182,9 @@ describe("dexloan_listings", () => {
       const borrower = await helpers.initLoan(connection, options);
 
       await borrower.program.methods
-        .cancelListing()
+        .closeLoan()
         .accounts({
-          listingAccount: borrower.listingAccount,
+          loanAccount: borrower.loanAccount,
           escrowAccount: borrower.escrowAccount,
           borrower: borrower.keypair.publicKey,
           depositTokenAccount: borrower.associatedAddress,
@@ -206,7 +202,7 @@ describe("dexloan_listings", () => {
         .initLoan(amount, basisPoints, duration)
         .accounts({
           escrowAccount: borrower.escrowAccount,
-          listingAccount: borrower.listingAccount,
+          loanAccount: borrower.loanAccount,
           borrower: borrower.keypair.publicKey,
           depositTokenAccount: borrower.associatedAddress,
           mint: borrower.mint,
@@ -216,8 +212,8 @@ describe("dexloan_listings", () => {
         })
         .rpc();
 
-      const listing = await borrower.program.account.listing.fetch(
-        borrower.listingAccount
+      const loan = await borrower.program.account.loan.fetch(
+        borrower.loanAccount
       );
       const borrowerTokenAccount = await splToken.getAccount(
         connection,
@@ -232,16 +228,16 @@ describe("dexloan_listings", () => {
       assert.equal(escrowTokenAccount.amount, BigInt(0));
       assert.equal(
         borrowerTokenAccount.delegate.toBase58(),
-        listing.escrow.toBase58()
+        loan.escrow.toBase58()
       );
-      assert.equal(listing.state, 1);
+      assert.deepEqual(loan.state, { listed: {} });
       assert.equal(
-        listing.borrower.toBase58(),
+        loan.borrower.toBase58(),
         borrower.keypair.publicKey.toBase58()
       );
     });
 
-    it("Does NOT allow an active listing to be reinitialized", async () => {
+    it("Does NOT allow an active loan to be reinitialized", async () => {
       const amount = anchor.web3.LAMPORTS_PER_SOL;
       const basisPoints = 500;
       const duration = 60;
@@ -253,25 +249,29 @@ describe("dexloan_listings", () => {
       });
       await helpers.createLoan(connection, borrower);
 
-      const listing = await borrower.program.account.listing.fetch(
-        borrower.listingAccount
+      const loan = await borrower.program.account.loan.fetch(
+        borrower.loanAccount
       );
 
       try {
         await borrower.program.methods
-          .initLoan(amount, basisPoints, duration)
+          .initLoan(
+            new anchor.BN(amount),
+            new anchor.BN(basisPoints),
+            new anchor.BN(1)
+          )
           .accounts({
             borrower: borrower.keypair.publicKey,
             depositTokenAccount: borrower.associatedAddress,
-            escrowAccount: listing.escrow,
-            listingAccount: borrower.listingAccount,
-            mint: listing.mint,
+            escrowAccount: loan.escrow,
+            loanAccount: borrower.loanAccount,
+            mint: loan.mint,
             tokenProgram: splToken.TOKEN_PROGRAM_ID,
             rent: anchor.web3.SYSVAR_RENT_PUBKEY,
             systemProgram: anchor.web3.SystemProgram.programId,
           })
           .rpc();
-        assert.ok(false);
+        assert.fail();
       } catch (error) {
         assert.ok(error.toString().includes("custom program error: 0x0"));
       }
@@ -289,14 +289,14 @@ describe("dexloan_listings", () => {
 
       await wait(1); // ensure 1 second passes
 
-      const listing = await borrower.program.account.listing.fetch(
-        borrower.listingAccount
+      const loan = await borrower.program.account.loan.fetch(
+        borrower.loanAccount
       );
 
       const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
         connection,
         lender.keypair,
-        listing.mint,
+        loan.mint,
         lender.keypair.publicKey
       );
 
@@ -306,8 +306,8 @@ describe("dexloan_listings", () => {
           escrowAccount: borrower.escrowAccount,
           lender: lender.keypair.publicKey,
           lenderTokenAccount: tokenAccount.address,
-          listingAccount: borrower.listingAccount,
-          mint: listing.mint,
+          loanAccount: borrower.loanAccount,
+          mint: loan.mint,
           systemProgram: anchor.web3.SystemProgram.programId,
           tokenProgram: splToken.TOKEN_PROGRAM_ID,
           clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
@@ -317,18 +317,18 @@ describe("dexloan_listings", () => {
 
       const escrowTokenAccount = await splToken.getAccount(
         connection,
-        listing.escrow
+        loan.escrow
       );
       const lenderTokenAccount = await splToken.getAccount(
         connection,
         tokenAccount.address
       );
-      const defaultedListing = await borrower.program.account.listing.fetch(
-        borrower.listingAccount
+      const defaultedListing = await borrower.program.account.loan.fetch(
+        borrower.loanAccount
       );
       assert.equal(escrowTokenAccount.amount, BigInt(0));
       assert.equal(lenderTokenAccount.amount, BigInt(1));
-      assert.equal(defaultedListing.state, 5);
+      assert.deepEqual(defaultedListing.state, { defaulted: {} });
     });
 
     it("Will allow accounts to be closed once overdue loans are repossessed", async () => {
@@ -343,14 +343,14 @@ describe("dexloan_listings", () => {
 
       await wait(1); // ensure 1 second passes
 
-      const listing = await borrower.program.account.listing.fetch(
-        borrower.listingAccount
+      const loan = await borrower.program.account.loan.fetch(
+        borrower.loanAccount
       );
 
       const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
         connection,
         lender.keypair,
-        listing.mint,
+        loan.mint,
         lender.keypair.publicKey
       );
 
@@ -360,8 +360,8 @@ describe("dexloan_listings", () => {
           escrowAccount: borrower.escrowAccount,
           lender: lender.keypair.publicKey,
           lenderTokenAccount: tokenAccount.address,
-          listingAccount: borrower.listingAccount,
-          mint: listing.mint,
+          loanAccount: borrower.loanAccount,
+          mint: loan.mint,
           systemProgram: anchor.web3.SystemProgram.programId,
           tokenProgram: splToken.TOKEN_PROGRAM_ID,
           clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
@@ -370,19 +370,19 @@ describe("dexloan_listings", () => {
         .rpc();
 
       await borrower.program.methods
-        .closeAccount()
+        .closeLoan()
         .accounts({
           borrower: borrower.keypair.publicKey,
-          listingAccount: borrower.listingAccount,
+          loanAccount: borrower.loanAccount,
         })
         .rpc();
 
       try {
-        await borrower.program.account.listing.fetch(borrower.listingAccount);
+        await borrower.program.account.loan.fetch(borrower.loanAccount);
       } catch (err) {
         assert.equal(
           err.message,
-          `Account does not exist ${borrower.listingAccount.toBase58()}`
+          `Account does not exist ${borrower.loanAccount.toBase58()}`
         );
       }
     });
@@ -397,14 +397,14 @@ describe("dexloan_listings", () => {
 
       const lender = await helpers.createLoan(connection, borrower);
 
-      const listing = await borrower.program.account.listing.fetch(
-        borrower.listingAccount
+      const loan = await borrower.program.account.loan.fetch(
+        borrower.loanAccount
       );
 
       const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
         connection,
         lender.keypair,
-        listing.mint,
+        loan.mint,
         lender.keypair.publicKey
       );
 
@@ -412,11 +412,11 @@ describe("dexloan_listings", () => {
         await lender.program.methods
           .repossessCollateral()
           .accounts({
-            escrowAccount: listing.escrow,
+            escrowAccount: loan.escrow,
             lender: lender.keypair.publicKey,
             lenderTokenAccount: tokenAccount.address,
-            listingAccount: borrower.listingAccount,
-            mint: listing.mint,
+            loanAccount: borrower.loanAccount,
+            mint: loan.mint,
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: splToken.TOKEN_PROGRAM_ID,
             clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
@@ -442,8 +442,8 @@ describe("dexloan_listings", () => {
 
       await wait(1); // ensure 1 second passes
 
-      const listing = await borrower.program.account.listing.fetch(
-        borrower.listingAccount
+      const loan = await borrower.program.account.loan.fetch(
+        borrower.loanAccount
       );
 
       // Creates another signer
@@ -455,7 +455,7 @@ describe("dexloan_listings", () => {
       const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
         connection,
         keypair,
-        listing.mint,
+        loan.mint,
         keypair.publicKey
       );
 
@@ -463,11 +463,11 @@ describe("dexloan_listings", () => {
         await program.methods
           .repossessCollateral()
           .accounts({
-            escrowAccount: listing.escrow,
+            escrowAccount: loan.escrow,
             lender: lender.keypair.publicKey,
             lenderTokenAccount: tokenAccount.address,
-            listingAccount: borrower.listingAccount,
-            mint: listing.mint,
+            loanAccount: borrower.loanAccount,
+            mint: loan.mint,
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: splToken.TOKEN_PROGRAM_ID,
             clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
@@ -486,11 +486,11 @@ describe("dexloan_listings", () => {
         await program.methods
           .repossessCollateral()
           .accounts({
-            escrowAccount: listing.escrow,
+            escrowAccount: loan.escrow,
             lender: keypair.publicKey,
             lenderTokenAccount: tokenAccount.address,
-            listingAccount: borrower.listingAccount,
-            mint: listing.mint,
+            loanAccount: borrower.loanAccount,
+            mint: loan.mint,
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: splToken.TOKEN_PROGRAM_ID,
             clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,

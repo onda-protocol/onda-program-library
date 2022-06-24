@@ -45,5 +45,5 @@ impl CallOption {
         1 // escrow bump
     }
 
-    pub const PREFIX: &'static [u8] = b"option";
+    pub const PREFIX: &'static [u8] = b"call_option";
 }

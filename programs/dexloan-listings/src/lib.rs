@@ -21,7 +21,7 @@ pub mod dexloan_listings {
         instructions::loan::init(ctx, amount, basis_points, duration)
     }
 
-    pub fn cancel_listing(ctx: Context<CloseLoan>) -> Result<()> {
+    pub fn close_loan(ctx: Context<CloseLoan>) -> Result<()> {
         instructions::loan::close(ctx)
     }
 
@@ -37,7 +37,7 @@ pub mod dexloan_listings {
         instructions::loan::repossess(ctx)
     }
 
-    pub fn init_option(
+    pub fn init_call_option(
         ctx: Context<InitCallOption>,
         amount: u64,
         strike_price: u64,

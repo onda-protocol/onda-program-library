@@ -96,6 +96,18 @@ export async function findListingAddress(
   return listingAccount;
 }
 
+export async function findLoanAddress(
+  mint: anchor.web3.PublicKey,
+  borrower: anchor.web3.PublicKey
+): Promise<anchor.web3.PublicKey> {
+  const [listingAccount] = await anchor.web3.PublicKey.findProgramAddress(
+    [Buffer.from("loan"), mint.toBuffer(), borrower.toBuffer()],
+    PROGRAM_ID
+  );
+
+  return listingAccount;
+}
+
 export async function findCallOptionAddress(
   mint: anchor.web3.PublicKey,
   seller: anchor.web3.PublicKey
@@ -124,7 +136,7 @@ export async function initLoan(
 
   const { mint, associatedAddress } = await mintNFT(connection, keypair);
 
-  const listingAccount = await findListingAddress(mint, keypair.publicKey);
+  const loanAccount = await findLoanAddress(mint, keypair.publicKey);
 
   const [escrowAccount] = await anchor.web3.PublicKey.findProgramAddress(
     [Buffer.from("escrow"), mint.toBuffer()],
@@ -141,7 +153,7 @@ export async function initLoan(
       .accounts({
         mint,
         escrowAccount,
-        listingAccount,
+        loanAccount,
         borrower: keypair.publicKey,
         depositTokenAccount: associatedAddress,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
@@ -159,7 +171,7 @@ export async function initLoan(
     keypair,
     provider,
     program,
-    listingAccount,
+    loanAccount,
     escrowAccount,
     associatedAddress,
   };
@@ -175,7 +187,7 @@ export async function createLoan(connection: anchor.web3.Connection, borrower) {
     await program.methods
       .makeLoan()
       .accounts({
-        listingAccount: borrower.listingAccount,
+        loanAccount: borrower.loanAccount,
         borrower: borrower.keypair.publicKey,
         lender: keypair.publicKey,
         mint: borrower.mint,
