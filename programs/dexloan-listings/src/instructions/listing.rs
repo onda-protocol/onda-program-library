@@ -1,10 +1,10 @@
 use anchor_lang::prelude::*;
 use anchor_lang::AccountsClose;
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{Listing, ListingState, Loan, LoanState};
+use crate::state::{Listing, ListingState};
 
 pub fn close(ctx: Context<CloseListing>) -> Result<()> {
-    let listing = &mut ctx.accounts.loan_account;
+    let listing = &mut ctx.accounts.listing_account;
 
     listing.close(ctx.accounts.borrower.to_account_info())?;
 
@@ -38,11 +38,11 @@ pub struct CloseListing<'info> {
     pub borrower: Signer<'info>,
     #[account(
         mut,
-        constraint = loan_account.borrower == borrower.key(),
-        constraint = loan_account.state != LoanState::Listed,
-        constraint = loan_account.state != LoanState::Active,
+        constraint = listing_account.borrower == borrower.key(),
+        constraint = listing_account.state != ListingState::Listed as u8,
+        constraint = listing_account.state != ListingState::Active as u8,
     )]
-    pub loan_account: Account<'info, Loan>,
+    pub listing_account: Account<'info, Listing>,
 }
 
 #[derive(Accounts)]

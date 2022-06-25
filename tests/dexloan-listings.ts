@@ -60,7 +60,7 @@ describe("dexloan_listings", () => {
         borrower.keypair.publicKey
       );
 
-      const lender = await helpers.createLoan(connection, borrower);
+      const lender = await helpers.giveLoan(connection, borrower);
 
       const loan = await borrower.program.account.loan.fetch(
         borrower.loanAccount
@@ -97,7 +97,7 @@ describe("dexloan_listings", () => {
         duration: 30 * 24 * 60 * 60, // 30 days
       };
       const borrower = await helpers.initLoan(connection, options);
-      const lender = await helpers.createLoan(connection, borrower);
+      const lender = await helpers.giveLoan(connection, borrower);
       const lenderPreRepaymentBalance = await connection.getBalance(
         lender.keypair.publicKey
       );
@@ -247,7 +247,7 @@ describe("dexloan_listings", () => {
         basisPoints,
         duration,
       });
-      await helpers.createLoan(connection, borrower);
+      await helpers.giveLoan(connection, borrower);
 
       const loan = await borrower.program.account.loan.fetch(
         borrower.loanAccount
@@ -285,7 +285,7 @@ describe("dexloan_listings", () => {
       };
       const borrower = await helpers.initLoan(connection, options);
 
-      const lender = await helpers.createLoan(connection, borrower);
+      const lender = await helpers.giveLoan(connection, borrower);
 
       await wait(1); // ensure 1 second passes
 
@@ -339,7 +339,7 @@ describe("dexloan_listings", () => {
       };
       const borrower = await helpers.initLoan(connection, options);
 
-      const lender = await helpers.createLoan(connection, borrower);
+      const lender = await helpers.giveLoan(connection, borrower);
 
       await wait(1); // ensure 1 second passes
 
@@ -373,7 +373,10 @@ describe("dexloan_listings", () => {
         .closeLoan()
         .accounts({
           borrower: borrower.keypair.publicKey,
+          depositTokenAccount: borrower.associatedAddress,
+          escrowAccount: borrower.escrowAccount,
           loanAccount: borrower.loanAccount,
+          mint: borrower.mint,
         })
         .rpc();
 
@@ -395,7 +398,7 @@ describe("dexloan_listings", () => {
       };
       const borrower = await helpers.initLoan(connection, options);
 
-      const lender = await helpers.createLoan(connection, borrower);
+      const lender = await helpers.giveLoan(connection, borrower);
 
       const loan = await borrower.program.account.loan.fetch(
         borrower.loanAccount
@@ -438,7 +441,7 @@ describe("dexloan_listings", () => {
       };
       const borrower = await helpers.initLoan(connection, options);
 
-      const lender = await helpers.createLoan(connection, borrower);
+      const lender = await helpers.giveLoan(connection, borrower);
 
       await wait(1); // ensure 1 second passes
 

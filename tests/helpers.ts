@@ -177,7 +177,7 @@ export async function initLoan(
   };
 }
 
-export async function createLoan(connection: anchor.web3.Connection, borrower) {
+export async function giveLoan(connection: anchor.web3.Connection, borrower) {
   const keypair = anchor.web3.Keypair.generate();
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
@@ -185,7 +185,7 @@ export async function createLoan(connection: anchor.web3.Connection, borrower) {
 
   try {
     await program.methods
-      .makeLoan()
+      .giveLoan()
       .accounts({
         loanAccount: borrower.loanAccount,
         borrower: borrower.keypair.publicKey,

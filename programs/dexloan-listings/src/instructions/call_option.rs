@@ -1,5 +1,7 @@
-use anchor_lang::prelude::*;
-use anchor_lang::solana_program::program_option::{COption};
+use anchor_lang::{
+    prelude::*,
+    solana_program::program_option::{COption}
+};
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{CallOption, CallOptionState};
 use crate::error::{ErrorCode};
@@ -128,6 +130,7 @@ pub fn exercise(ctx: Context<ExerciseCallOption>) -> Result<()> {
 pub fn close(ctx: Context<CloseCallOption>) -> Result<()> {
     let call_option = &mut ctx.accounts.call_option_account;
     let escrow_account = &ctx.accounts.escrow_account;
+    let deposit_token_account = &ctx.accounts.deposit_token_account;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
     
     if call_option.state == CallOptionState::Active && call_option.expiry > unix_timestamp {
@@ -137,16 +140,18 @@ pub fn close(ctx: Context<CloseCallOption>) -> Result<()> {
     let cpi_program = ctx.accounts.token_program.to_account_info();
 
     if escrow_account.amount == 0 {
-        let cpi_accounts = anchor_spl::token::Revoke {
-            source: ctx.accounts.deposit_token_account.to_account_info(),
-            authority:  ctx.accounts.seller.to_account_info()
-        };
-        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-        anchor_spl::token::revoke(cpi_ctx)?;
+        if deposit_token_account.delegate == COption::Some(escrow_account.key()) {
+            let cpi_accounts = anchor_spl::token::Revoke {
+                source: deposit_token_account.to_account_info(),
+                authority:  ctx.accounts.seller.to_account_info()
+            };
+            let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+            anchor_spl::token::revoke(cpi_ctx)?;
+        }
     } else {
         let cpi_accounts = anchor_spl::token::Transfer {
             from: escrow_account.to_account_info(),
-            to: ctx.accounts.deposit_token_account.to_account_info(),
+            to: deposit_token_account.to_account_info(),
             authority: escrow_account.to_account_info(),
         };
         let seeds = &[

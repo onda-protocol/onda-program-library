@@ -1,4 +1,7 @@
-use anchor_lang::prelude::*;
+use anchor_lang::{
+    prelude::*,
+    solana_program::program_option::{COption}
+};
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{Loan, LoanState};
 use crate::error::{ErrorCode};
@@ -47,13 +50,15 @@ pub fn close(ctx: Context<CloseLoan>) -> Result<()> {
     let token_program = &ctx.accounts.token_program;
 
     if escrow_account.amount == 0 {
-        let cpi_program = token_program.to_account_info();
-        let cpi_accounts = anchor_spl::token::Revoke {
-            source: deposit_token_account.to_account_info(),
-            authority: borrower.to_account_info(),
-        };
-        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-        anchor_spl::token::revoke(cpi_ctx)?;
+        if deposit_token_account.delegate == COption::Some(escrow_account.key()) {
+            let cpi_program = token_program.to_account_info();
+            let cpi_accounts = anchor_spl::token::Revoke {
+                source: deposit_token_account.to_account_info(),
+                authority: borrower.to_account_info(),
+            };
+            let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+            anchor_spl::token::revoke(cpi_ctx)?;
+        }
     } else {
         let cpi_program = token_program.to_account_info();
         let cpi_accounts = anchor_spl::token::Transfer {
@@ -259,7 +264,7 @@ pub struct CloseLoan<'info> {
         constraint = loan_account.borrower == *borrower.key,
         constraint = loan_account.escrow == escrow_account.key(),
         constraint = loan_account.mint == mint.key(),
-        constraint = loan_account.state == LoanState::Listed,
+        constraint = loan_account.state == LoanState::Listed || loan_account.state == LoanState::Defaulted,
         close = borrower
     )]
     pub loan_account: Account<'info, Loan>,

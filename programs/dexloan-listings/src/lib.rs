@@ -25,7 +25,7 @@ pub mod dexloan_listings {
         instructions::loan::close(ctx)
     }
 
-    pub fn make_loan(ctx: Context<Lend>) -> Result<()> {
+    pub fn give_loan(ctx: Context<Lend>) -> Result<()> {
         instructions::loan::lend(ctx)
     }
 
