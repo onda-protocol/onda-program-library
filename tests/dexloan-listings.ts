@@ -10,23 +10,26 @@ describe("dexloan_listings", () => {
     anchor.AnchorProvider.defaultOptions().preflightCommitment
   );
 
+  let borrower;
+  let loan;
+  let borrowerTokenAccount;
+
   describe.only("Loans", () => {
-    it.only("Creates a dexloan loan", async () => {
+    it("Creates a dexloan loan", async () => {
       const options = {
         amount: anchor.web3.LAMPORTS_PER_SOL,
         basisPoints: 500,
         duration: 30 * 24 * 60 * 60, // 30 days
       };
-      const borrower = await helpers.initLoan(connection, options);
 
-      const loan = await borrower.program.account.loan.fetch(
-        borrower.loanAccount
-      );
-      const borrowerTokenAccount = await splToken.getAccount(
+      borrower = await helpers.initLoan(connection, options);
+      loan = await borrower.program.account.loan.fetch(borrower.loanAccount);
+      borrowerTokenAccount = await splToken.getAccount(
         connection,
         borrower.depositTokenAccount
       );
 
+      assert.ok(true);
       assert.equal(
         borrowerTokenAccount.delegate,
         borrower.loanAccount.toBase58()
@@ -37,6 +40,37 @@ describe("dexloan_listings", () => {
       assert.equal(loan.mint.toBase58(), borrower.mint.toBase58());
       assert.equal(borrowerTokenAccount.amount, BigInt(1));
       assert.deepEqual(loan.state, { listed: {} });
+    });
+
+    it("Freezes tokens after initialization", async () => {
+      const receiver = anchor.web3.Keypair.generate();
+
+      await helpers.requestAirdrop(connection, receiver.publicKey);
+      await helpers.wait(1);
+
+      const receiverTokenAccount = await splToken.createAssociatedTokenAccount(
+        connection,
+        receiver,
+        borrower.mint,
+        receiver.publicKey
+      );
+
+      await helpers.wait(1);
+
+      try {
+        await splToken.transfer(
+          connection,
+          borrower.keypair,
+          borrower.depositTokenAccount,
+          receiverTokenAccount,
+          borrower.keypair.publicKey,
+          1
+        );
+        assert.ok(false);
+      } catch (err) {
+        console.log(err);
+        assert.ok(err);
+      }
     });
   });
 
