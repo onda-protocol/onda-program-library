@@ -33,7 +33,7 @@ export async function requestAirdrop(
   const blockhashWithExpiryBlockHeight = await connection.getLatestBlockhash();
   const signature = await connection.requestAirdrop(
     publicKey,
-    anchor.web3.LAMPORTS_PER_SOL * 2
+    anchor.web3.LAMPORTS_PER_SOL
   );
   await connection.confirmTransaction({
     signature,
@@ -134,10 +134,10 @@ export async function initLoan(
         loanAccount,
         depositTokenAccount,
         mint: nft.mint.address,
-        edition: nft.edition.address,
         borrower: keypair.publicKey,
-        tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        edition: nft.edition.address,
         metadataProgram: METADATA_PROGRAM_ID,
+        tokenProgram: splToken.TOKEN_PROGRAM_ID,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
@@ -148,20 +148,32 @@ export async function initLoan(
   }
 
   return {
-    mint: nft.mint.address,
     keypair,
     provider,
     program,
     loanAccount,
     depositTokenAccount,
+    edition: nft.edition.address,
+    mint: nft.mint.address,
   };
 }
 
+export function getLenderKeypair() {
+  return anchor.web3.Keypair.fromSecretKey(
+    new Uint8Array([
+      114, 81, 242, 139, 161, 245, 117, 122, 191, 227, 244, 80, 105, 25, 54,
+      130, 50, 10, 108, 40, 18, 31, 172, 3, 70, 36, 143, 141, 249, 8, 119, 33,
+      254, 50, 70, 83, 150, 213, 73, 182, 129, 95, 147, 188, 176, 50, 61, 176,
+      36, 62, 183, 123, 23, 105, 183, 6, 188, 94, 237, 150, 115, 108, 2, 187,
+    ])
+  );
+}
+
 export async function giveLoan(connection: anchor.web3.Connection, borrower) {
-  const keypair = anchor.web3.Keypair.generate();
+  const keypair = getLenderKeypair();
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
-  await requestAirdrop(connection, keypair.publicKey);
+  // await requestAirdrop(connection, keypair.publicKey);
 
   try {
     await program.methods
@@ -169,10 +181,9 @@ export async function giveLoan(connection: anchor.web3.Connection, borrower) {
       .accounts({
         loanAccount: borrower.loanAccount,
         borrower: borrower.keypair.publicKey,
+        depositTokenAccount: borrower.depositTokenAccount,
         lender: keypair.publicKey,
         mint: borrower.mint,
-        escrowAccount: borrower.escrowAccount,
-        depositTokenAccount: borrower.associatedAddress,
         systemProgram: anchor.web3.SystemProgram.programId,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
@@ -256,7 +267,7 @@ export async function buyCallOption(
   const keypair = anchor.web3.Keypair.generate();
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
-  await requestAirdrop(connection, keypair.publicKey);
+  // await requestAirdrop(connection, keypair.publicKey);
 
   const associatedAddress = await splToken.getOrCreateAssociatedTokenAccount(
     connection,
