@@ -56,17 +56,18 @@ pub fn init(
 }
 
 pub fn close(ctx: Context<CloseLoan>) -> Result<()> {
-    // TODO check if frozen
-    thaw(
-        ctx.accounts.loan_account.bump,
-        ThawParams {
-            loan: ctx.accounts.loan_account.to_account_info(),
-            borrower: ctx.accounts.borrower.to_account_info(),
-            deposit_token_account: ctx.accounts.deposit_token_account.to_account_info(),
-            edition: ctx.accounts.edition.to_account_info(),
-            mint: ctx.accounts.mint.to_account_info(),
-        }
-    )?;
+    if ctx.accounts.deposit_token_account.is_frozen() {
+        thaw(
+            ctx.accounts.loan_account.bump,
+            ThawParams {
+                loan: ctx.accounts.loan_account.to_account_info(),
+                borrower: ctx.accounts.borrower.to_account_info(),
+                deposit_token_account: ctx.accounts.deposit_token_account.to_account_info(),
+                edition: ctx.accounts.edition.to_account_info(),
+                mint: ctx.accounts.mint.to_account_info(),
+            }
+        )?;
+    }
 
     anchor_spl::token::revoke(
         CpiContext::new(
