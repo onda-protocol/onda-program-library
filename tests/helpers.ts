@@ -1,5 +1,7 @@
 import * as anchor from "@project-serum/anchor";
 import * as splToken from "@solana/spl-token";
+import { Metaplex, keypairIdentity } from "@metaplex-foundation/js";
+import { PROGRAM_ID as METADATA_PROGRAM_ID } from "@metaplex-foundation/mpl-token-metadata";
 import { IDL, DexloanListings } from "../target/types/dexloan_listings";
 
 const PROGRAM_ID = new anchor.web3.PublicKey(
@@ -31,57 +33,12 @@ export async function requestAirdrop(
   const blockhashWithExpiryBlockHeight = await connection.getLatestBlockhash();
   const signature = await connection.requestAirdrop(
     publicKey,
-    anchor.web3.LAMPORTS_PER_SOL * 20
+    anchor.web3.LAMPORTS_PER_SOL * 2
   );
   await connection.confirmTransaction({
     signature,
     ...blockhashWithExpiryBlockHeight,
   });
-}
-
-export async function mintNFT(
-  connection: anchor.web3.Connection,
-  keypair: anchor.web3.Keypair
-): Promise<{
-  mint: anchor.web3.PublicKey;
-  associatedAddress: anchor.web3.PublicKey;
-}> {
-  // Create the Mint Account for the NFT
-  const mint = await splToken.createMint(
-    connection,
-    keypair,
-    keypair.publicKey,
-    null,
-    0
-  );
-
-  const associatedAddress = await splToken.getOrCreateAssociatedTokenAccount(
-    connection,
-    keypair,
-    mint,
-    keypair.publicKey
-  );
-
-  await splToken.mintTo(
-    connection,
-    keypair,
-    mint,
-    associatedAddress.address,
-    keypair,
-    1
-  );
-
-  // Reset mint_authority to null from the user to prevent further minting
-  await splToken.setAuthority(
-    connection,
-    keypair,
-    mint,
-    keypair.publicKey,
-    0,
-    null
-  );
-
-  return { mint, associatedAddress: associatedAddress.address };
 }
 
 export async function findListingAddress(
@@ -128,20 +85,43 @@ export async function initLoan(
     duration: number;
   }
 ) {
-  const keypair = anchor.web3.Keypair.generate();
+  const keypair = anchor.web3.Keypair.fromSecretKey(
+    new Uint8Array([
+      71, 35, 95, 48, 212, 238, 241, 57, 118, 77, 120, 148, 138, 225, 184, 200,
+      163, 169, 55, 8, 181, 69, 2, 6, 107, 129, 115, 87, 113, 58, 117, 26, 57,
+      7, 172, 250, 17, 17, 24, 22, 59, 192, 224, 136, 245, 121, 67, 41, 137,
+      218, 59, 249, 200, 31, 142, 149, 179, 204, 75, 22, 43, 108, 22, 243,
+    ])
+  );
+  console.log(keypair.publicKey.toBase58());
+  // await requestAirdrop(connection, keypair.publicKey);
+  const balance = await connection.getBalance(keypair.publicKey);
+  console.log("balance: ", balance);
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
 
-  await requestAirdrop(connection, keypair.publicKey);
+  const metaplex = Metaplex.make(connection).use(keypairIdentity(keypair));
 
-  const { mint, associatedAddress } = await mintNFT(connection, keypair);
+  const { nft } = await metaplex
+    .nfts()
+    .create({
+      uri: "https://arweave.net/123",
+      name: "My NFT",
+      sellerFeeBasisPoints: 500,
+    })
+    .run();
 
-  const loanAccount = await findLoanAddress(mint, keypair.publicKey);
-
-  const [escrowAccount] = await anchor.web3.PublicKey.findProgramAddress(
-    [Buffer.from("escrow"), mint.toBuffer()],
-    program.programId
+  const loanAccount = await findLoanAddress(
+    nft.mint.address,
+    keypair.publicKey
   );
+
+  await wait(1);
+
+  const largestAccounts = await connection.getTokenLargestAccounts(
+    nft.mint.address
+  );
+  const depositTokenAccount = largestAccounts.value[0].address;
 
   const amount = new anchor.BN(options.amount);
   const basisPoints = new anchor.BN(options.basisPoints);
@@ -151,12 +131,13 @@ export async function initLoan(
     await program.methods
       .initLoan(amount, basisPoints, duration)
       .accounts({
-        mint,
-        escrowAccount,
         loanAccount,
+        depositTokenAccount,
+        mint: nft.mint.address,
+        edition: nft.edition.address,
         borrower: keypair.publicKey,
-        depositTokenAccount: associatedAddress,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        metadataProgram: METADATA_PROGRAM_ID,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
@@ -167,13 +148,12 @@ export async function initLoan(
   }
 
   return {
-    mint,
+    mint: nft.mint.address,
     keypair,
     provider,
     program,
     loanAccount,
-    escrowAccount,
-    associatedAddress,
+    depositTokenAccount,
   };
 }
 
@@ -210,64 +190,64 @@ export async function giveLoan(connection: anchor.web3.Connection, borrower) {
   };
 }
 
-export async function initCallOption(
-  connection: anchor.web3.Connection,
-  options: {
-    amount: number;
-    strikePrice: number;
-    expiry: number;
-  }
-) {
-  const keypair = anchor.web3.Keypair.generate();
-  const provider = getProvider(connection, keypair);
-  const program = getProgram(provider);
-  await requestAirdrop(connection, keypair.publicKey);
+// export async function initCallOption(
+//   connection: anchor.web3.Connection,
+//   options: {
+//     amount: number;
+//     strikePrice: number;
+//     expiry: number;
+//   }
+// ) {
+//   const keypair = anchor.web3.Keypair.generate();
+//   const provider = getProvider(connection, keypair);
+//   const program = getProgram(provider);
+//   await requestAirdrop(connection, keypair.publicKey);
 
-  const { mint, associatedAddress } = await mintNFT(connection, keypair);
+//   const { mint, associatedAddress } = await mintNFT(connection, keypair);
 
-  const callOptionAccount = await findCallOptionAddress(
-    mint,
-    keypair.publicKey
-  );
+//   const callOptionAccount = await findCallOptionAddress(
+//     mint,
+//     keypair.publicKey
+//   );
 
-  const [escrowAccount] = await anchor.web3.PublicKey.findProgramAddress(
-    [Buffer.from("escrow"), mint.toBuffer()],
-    program.programId
-  );
-  const amount = new anchor.BN(options.amount);
-  const strikePrice = new anchor.BN(options.strikePrice);
-  const expiry = new anchor.BN(options.expiry);
+//   const [escrowAccount] = await anchor.web3.PublicKey.findProgramAddress(
+//     [Buffer.from("escrow"), mint.toBuffer()],
+//     program.programId
+//   );
+//   const amount = new anchor.BN(options.amount);
+//   const strikePrice = new anchor.BN(options.strikePrice);
+//   const expiry = new anchor.BN(options.expiry);
 
-  try {
-    await program.methods
-      .initCallOption(amount, strikePrice, expiry)
-      .accounts({
-        mint,
-        escrowAccount,
-        callOptionAccount,
-        seller: keypair.publicKey,
-        depositTokenAccount: associatedAddress,
-        tokenProgram: splToken.TOKEN_PROGRAM_ID,
-        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-        systemProgram: anchor.web3.SystemProgram.programId,
-        clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-      })
-      .rpc();
-  } catch (error) {
-    console.log(error.logs);
-    throw error;
-  }
+//   try {
+//     await program.methods
+//       .initCallOption(amount, strikePrice, expiry)
+//       .accounts({
+//         mint,
+//         escrowAccount,
+//         callOptionAccount,
+//         seller: keypair.publicKey,
+//         depositTokenAccount: associatedAddress,
+//         tokenProgram: splToken.TOKEN_PROGRAM_ID,
+//         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+//         systemProgram: anchor.web3.SystemProgram.programId,
+//         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+//       })
+//       .rpc();
+//   } catch (error) {
+//     console.log(error.logs);
+//     throw error;
+//   }
 
-  return {
-    mint,
-    keypair,
-    provider,
-    program,
-    callOptionAccount,
-    escrowAccount,
-    associatedAddress,
-  };
-}
+//   return {
+//     mint,
+//     keypair,
+//     provider,
+//     program,
+//     callOptionAccount,
+//     escrowAccount,
+//     associatedAddress,
+//   };
+// }
 
 export async function buyCallOption(
   connection: anchor.web3.Connection,
@@ -311,4 +291,8 @@ export async function buyCallOption(
     program,
     associatedAddress: associatedAddress.address,
   };
+}
+
+export async function wait(seconds) {
+  await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
 }

@@ -1,8 +1,12 @@
 use anchor_lang::{
     prelude::*,
-    solana_program::program_option::{COption}
+    solana_program::{
+        program::{invoke_signed},
+        program_option::{COption}
+    }
 };
 use anchor_spl::token::{Mint, Token, TokenAccount};
+use mpl_token_metadata::{instruction::{freeze_delegated_account}};
 use crate::state::{Loan, LoanState};
 use crate::error::{ErrorCode};
 
@@ -17,27 +21,55 @@ pub fn init(
     basis_points: u32,
     duration: u64
 ) -> Result<()> {
-    let listing = &mut ctx.accounts.loan_account;
+    let loan = &mut ctx.accounts.loan_account;
+    let loan_bump = ctx.bumps.get("loan_account").unwrap().clone(); // TODO unwrap_or
+
+    require_keys_eq!(ctx.accounts.metadata_program.key(), mpl_token_metadata::ID);
+
     // Init
-    listing.mint = ctx.accounts.mint.key();
-    listing.escrow = ctx.accounts.escrow_account.key();
-    listing.bump = *ctx.bumps.get("loan_account").unwrap();
-    listing.escrow_bump = *ctx.bumps.get("escrow_account").unwrap();
+    loan.mint = ctx.accounts.mint.key();
     //
-    listing.amount = amount;
-    listing.basis_points = basis_points;
-    listing.duration = duration;
-    listing.state = LoanState::Listed;
-    listing.borrower = ctx.accounts.borrower.key();
+    loan.amount = amount;
+    loan.basis_points = basis_points;
+    loan.duration = duration;
+    loan.state = LoanState::Listed;
+    loan.borrower = ctx.accounts.borrower.key();
     // Transfer
     let cpi_program = ctx.accounts.token_program.to_account_info();
     let cpi_accounts = anchor_spl::token::Approve {
         to: ctx.accounts.deposit_token_account.to_account_info(),
-        delegate: ctx.accounts.escrow_account.to_account_info(),
+        delegate: loan.to_account_info(),
         authority: ctx.accounts.borrower.to_account_info(),
     };
     let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
     anchor_spl::token::approve(cpi_ctx, 1)?;
+
+    let account_infos = &[
+        loan.to_account_info(),
+        ctx.accounts.deposit_token_account.to_account_info(),
+        ctx.accounts.edition.to_account_info(),
+        ctx.accounts.mint.to_account_info()
+    ];
+    let freeze_instruction = &freeze_delegated_account(
+        mpl_token_metadata::ID,
+        loan.key(),
+        ctx.accounts.deposit_token_account.key(),
+        ctx.accounts.edition.key(),
+        ctx.accounts.mint.key()
+    );
+    let bump_seed = &[loan_bump];
+    let signer_seeds = &[&[
+        Loan::PREFIX,
+        ctx.accounts.mint.to_account_info().key.as_ref(),
+        ctx.accounts.borrower.to_account_info().key.as_ref(),
+        bump_seed
+    ][..]];
+
+    invoke_signed(
+        freeze_instruction,
+        account_infos,
+        signer_seeds
+    )?;
 
     Ok(())
 }
@@ -85,21 +117,6 @@ pub fn lend(ctx: Context<Lend>) -> Result<()> {
     listing.state = LoanState::Active;
     listing.lender = ctx.accounts.lender.key();
     listing.start_date = ctx.accounts.clock.unix_timestamp;
-    // Transfer token to escrow
-    let cpi_program = ctx.accounts.token_program.to_account_info();
-    let cpi_accounts = anchor_spl::token::Transfer {
-        from: ctx.accounts.deposit_token_account.to_account_info(),
-        to: ctx.accounts.escrow_account.to_account_info(),
-        authority: ctx.accounts.escrow_account.to_account_info(),
-    };
-    let seeds = &[
-        ESCROW_PREFIX,
-        ctx.accounts.mint.to_account_info().key.as_ref(),
-        &[listing.escrow_bump],
-    ];
-    let signer = &[&seeds[..]];
-    let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
-    anchor_spl::token::transfer(cpi_ctx, 1)?;
     // Transfer amount
     anchor_lang::solana_program::program::invoke(
         &anchor_lang::solana_program::system_instruction::transfer(
@@ -227,19 +244,12 @@ pub struct InitLoan<'info> {
         space = Loan::space(),
     )]
     pub loan_account: Account<'info, Loan>,
-    /// This is where we'll store the borrower's token
-    #[account(
-        init_if_needed,
-        payer = borrower,
-        seeds = [ESCROW_PREFIX, mint.key().as_ref()],
-        bump,
-        token::mint = mint,
-        token::authority = escrow_account,
-    )]
-    pub escrow_account: Account<'info, TokenAccount>,
     #[account(constraint = mint.supply == 1)]
     pub mint: Account<'info, Mint>,
-    /// Misc
+    /// CHECK: validated in cpi
+    pub edition: UncheckedAccount<'info>,
+    /// CHECK: validated in handler
+    pub metadata_program: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub rent: Sysvar<'info, Rent>,
@@ -304,19 +314,12 @@ pub struct Lend<'info> {
     pub loan_account: Account<'info, Loan>,
     #[account(
         mut,
-        seeds = [ESCROW_PREFIX, mint.key().as_ref()],
-        bump = loan_account.escrow_bump,
-    )]
-    pub escrow_account: Account<'info, TokenAccount>,
-    #[account(
-        mut,
         constraint = deposit_token_account.owner == borrower.key(),
         associated_token::mint = mint,
         associated_token::authority = borrower,
     )]
     pub deposit_token_account: Account<'info, TokenAccount>,
     pub mint: Account<'info, Mint>,
-    /// Misc
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub clock: Sysvar<'info, Clock>,
@@ -331,12 +334,6 @@ pub struct RepayLoan<'info> {
         constraint = deposit_token_account.owner == borrower.key(),
     )]
     pub deposit_token_account: Account<'info, TokenAccount>,
-    #[account(
-        mut,
-        seeds = [ESCROW_PREFIX, mint.key().as_ref()],
-        bump = loan_account.escrow_bump,
-    )]
-    pub escrow_account: Account<'info, TokenAccount>,
     /// CHECK: contrained on loan_account
     #[account(mut)]
     pub lender: AccountInfo<'info>,
@@ -350,14 +347,16 @@ pub struct RepayLoan<'info> {
         bump = loan_account.bump,
         constraint = loan_account.borrower == borrower.key(),
         constraint = loan_account.lender == lender.key(),
-        constraint = loan_account.escrow == escrow_account.key(),
         constraint = loan_account.mint == mint.key(),
         constraint = loan_account.state == LoanState::Active,
         close = borrower
     )]
     pub loan_account: Box<Account<'info, Loan>>,
     pub mint: Box<Account<'info, Mint>>,
-    /// Misc
+    /// CHECK: validated in cpi
+    pub edition: UncheckedAccount<'info>,
+    /// CHECK: validated in handler
+    pub metadata_program: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub clock: Sysvar<'info, Clock>,
@@ -365,12 +364,6 @@ pub struct RepayLoan<'info> {
 
 #[derive(Accounts)]
 pub struct Repossess<'info> {
-    #[account(
-        mut,
-        seeds = [ESCROW_PREFIX, mint.key().as_ref()],
-        bump = loan_account.escrow_bump,
-    )]
-    pub escrow_account: Account<'info, TokenAccount>,
     #[account(mut)]
     pub lender: Signer<'info>,
     #[account(mut)]
@@ -378,13 +371,15 @@ pub struct Repossess<'info> {
     #[account(
         mut,
         constraint = loan_account.lender == lender.key(),
-        constraint = loan_account.escrow == escrow_account.key(),
         constraint = loan_account.mint == mint.key(),
         constraint = loan_account.state == LoanState::Active,
     )]
     pub loan_account: Account<'info, Loan>,
     pub mint: Account<'info, Mint>,
-    /// Misc
+    /// CHECK: validated in cpi
+    pub edition: UncheckedAccount<'info>,
+    /// CHECK: validated in handler
+    pub metadata_program: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub clock: Sysvar<'info, Clock>,
