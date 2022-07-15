@@ -5,6 +5,7 @@ use instructions::{call_option::*, loan::*, listing::*};
 
 pub mod error;
 pub mod state;
+pub mod utils;
 
 declare_id!("H6FCxCy2KCPJwCoUb9eQCSv41WZBKQaYfB6x5oFajzfj");
 

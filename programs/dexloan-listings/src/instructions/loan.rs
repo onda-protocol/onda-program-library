@@ -1,15 +1,13 @@
 use anchor_lang::{
     prelude::*,
     solana_program::{
-        program::{invoke, invoke_signed},
+        program::{invoke},
     }
 };
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use mpl_token_metadata::{
-    instruction::{freeze_delegated_account, thaw_delegated_account}
-};
 use crate::state::{Loan, LoanState};
 use crate::error::{ErrorCode};
+use crate::utils::{freeze, thaw, FreezeParams, ThawParams};
 
 declare_id!("H6FCxCy2KCPJwCoUb9eQCSv41WZBKQaYfB6x5oFajzfj");
 
@@ -43,31 +41,15 @@ pub fn init(
     let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
     anchor_spl::token::approve(cpi_ctx, 1)?;
 
-    let account_infos = &[
-        loan.to_account_info(),
-        ctx.accounts.deposit_token_account.to_account_info(),
-        ctx.accounts.edition.to_account_info(),
-        ctx.accounts.mint.to_account_info()
-    ];
-    let freeze_instruction = &freeze_delegated_account(
-        mpl_token_metadata::ID,
-        loan.key(),
-        ctx.accounts.deposit_token_account.key(),
-        ctx.accounts.edition.key(),
-        ctx.accounts.mint.key()
-    );
-    let bump_seed = &[loan_bump];
-    let signer_seeds = &[&[
-        Loan::PREFIX,
-        ctx.accounts.mint.to_account_info().key.as_ref(),
-        ctx.accounts.borrower.to_account_info().key.as_ref(),
-        bump_seed
-    ][..]];
-
-    invoke_signed(
-        freeze_instruction,
-        account_infos,
-        signer_seeds
+    freeze(
+        loan.bump,
+        FreezeParams {
+            loan: ctx.accounts.loan_account.to_account_info(),
+            borrower: ctx.accounts.borrower.to_account_info(),
+            deposit_token_account: ctx.accounts.deposit_token_account.to_account_info(),
+            edition: ctx.accounts.edition.to_account_info(),
+            mint: ctx.accounts.mint.to_account_info(),
+        }
     )?;
 
     Ok(())
@@ -200,7 +182,7 @@ pub fn repossess(ctx: Context<Repossess>) -> Result<()> {
             mint: ctx.accounts.mint.to_account_info(),
         }
     )?;
-
+    // Transfer NFT
     let cpi_program = ctx.accounts.token_program.to_account_info();
     let cpi_accounts = anchor_spl::token::Transfer {
         from: ctx.accounts.deposit_token_account.to_account_info(),
@@ -217,80 +199,6 @@ pub fn repossess(ctx: Context<Repossess>) -> Result<()> {
     anchor_spl::token::transfer(
         CpiContext::new_with_signer(cpi_program, cpi_accounts, signer),
         1
-    )?;
-
-    let revoke_ix = spl_token::instruction::revoke(
-        &spl_token::ID,
-        ctx.accounts.deposit_token_account.to_account_info().key,
-        ctx.accounts.borrower.key,
-        &[loan.to_account_info().key],
-    )?;
-    let signer_bump = &[loan.bump];
-    let signer_seeds = &[&[
-        Loan::PREFIX,
-        ctx.accounts.mint.to_account_info().key.as_ref(),
-        ctx.accounts.borrower.key.as_ref(),
-        signer_bump,
-    ][..]];
-
-    invoke_signed(
-        &revoke_ix,
-        &[
-            loan.to_account_info(),
-            ctx.accounts.deposit_token_account.to_account_info(),
-            ctx.accounts.borrower.to_account_info(),
-        ],
-        signer_seeds
-    )?;
-
-    Ok(())
-}
-
-pub struct ThawParams<'a> {
-    /// CHECK
-    loan: AccountInfo<'a>,
-    /// CHECK
-    borrower: AccountInfo<'a>,
-    /// CHECK
-    deposit_token_account: AccountInfo<'a>,
-    /// CHECK
-    edition: AccountInfo<'a>,
-    /// CHECK
-    mint: AccountInfo<'a>,
-}
-
-pub fn thaw<'a>(bump: u8, params: ThawParams<'a>) -> Result<()> {
-    let ThawParams {
-        loan,
-        borrower,
-        deposit_token_account,
-        edition,
-        mint,
-    } = params;
-    
-    let signer_bump = &[bump];
-    let signer_seeds = &[&[
-        Loan::PREFIX,
-        mint.key.as_ref(),
-        borrower.key.as_ref(),
-        signer_bump
-    ][..]];
-
-    invoke_signed(
-        &thaw_delegated_account(
-            mpl_token_metadata::ID,
-            loan.key(),
-            deposit_token_account.key(),
-            edition.key(),
-            mint.key()
-        ),
-        &[
-            loan,
-            deposit_token_account.clone(),
-            edition,
-            mint
-        ],
-        signer_seeds
     )?;
 
     Ok(())
