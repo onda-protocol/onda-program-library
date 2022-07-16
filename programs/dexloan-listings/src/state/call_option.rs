@@ -21,8 +21,6 @@ pub struct CallOption {
     pub expiry: i64,
     /// The start date of the loan
     pub strike_price: u64,
-    /// The escrow where the collateral NFT is held
-    pub escrow: Pubkey,
     /// The mint of the token being used for collateral
     pub mint: Pubkey,
     /// Misc
@@ -39,7 +37,6 @@ impl CallOption {
         32 + // buyer
         8 + // expiry
         8 + // exercise price
-        32 + // escrow
         32 + // mint
         1 + // bump
         1 // escrow bump

@@ -7,7 +7,7 @@ use anchor_lang::{
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{Loan, LoanState};
 use crate::error::{ErrorCode};
-use crate::utils::{freeze, thaw, FreezeParams, ThawParams};
+use crate::utils::{freeze, thaw, FreezeParams};
 
 declare_id!("H6FCxCy2KCPJwCoUb9eQCSv41WZBKQaYfB6x5oFajzfj");
 
@@ -32,23 +32,33 @@ pub fn init(
     loan.state = LoanState::Listed;
     loan.borrower = ctx.accounts.borrower.key();
     // Transfer
-    let cpi_program = ctx.accounts.token_program.to_account_info();
-    let cpi_accounts = anchor_spl::token::Approve {
-        to: ctx.accounts.deposit_token_account.to_account_info(),
-        delegate: loan.to_account_info(),
-        authority: ctx.accounts.borrower.to_account_info(),
-    };
-    let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-    anchor_spl::token::approve(cpi_ctx, 1)?;
+    anchor_spl::token::approve(
+        CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            anchor_spl::token::Approve {
+                to: ctx.accounts.deposit_token_account.to_account_info(),
+                delegate: loan.to_account_info(),
+                authority: ctx.accounts.borrower.to_account_info(),
+            }
+        ),
+        1
+    )?;
+
+    let signer_bump = &[ctx.accounts.loan_account.bump];
+    let signer_seeds = &[&[
+        Loan::PREFIX,
+        ctx.accounts.loan_account.mint.as_ref(),
+        ctx.accounts.loan_account.borrower.as_ref(),
+        signer_bump
+    ][..]];
 
     freeze(
-        loan.bump,
         FreezeParams {
-            loan: ctx.accounts.loan_account.to_account_info(),
-            borrower: ctx.accounts.borrower.to_account_info(),
-            deposit_token_account: ctx.accounts.deposit_token_account.to_account_info(),
+            delegate: ctx.accounts.loan_account.to_account_info(),
+            token_account: ctx.accounts.deposit_token_account.to_account_info(),
             edition: ctx.accounts.edition.to_account_info(),
             mint: ctx.accounts.mint.to_account_info(),
+            signer_seeds: signer_seeds
         }
     )?;
 
@@ -57,14 +67,21 @@ pub fn init(
 
 pub fn close(ctx: Context<CloseLoan>) -> Result<()> {
     if ctx.accounts.deposit_token_account.is_frozen() {
+        let signer_bump = &[ctx.accounts.loan_account.bump];
+        let signer_seeds = &[&[
+            Loan::PREFIX,
+            ctx.accounts.loan_account.mint.as_ref(),
+            ctx.accounts.loan_account.borrower.as_ref(),
+            signer_bump
+        ][..]];
+    
         thaw(
-            ctx.accounts.loan_account.bump,
-            ThawParams {
-                loan: ctx.accounts.loan_account.to_account_info(),
-                borrower: ctx.accounts.borrower.to_account_info(),
-                deposit_token_account: ctx.accounts.deposit_token_account.to_account_info(),
+            FreezeParams {
+                delegate: ctx.accounts.loan_account.to_account_info(),
+                token_account: ctx.accounts.deposit_token_account.to_account_info(),
                 edition: ctx.accounts.edition.to_account_info(),
                 mint: ctx.accounts.mint.to_account_info(),
+                signer_seeds: signer_seeds
             }
         )?;
     }
@@ -135,23 +152,33 @@ pub fn repay(ctx: Context<RepayLoan>) -> Result<()> {
         ]
     )?;
 
+    let signer_bump = &[loan.bump];
+    let signer_seeds = &[&[
+        Loan::PREFIX,
+        loan.mint.as_ref(),
+        loan.borrower.as_ref(),
+        signer_bump
+    ][..]];
+
     thaw(
-        loan.bump,
-        ThawParams {
-            loan: ctx.accounts.loan_account.to_account_info(),
-            borrower: ctx.accounts.borrower.to_account_info(),
-            deposit_token_account: ctx.accounts.deposit_token_account.to_account_info(),
+        FreezeParams {
+            delegate: loan.to_account_info(),
+            token_account: ctx.accounts.deposit_token_account.to_account_info(),
             edition: ctx.accounts.edition.to_account_info(),
             mint: ctx.accounts.mint.to_account_info(),
+            signer_seeds: signer_seeds
         }
     )?;
 
-    let cpi_accounts = anchor_spl::token::Revoke {
-        source: ctx.accounts.deposit_token_account.to_account_info(),
-        authority: ctx.accounts.borrower.to_account_info(),
-    };
-    let cpi_ctx = CpiContext::new(ctx.accounts.token_program.to_account_info(), cpi_accounts);
-    anchor_spl::token::revoke(cpi_ctx)?;
+    anchor_spl::token::revoke(
+        CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            anchor_spl::token::Revoke {
+                source: ctx.accounts.deposit_token_account.to_account_info(),
+                authority: ctx.accounts.borrower.to_account_info(),
+            }
+        )
+    )?;
 
     Ok(())
 }
@@ -173,32 +200,35 @@ pub fn repossess(ctx: Context<Repossess>) -> Result<()> {
     
     loan.state = LoanState::Defaulted;
 
+    let signer_bump = &[loan.bump];
+    let signer_seeds = &[&[
+        Loan::PREFIX,
+        loan.mint.as_ref(),
+        loan.borrower.as_ref(),
+        signer_bump
+    ][..]];
+
     thaw(
-        loan.bump,
-        ThawParams {
-            loan: loan.to_account_info(),
-            borrower: ctx.accounts.borrower.to_account_info(),
-            deposit_token_account: ctx.accounts.deposit_token_account.to_account_info(),
+        FreezeParams {
+            delegate: loan.to_account_info(),
+            token_account: ctx.accounts.deposit_token_account.to_account_info(),
             edition: ctx.accounts.edition.to_account_info(),
             mint: ctx.accounts.mint.to_account_info(),
+            signer_seeds: signer_seeds
         }
     )?;
+
     // Transfer NFT
-    let cpi_program = ctx.accounts.token_program.to_account_info();
-    let cpi_accounts = anchor_spl::token::Transfer {
-        from: ctx.accounts.deposit_token_account.to_account_info(),
-        to: ctx.accounts.lender_token_account.to_account_info(),
-        authority: loan.to_account_info(),
-    };
-    let seeds = &[
-        Loan::PREFIX,
-        ctx.accounts.mint.to_account_info().key.as_ref(),
-        ctx.accounts.borrower.to_account_info().key.as_ref(),
-        &[loan.bump],
-    ];
-    let signer = &[&seeds[..]];
     anchor_spl::token::transfer(
-        CpiContext::new_with_signer(cpi_program, cpi_accounts, signer),
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            anchor_spl::token::Transfer {
+                from: ctx.accounts.deposit_token_account.to_account_info(),
+                to: ctx.accounts.lender_token_account.to_account_info(),
+                authority: loan.to_account_info(),
+            },
+            signer_seeds
+        ),
         1
     )?;
 

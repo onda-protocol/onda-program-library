@@ -23,8 +23,6 @@ pub struct Loan {
     pub duration: u64,
     /// The start date of the loan
     pub start_date: i64,
-    /// The escrow where the collateral NFT is held
-    pub escrow: Pubkey,
     /// The mint of the token being used for collateral
     pub mint: Pubkey,
     /// Misc
@@ -42,7 +40,6 @@ impl Loan {
         4 + // basis_points
         8 + // duration
         8 + // start_date
-        32 + // escrow
         32 + // mint
         1 + // bump
         1 // escrow bump
