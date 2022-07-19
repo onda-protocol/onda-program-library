@@ -11,12 +11,12 @@ describe("dexloan_listings", () => {
     anchor.AnchorProvider.defaultOptions().preflightCommitment
   );
 
-  let borrower;
-  let lender;
-  let options;
+  describe.only("Loan repossessions", () => {
+    let borrower;
+    let lender;
+    let options;
 
-  describe.only("Loans", () => {
-    it("Creates a dexloan loan", async () => {
+    it.only("Creates a dexloan loan", async () => {
       options = {
         amount: anchor.web3.LAMPORTS_PER_SOL / 100,
         basisPoints: 500,
@@ -33,7 +33,20 @@ describe("dexloan_listings", () => {
         borrower.loanAccount
       );
 
-      assert.ok(true);
+      console.log(
+        "delegate ",
+        borrowerTokenAccount.delegate.toBase58(),
+        borrower.loanAccount.toBase58()
+      );
+      console.log(
+        "borrower ",
+        loan.borrower.toBase58(),
+        borrower.keypair.publicKey.toBase58()
+      );
+      console.log("basis points: ", loan.basisPoints, options.basisPoints);
+      console.log("duration: ", loan.duration.toNumber(), options.duration);
+      console.log("mint: ", loan.mint.toBase58(), borrower.mint.toBase58());
+
       assert.equal(
         borrowerTokenAccount.delegate,
         borrower.loanAccount.toBase58()
@@ -105,7 +118,48 @@ describe("dexloan_listings", () => {
       );
     });
 
-    it("Allows an overdue loan to be repossessed", async () => {
+    it("Will only allow lender to repossess an overdue loan", async () => {
+      // Creates another signer
+      const keypair = anchor.web3.Keypair.generate();
+      const provider = helpers.getProvider(connection, keypair);
+      const program = helpers.getProgram(provider);
+      await helpers.requestAirdrop(connection, keypair.publicKey);
+
+      const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
+        connection,
+        keypair,
+        borrower.mint,
+        keypair.publicKey
+      );
+
+      try {
+        await program.methods
+          .repossessCollateral()
+          .accounts({
+            borrower: borrower.keypair.publicKey,
+            depositTokenAccount: borrower.depositTokenAccount,
+            lender: lender.keypair.publicKey,
+            lenderTokenAccount: tokenAccount.address,
+            loanAccount: borrower.loanAccount,
+            mint: borrower.mint,
+            edition: borrower.edition,
+            metadataProgram: METADATA_PROGRAM_ID,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: splToken.TOKEN_PROGRAM_ID,
+            clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          })
+          .rpc();
+
+        assert.ok(false);
+      } catch (error) {
+        assert.ok(
+          error.toString().includes("Error: Signature verification failed")
+        );
+      }
+    });
+
+    it("Allows an overdue loan to be repossessed by the lender", async () => {
       const loan = await borrower.program.account.loan.fetch(
         borrower.loanAccount
       );
@@ -149,371 +203,266 @@ describe("dexloan_listings", () => {
       assert.equal(lenderTokenAccount.amount, BigInt(1));
       assert.deepEqual(defaultedListing.state, { defaulted: {} });
     });
+
+    it("Will allow accounts to be closed once overdue loans are repossessed", async () => {
+      await borrower.program.methods
+        .closeLoan()
+        .accounts({
+          borrower: borrower.keypair.publicKey,
+          depositTokenAccount: borrower.depositTokenAccount,
+          escrowAccount: borrower.escrowAccount,
+          loanAccount: borrower.loanAccount,
+          mint: borrower.mint,
+        })
+        .rpc();
+
+      try {
+        await borrower.program.account.loan.fetch(borrower.loanAccount);
+      } catch (err) {
+        assert.equal(
+          err.message,
+          `Account does not exist ${borrower.loanAccount.toBase58()}`
+        );
+      }
+    });
   });
 
-  //   it("Allows loans to be repaid", async () => {
-  //     const options = {
-  //       amount: anchor.web3.LAMPORTS_PER_SOL * 2,
-  //       basisPoints: 700,
-  //       duration: 30 * 24 * 60 * 60, // 30 days
-  //     };
-  //     const borrower = await helpers.initLoan(connection, options);
-  //     const lender = await helpers.giveLoan(connection, borrower);
-  //     const lenderPreRepaymentBalance = await connection.getBalance(
-  //       lender.keypair.publicKey
-  //     );
+  describe("Loan repayments", () => {
+    let borrower;
+    let lender;
+    let options;
 
-  //     await borrower.program.methods
-  //       .repayLoan()
-  //       .accounts({
-  //         loanAccount: borrower.loanAccount,
-  //         escrowAccount: borrower.escrowAccount,
-  //         borrower: borrower.keypair.publicKey,
-  //         depositTokenAccount: borrower.associatedAddress,
-  //         lender: lender.keypair.publicKey,
-  //         mint: borrower.mint,
-  //         systemProgram: anchor.web3.SystemProgram.programId,
-  //         tokenProgram: splToken.TOKEN_PROGRAM_ID,
-  //         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-  //       })
-  //       .rpc();
+    it("Creates a dexloan loan", async () => {
+      options = {
+        amount: anchor.web3.LAMPORTS_PER_SOL / 10,
+        basisPoints: 700,
+        duration: 30 * 24 * 60 * 60, // 30 days
+      };
 
-  //     const lenderPostRepaymentBalance = await connection.getBalance(
-  //       lender.keypair.publicKey
-  //     );
-  //     const borrowerTokenAccount = await splToken.getAccount(
-  //       connection,
-  //       borrower.associatedAddress
-  //     );
-  //     const escrowTokenAccount = await splToken.getAccount(
-  //       connection,
-  //       borrower.escrowAccount
-  //     );
+      borrower = await helpers.initLoan(connection, options);
+      const borrowerTokenAccount = await splToken.getAccount(
+        connection,
+        borrower.depositTokenAccount
+      );
+      const loan = await borrower.program.account.loan.fetch(
+        borrower.loanAccount
+      );
 
-  //     assert.equal(borrowerTokenAccount.amount, BigInt(1));
-  //     assert.equal(escrowTokenAccount.amount, BigInt(0));
-  //     assert(lenderPostRepaymentBalance > lenderPreRepaymentBalance);
-  //   });
+      assert.ok(true);
+      assert.equal(
+        borrowerTokenAccount.delegate,
+        borrower.loanAccount.toBase58()
+      );
+      assert.equal(loan.borrower, borrower.keypair.publicKey.toBase58());
+      assert.equal(loan.basisPoints, options.basisPoints);
+      assert.equal(loan.duration.toNumber(), options.duration);
+      assert.equal(loan.mint.toBase58(), borrower.mint.toBase58());
+      assert.equal(borrowerTokenAccount.amount, BigInt(1));
+      assert.deepEqual(loan.state, { listed: {} });
+    });
 
-  //   it("Allows loans to be closed", async () => {
-  //     const options = {
-  //       amount: anchor.web3.LAMPORTS_PER_SOL,
-  //       basisPoints: 500,
-  //       duration: 30 * 24 * 60 * 60, // 30 days
-  //     };
-  //     const borrower = await helpers.initLoan(connection, options);
+    it("Allows unactive loans to be closed", async () => {
+      try {
+        await borrower.program.methods
+          .closeLoan()
+          .accounts({
+            loanAccount: borrower.loanAccount,
+            borrower: borrower.keypair.publicKey,
+            depositTokenAccount: borrower.depositTokenAccount,
+            mint: borrower.mint,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: splToken.TOKEN_PROGRAM_ID,
+          })
+          .rpc();
+      } catch (error) {
+        console.log(error.logs);
+        assert.fail(error);
+      }
 
-  //     try {
-  //       await borrower.program.methods
-  //         .closeLoan()
-  //         .accounts({
-  //           loanAccount: borrower.loanAccount,
-  //           escrowAccount: borrower.escrowAccount,
-  //           borrower: borrower.keypair.publicKey,
-  //           depositTokenAccount: borrower.associatedAddress,
-  //           mint: borrower.mint,
-  //           systemProgram: anchor.web3.SystemProgram.programId,
-  //           tokenProgram: splToken.TOKEN_PROGRAM_ID,
-  //         })
-  //         .rpc();
-  //     } catch (error) {
-  //       console.log(error.logs);
-  //       assert.fail(error);
-  //     }
+      const borrowerTokenAccount = await splToken.getAccount(
+        connection,
+        borrower.depositTokenAccount
+      );
+      assert.equal(borrowerTokenAccount.delegate, null);
+      assert.equal(borrowerTokenAccount.amount, BigInt(1));
+    });
 
-  //     const borrowerTokenAccount = await splToken.getAccount(
-  //       connection,
-  //       borrower.associatedAddress
-  //     );
-  //     const escrowTokenAccount = await splToken.getAccount(
-  //       connection,
-  //       borrower.escrowAccount
-  //     );
-  //     assert.equal(borrowerTokenAccount.delegate, null);
-  //     assert.equal(borrowerTokenAccount.amount, BigInt(1));
-  //     assert.equal(escrowTokenAccount.amount, BigInt(0));
-  //   });
+    it("Allows loans to be reinitialized after being closed", async () => {
+      const amount = new anchor.BN(options.amount);
+      const basisPoints = new anchor.BN(options.basisPoints);
+      const duration = new anchor.BN(options.duration);
 
-  //   it("Allows loans to be reinitialized after being closed", async () => {
-  //     const options = {
-  //       amount: anchor.web3.LAMPORTS_PER_SOL,
-  //       basisPoints: 500,
-  //       duration: 30 * 24 * 60 * 60, // 30 days
-  //     };
-  //     const borrower = await helpers.initLoan(connection, options);
+      await borrower.program.methods
+        .initLoan(amount, basisPoints, duration)
+        .accounts({
+          loanAccount: borrower.loanAccount,
+          depositTokenAccount: borrower.depositTokenAccount,
+          mint: borrower.mint,
+          borrower: borrower.keypair.publicKey,
+          edition: borrower.edition,
+          metadataProgram: METADATA_PROGRAM_ID,
+          tokenProgram: splToken.TOKEN_PROGRAM_ID,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .rpc();
 
-  //     await borrower.program.methods
-  //       .closeLoan()
-  //       .accounts({
-  //         loanAccount: borrower.loanAccount,
-  //         escrowAccount: borrower.escrowAccount,
-  //         borrower: borrower.keypair.publicKey,
-  //         depositTokenAccount: borrower.associatedAddress,
-  //         mint: borrower.mint,
-  //         systemProgram: anchor.web3.SystemProgram.programId,
-  //         tokenProgram: splToken.TOKEN_PROGRAM_ID,
-  //       })
-  //       .rpc();
+      const loan = await borrower.program.account.loan.fetch(
+        borrower.loanAccount
+      );
+      const borrowerTokenAccount = await splToken.getAccount(
+        connection,
+        borrower.depositTokenAccount
+      );
 
-  //     const amount = new anchor.BN(options.amount);
-  //     const basisPoints = new anchor.BN(options.basisPoints);
-  //     const duration = new anchor.BN(options.duration);
+      assert.equal(borrowerTokenAccount.amount, BigInt(1));
+      assert.equal(
+        borrowerTokenAccount.delegate.toBase58(),
+        loan.escrow.toBase58()
+      );
+      assert.deepEqual(loan.state, { listed: {} });
+      assert.equal(
+        loan.borrower.toBase58(),
+        borrower.keypair.publicKey.toBase58()
+      );
+    });
 
-  //     await borrower.program.methods
-  //       .initLoan(amount, basisPoints, duration)
-  //       .accounts({
-  //         escrowAccount: borrower.escrowAccount,
-  //         loanAccount: borrower.loanAccount,
-  //         borrower: borrower.keypair.publicKey,
-  //         depositTokenAccount: borrower.associatedAddress,
-  //         mint: borrower.mint,
-  //         tokenProgram: splToken.TOKEN_PROGRAM_ID,
-  //         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-  //         systemProgram: anchor.web3.SystemProgram.programId,
-  //       })
-  //       .rpc();
+    it("Allows loans to be given", async () => {
+      const borrowerPreLoanBalance = await connection.getBalance(
+        borrower.keypair.publicKey
+      );
 
-  //     const loan = await borrower.program.account.loan.fetch(
-  //       borrower.loanAccount
-  //     );
-  //     const borrowerTokenAccount = await splToken.getAccount(
-  //       connection,
-  //       borrower.associatedAddress
-  //     );
-  //     const escrowTokenAccount = await splToken.getAccount(
-  //       connection,
-  //       borrower.escrowAccount
-  //     );
+      lender = await helpers.giveLoan(connection, borrower);
+      const loan = await borrower.program.account.loan.fetch(
+        borrower.loanAccount
+      );
+      const borrowerPostLoanBalance = await connection.getBalance(
+        borrower.keypair.publicKey
+      );
+      const borrowerTokenAccount = await splToken.getAccount(
+        connection,
+        borrower.depositTokenAccount
+      );
+      assert.ok(true);
+      assert.equal(borrowerTokenAccount.amount, BigInt(1));
+      assert.equal(
+        borrowerPreLoanBalance + options.amount,
+        borrowerPostLoanBalance
+      );
+      assert.equal(loan.lender.toBase58(), lender.keypair.publicKey.toBase58());
+      assert.deepEqual(loan.state, { active: {} });
+      assert(
+        loan.startDate.toNumber() > 0 && loan.startDate.toNumber() < Date.now()
+      );
+    });
 
-  //     assert.equal(borrowerTokenAccount.amount, BigInt(1));
-  //     assert.equal(escrowTokenAccount.amount, BigInt(0));
-  //     assert.equal(
-  //       borrowerTokenAccount.delegate.toBase58(),
-  //       loan.escrow.toBase58()
-  //     );
-  //     assert.deepEqual(loan.state, { listed: {} });
-  //     assert.equal(
-  //       loan.borrower.toBase58(),
-  //       borrower.keypair.publicKey.toBase58()
-  //     );
-  //   });
+    it("Will not allow a loan to be repossessed if not overdue", async () => {
+      const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
+        connection,
+        lender.keypair,
+        borrower.mint,
+        lender.keypair.publicKey
+      );
 
-  //   it("Does NOT allow an active loan to be reinitialized", async () => {
-  //     const amount = anchor.web3.LAMPORTS_PER_SOL;
-  //     const basisPoints = 500;
-  //     const duration = 60;
+      try {
+        await lender.program.methods
+          .repossessCollateral()
+          .accounts({
+            borrower: borrower.keypair.publicKey,
+            depositTokenAccount: borrower.depositTokenAccount,
+            lender: lender.keypair.publicKey,
+            lenderTokenAccount: tokenAccount.address,
+            loanAccount: borrower.loanAccount,
+            mint: borrower.mint,
+            edition: borrower.edition,
+            metadataProgram: METADATA_PROGRAM_ID,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: splToken.TOKEN_PROGRAM_ID,
+            clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          })
+          .rpc();
 
-  //     const borrower = await helpers.initLoan(connection, {
-  //       amount,
-  //       basisPoints,
-  //       duration,
-  //     });
-  //     await helpers.giveLoan(connection, borrower);
+        assert.ok(false);
+      } catch (error) {
+        assert.ok(error.toString(), "This loan is not overdue");
+      }
+    });
 
-  //     const loan = await borrower.program.account.loan.fetch(
-  //       borrower.loanAccount
-  //     );
+    it("Allows loans to be repaid", async () => {
+      const borrower = await helpers.initLoan(connection, options);
+      const lender = await helpers.giveLoan(connection, borrower);
+      const lenderPreRepaymentBalance = await connection.getBalance(
+        lender.keypair.publicKey
+      );
 
-  //     try {
-  //       await borrower.program.methods
-  //         .initLoan(
-  //           new anchor.BN(amount),
-  //           new anchor.BN(basisPoints),
-  //           new anchor.BN(1)
-  //         )
-  //         .accounts({
-  //           borrower: borrower.keypair.publicKey,
-  //           depositTokenAccount: borrower.associatedAddress,
-  //           escrowAccount: loan.escrow,
-  //           loanAccount: borrower.loanAccount,
-  //           mint: loan.mint,
-  //           tokenProgram: splToken.TOKEN_PROGRAM_ID,
-  //           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-  //           systemProgram: anchor.web3.SystemProgram.programId,
-  //         })
-  //         .rpc();
-  //       assert.fail();
-  //     } catch (error) {
-  //       assert.ok(error.toString().includes("custom program error: 0x0"));
-  //     }
-  //   });
+      await borrower.program.methods
+        .repayLoan()
+        .accounts({
+          loanAccount: borrower.loanAccount,
+          borrower: borrower.keypair.publicKey,
+          depositTokenAccount: borrower.depositTokenAccount,
+          lender: lender.keypair.publicKey,
+          mint: borrower.mint,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          tokenProgram: splToken.TOKEN_PROGRAM_ID,
+          clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+        })
+        .rpc();
 
-  //   it("Will allow accounts to be closed once overdue loans are repossessed", async () => {
-  //     const options = {
-  //       amount: anchor.web3.LAMPORTS_PER_SOL,
-  //       basisPoints: 500,
-  //       duration: 1, // 1 second
-  //     };
-  //     const borrower = await helpers.initLoan(connection, options);
+      const lenderPostRepaymentBalance = await connection.getBalance(
+        lender.keypair.publicKey
+      );
+      const borrowerTokenAccount = await splToken.getAccount(
+        connection,
+        borrower.depositTokenAccount
+      );
+      assert.equal(borrowerTokenAccount.amount, BigInt(1));
+      assert.equal(borrowerTokenAccount.delegate, null);
+      assert(lenderPostRepaymentBalance > lenderPreRepaymentBalance);
+    });
 
-  //     const lender = await helpers.giveLoan(connection, borrower);
+    it("Prevents reinitialization", async () => {
+      const amount = anchor.web3.LAMPORTS_PER_SOL;
+      const basisPoints = 500;
+      const duration = 60;
 
-  //     await wait(1); // ensure 1 second passes
+      const borrower = await helpers.initLoan(connection, {
+        amount,
+        basisPoints,
+        duration,
+      });
+      await helpers.giveLoan(connection, borrower);
 
-  //     const loan = await borrower.program.account.loan.fetch(
-  //       borrower.loanAccount
-  //     );
+      const loan = await borrower.program.account.loan.fetch(
+        borrower.loanAccount
+      );
 
-  //     const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
-  //       connection,
-  //       lender.keypair,
-  //       loan.mint,
-  //       lender.keypair.publicKey
-  //     );
-
-  //     await lender.program.methods
-  //       .repossessCollateral()
-  //       .accounts({
-  //         escrowAccount: borrower.escrowAccount,
-  //         lender: lender.keypair.publicKey,
-  //         lenderTokenAccount: tokenAccount.address,
-  //         loanAccount: borrower.loanAccount,
-  //         mint: loan.mint,
-  //         systemProgram: anchor.web3.SystemProgram.programId,
-  //         tokenProgram: splToken.TOKEN_PROGRAM_ID,
-  //         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-  //         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-  //       })
-  //       .rpc();
-
-  //     await borrower.program.methods
-  //       .closeLoan()
-  //       .accounts({
-  //         borrower: borrower.keypair.publicKey,
-  //         depositTokenAccount: borrower.associatedAddress,
-  //         escrowAccount: borrower.escrowAccount,
-  //         loanAccount: borrower.loanAccount,
-  //         mint: borrower.mint,
-  //       })
-  //       .rpc();
-
-  //     try {
-  //       await borrower.program.account.loan.fetch(borrower.loanAccount);
-  //     } catch (err) {
-  //       assert.equal(
-  //         err.message,
-  //         `Account does not exist ${borrower.loanAccount.toBase58()}`
-  //       );
-  //     }
-  //   });
-
-  //   it("Will not allow a loan to be repossessed if not overdue", async () => {
-  //     const options = {
-  //       amount: anchor.web3.LAMPORTS_PER_SOL,
-  //       basisPoints: 500,
-  //       duration: 60 * 60, // 1 hour
-  //     };
-  //     const borrower = await helpers.initLoan(connection, options);
-
-  //     const lender = await helpers.giveLoan(connection, borrower);
-
-  //     const loan = await borrower.program.account.loan.fetch(
-  //       borrower.loanAccount
-  //     );
-
-  //     const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
-  //       connection,
-  //       lender.keypair,
-  //       loan.mint,
-  //       lender.keypair.publicKey
-  //     );
-
-  //     try {
-  //       await lender.program.methods
-  //         .repossessCollateral()
-  //         .accounts({
-  //           escrowAccount: loan.escrow,
-  //           lender: lender.keypair.publicKey,
-  //           lenderTokenAccount: tokenAccount.address,
-  //           loanAccount: borrower.loanAccount,
-  //           mint: loan.mint,
-  //           systemProgram: anchor.web3.SystemProgram.programId,
-  //           tokenProgram: splToken.TOKEN_PROGRAM_ID,
-  //           clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-  //           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-  //         })
-  //         .rpc();
-
-  //       assert.ok(false);
-  //     } catch (error) {
-  //       assert.ok(error.toString(), "This loan is not overdue");
-  //     }
-  //   });
-
-  //   it("Will only allow lender to repossess an overdue loan", async () => {
-  //     const options = {
-  //       amount: anchor.web3.LAMPORTS_PER_SOL,
-  //       basisPoints: 500,
-  //       duration: 1, // 1 second
-  //     };
-  //     const borrower = await helpers.initLoan(connection, options);
-
-  //     const lender = await helpers.giveLoan(connection, borrower);
-
-  //     await wait(1); // ensure 1 second passes
-
-  //     const loan = await borrower.program.account.loan.fetch(
-  //       borrower.loanAccount
-  //     );
-
-  //     // Creates another signer
-  //     const keypair = anchor.web3.Keypair.generate();
-  //     const provider = helpers.getProvider(connection, keypair);
-  //     const program = helpers.getProgram(provider);
-  //     await helpers.requestAirdrop(connection, keypair.publicKey);
-
-  //     const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
-  //       connection,
-  //       keypair,
-  //       loan.mint,
-  //       keypair.publicKey
-  //     );
-
-  //     try {
-  //       await program.methods
-  //         .repossessCollateral()
-  //         .accounts({
-  //           escrowAccount: loan.escrow,
-  //           lender: lender.keypair.publicKey,
-  //           lenderTokenAccount: tokenAccount.address,
-  //           loanAccount: borrower.loanAccount,
-  //           mint: loan.mint,
-  //           systemProgram: anchor.web3.SystemProgram.programId,
-  //           tokenProgram: splToken.TOKEN_PROGRAM_ID,
-  //           clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-  //           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-  //         })
-  //         .rpc();
-
-  //       assert.ok(false);
-  //     } catch (error) {
-  //       assert.ok(
-  //         error.toString().includes("Error: Signature verification failed")
-  //       );
-  //     }
-
-  //     try {
-  //       await program.methods
-  //         .repossessCollateral()
-  //         .accounts({
-  //           escrowAccount: loan.escrow,
-  //           lender: keypair.publicKey,
-  //           lenderTokenAccount: tokenAccount.address,
-  //           loanAccount: borrower.loanAccount,
-  //           mint: loan.mint,
-  //           systemProgram: anchor.web3.SystemProgram.programId,
-  //           tokenProgram: splToken.TOKEN_PROGRAM_ID,
-  //           clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-  //           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-  //         })
-  //         .rpc();
-
-  //       assert.ok(false);
-  //     } catch (error) {
-  //       assert.ok(error.toString().includes("A raw constraint was violated"));
-  //     }
-  //   });
-  // });
+      try {
+        await borrower.program.methods
+          .initLoan(
+            new anchor.BN(amount),
+            new anchor.BN(basisPoints),
+            new anchor.BN(1)
+          )
+          .accounts({
+            loanAccount: borrower.loanAccount,
+            depositTokenAccount: borrower.depositTokenAccount,
+            mint: borrower.mint,
+            borrower: borrower.keypair.publicKey,
+            edition: borrower.edition,
+            metadataProgram: METADATA_PROGRAM_ID,
+            tokenProgram: splToken.TOKEN_PROGRAM_ID,
+            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .rpc();
+        assert.fail();
+      } catch (error) {
+        assert.ok(error.toString().includes("custom program error: 0x0"));
+      }
+    });
+  });
 
   // describe("Call Options", () => {
   //   it("Will allow a call option to be created", async () => {

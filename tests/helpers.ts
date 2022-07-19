@@ -111,6 +111,8 @@ export async function initLoan(
     })
     .run();
 
+  console.log("nft mint: ", nft.mint.address.toBase58());
+
   const loanAccount = await findLoanAddress(
     nft.mint.address,
     keypair.publicKey
@@ -284,7 +286,6 @@ export async function buyCallOption(
         seller: seller.keypair.publicKey,
         buyer: keypair.publicKey,
         mint: seller.mint,
-        escrowAccount: seller.escrowAccount,
         depositTokenAccount: seller.associatedAddress,
         systemProgram: anchor.web3.SystemProgram.programId,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
