@@ -9,8 +9,6 @@ use crate::state::{Loan, LoanState};
 use crate::error::{DexloanError};
 use crate::utils::{freeze, thaw, FreezeParams};
 
-declare_id!("H6FCxCy2KCPJwCoUb9eQCSv41WZBKQaYfB6x5oFajzfj");
-
 pub fn init(
     ctx: Context<InitLoan>,
     amount: u64,
