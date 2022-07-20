@@ -4,7 +4,7 @@ use anchor_lang::{
 };
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{CallOption, CallOptionState};
-use crate::error::{ErrorCode};
+use crate::error::{DexloanError};
 use crate::utils::{freeze, thaw, FreezeParams};
 
 pub fn init(
@@ -20,7 +20,7 @@ pub fn init(
     msg!("expiry: {} seconds", expiry);
     
     if unix_timestamp > expiry {
-        return Err(ErrorCode::InvalidExpiry.into())
+        return Err(DexloanError::InvalidExpiry.into())
     }
 
     // Init
@@ -95,7 +95,7 @@ pub fn exercise(ctx: Context<ExerciseCallOption>) -> Result<()> {
     msg!("Strike price: {} lamports", call_option.strike_price);
 
     if unix_timestamp > call_option.expiry {
-        return Err(ErrorCode::OptionExpired.into())
+        return Err(DexloanError::OptionExpired.into())
     }
 
     call_option.state = CallOptionState::Exercised;

@@ -6,12 +6,10 @@ use anchor_lang::{
 };
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{Loan, LoanState};
-use crate::error::{ErrorCode};
+use crate::error::{DexloanError};
 use crate::utils::{freeze, thaw, FreezeParams};
 
 declare_id!("H6FCxCy2KCPJwCoUb9eQCSv41WZBKQaYfB6x5oFajzfj");
-
-pub const SECONDS_PER_YEAR: f64 = 31_536_000.0; 
 
 pub fn init(
     ctx: Context<InitLoan>,
@@ -124,25 +122,19 @@ pub fn lend(ctx: Context<Lend>) -> Result<()> {
 pub fn repay(ctx: Context<RepayLoan>) -> Result<()> {
     let loan = &mut ctx.accounts.loan_account;
 
-    let loan_basis_points = f64::from(loan.basis_points);
-    let loan_duration = ctx.accounts.clock.unix_timestamp - loan.start_date;
-    let pro_rata_interest_rate = ((loan_basis_points / 10_000 as f64) / SECONDS_PER_YEAR) * loan_duration as f64;
-    let interest_due = loan.amount as f64 * pro_rata_interest_rate;
-    let amount_due = loan.amount + interest_due.round() as u64;
-    
-    msg!("Loan basis points: {}", loan_basis_points);
-    msg!("Loan duration: {} seconds", loan_duration);
-    msg!("Loan amount: {} LAMPORTS", loan.amount);
-    msg!("Pro Rata interest rate: {}%", pro_rata_interest_rate);
-    msg!("Interest due: {} LAMPORTS", interest_due);
-    msg!("Total amount due: {} LAMPORTS", amount_due);
+    let amount_due = calculate_repayment(
+        loan.amount,
+        loan.basis_points,
+        loan.start_date,
+        ctx.accounts.clock.unix_timestamp
+    )?;
 
     // Transfer payment
     invoke(
         &anchor_lang::solana_program::system_instruction::transfer(
             &loan.borrower,
             &loan.lender,
-            amount_due as u64,
+            amount_due,
         ),
         &[
             ctx.accounts.borrower.to_account_info(),
@@ -181,6 +173,30 @@ pub fn repay(ctx: Context<RepayLoan>) -> Result<()> {
     Ok(())
 }
 
+pub const SECONDS_PER_YEAR: f64 = 31_536_000.0;
+pub const BASIS_POINTS: f64 = 10_000.0;
+
+pub fn calculate_repayment(
+    amount: u64,
+    basis_points: u32,
+    start_date: i64,
+    unix_timestamp: i64,
+) -> Result<u64> {
+    let time_elapsed = (unix_timestamp - start_date) as f64;
+    let pro_rata_interest_rate = (f64::from(basis_points) / BASIS_POINTS / SECONDS_PER_YEAR) * time_elapsed;
+    let f_amount = amount as f64;
+    let interest_due = f_amount * pro_rata_interest_rate;
+    let amount_due = f_amount + interest_due.round();
+
+    msg!("Loan amount: {} LAMPORTS", amount);
+    msg!("Time elapsed: {}", time_elapsed);
+    msg!("Pro Rata interest rate: {}%", pro_rata_interest_rate);
+    msg!("Interest due: {} LAMPORTS", interest_due);
+    msg!("Total amount due: {} LAMPORTS", amount_due);
+
+    Ok(amount_due as u64)
+}
+
 pub fn repossess(ctx: Context<Repossess>) -> Result<()> {
     let loan = &mut ctx.accounts.loan_account;
 
@@ -193,7 +209,7 @@ pub fn repossess(ctx: Context<Repossess>) -> Result<()> {
     msg!("Time passed: {} seconds", loan_duration);
 
     if loan.duration > loan_duration  {
-        return Err(ErrorCode::NotOverdue.into())
+        return Err(DexloanError::NotOverdue.into())
     }
     
     loan.state = LoanState::Defaulted;
