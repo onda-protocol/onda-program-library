@@ -174,7 +174,6 @@ pub fn repay(ctx: Context<RepayLoan>) -> Result<()> {
 }
 
 pub const SECONDS_PER_YEAR: f64 = 31_536_000.0;
-pub const BASIS_POINTS: f64 = 10_000.0;
 
 pub fn calculate_repayment(
     amount: u64,
@@ -183,10 +182,9 @@ pub fn calculate_repayment(
     unix_timestamp: i64,
 ) -> Result<u64> {
     let time_elapsed = (unix_timestamp - start_date) as f64;
-    let pro_rata_interest_rate = (f64::from(basis_points) / BASIS_POINTS / SECONDS_PER_YEAR) * time_elapsed;
-    let f_amount = amount as f64;
-    let interest_due = f_amount * pro_rata_interest_rate;
-    let amount_due = f_amount + interest_due.round();
+    let pro_rata_interest_rate = (f64::from(basis_points / 10_000) / SECONDS_PER_YEAR) * time_elapsed;
+    let interest_due = amount as f64 * pro_rata_interest_rate;
+    let amount_due = amount as f64 + interest_due.round();
 
     msg!("Loan amount: {} LAMPORTS", amount);
     msg!("Time elapsed: {}", time_elapsed);
