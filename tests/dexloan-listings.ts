@@ -11,12 +11,12 @@ describe("dexloan_listings", () => {
     anchor.AnchorProvider.defaultOptions().preflightCommitment
   );
 
-  describe.only("Loan repossessions", () => {
+  describe("Loan repossessions", () => {
     let borrower;
     let lender;
     let options;
 
-    it.only("Creates a dexloan loan", async () => {
+    it("Creates a dexloan loan", async () => {
       options = {
         amount: anchor.web3.LAMPORTS_PER_SOL / 100,
         basisPoints: 500,
@@ -32,20 +32,6 @@ describe("dexloan_listings", () => {
       const loan = await borrower.program.account.loan.fetch(
         borrower.loanAccount
       );
-
-      console.log(
-        "delegate ",
-        borrowerTokenAccount.delegate.toBase58(),
-        borrower.loanAccount.toBase58()
-      );
-      console.log(
-        "borrower ",
-        loan.borrower.toBase58(),
-        borrower.keypair.publicKey.toBase58()
-      );
-      console.log("basis points: ", loan.basisPoints, options.basisPoints);
-      console.log("duration: ", loan.duration.toNumber(), options.duration);
-      console.log("mint: ", loan.mint.toBase58(), borrower.mint.toBase58());
 
       assert.equal(
         borrowerTokenAccount.delegate,
@@ -84,8 +70,7 @@ describe("dexloan_listings", () => {
         );
         assert.ok(false);
       } catch (err) {
-        console.log(err);
-        assert.ok(err);
+        assert.ok(err.logs.includes("Program log: Error: Account is frozen"));
       }
     });
 
@@ -213,6 +198,10 @@ describe("dexloan_listings", () => {
           escrowAccount: borrower.escrowAccount,
           loanAccount: borrower.loanAccount,
           mint: borrower.mint,
+          edition: borrower.edition,
+          metadataProgram: METADATA_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          tokenProgram: splToken.TOKEN_PROGRAM_ID,
         })
         .rpc();
 
@@ -270,6 +259,8 @@ describe("dexloan_listings", () => {
             borrower: borrower.keypair.publicKey,
             depositTokenAccount: borrower.depositTokenAccount,
             mint: borrower.mint,
+            edition: borrower.edition,
+            metadataProgram: METADATA_PROGRAM_ID,
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: splToken.TOKEN_PROGRAM_ID,
           })
@@ -318,7 +309,7 @@ describe("dexloan_listings", () => {
       assert.equal(borrowerTokenAccount.amount, BigInt(1));
       assert.equal(
         borrowerTokenAccount.delegate.toBase58(),
-        loan.escrow.toBase58()
+        borrower.loanAccount.toBase58()
       );
       assert.deepEqual(loan.state, { listed: {} });
       assert.equal(
@@ -404,6 +395,8 @@ describe("dexloan_listings", () => {
           depositTokenAccount: borrower.depositTokenAccount,
           lender: lender.keypair.publicKey,
           mint: borrower.mint,
+          edition: borrower.edition,
+          metadataProgram: METADATA_PROGRAM_ID,
           systemProgram: anchor.web3.SystemProgram.programId,
           tokenProgram: splToken.TOKEN_PROGRAM_ID,
           clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,

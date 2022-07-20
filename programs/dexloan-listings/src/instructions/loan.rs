@@ -124,11 +124,9 @@ pub fn lend(ctx: Context<Lend>) -> Result<()> {
 pub fn repay(ctx: Context<RepayLoan>) -> Result<()> {
     let loan = &mut ctx.accounts.loan_account;
 
-    let unix_timestamp = ctx.accounts.clock.unix_timestamp;
-    let loan_start_date = loan.start_date;
-    let loan_basis_points = loan.basis_points as f64;
-    let loan_duration = (unix_timestamp - loan_start_date) as f64;
-    let pro_rata_interest_rate = ((loan_basis_points / 10_000 as f64) / SECONDS_PER_YEAR) * loan_duration;
+    let loan_basis_points = f64::from(loan.basis_points);
+    let loan_duration = ctx.accounts.clock.unix_timestamp - loan.start_date;
+    let pro_rata_interest_rate = ((loan_basis_points / 10_000 as f64) / SECONDS_PER_YEAR) * loan_duration as f64;
     let interest_due = loan.amount as f64 * pro_rata_interest_rate;
     let amount_due = loan.amount + interest_due.round() as u64;
     

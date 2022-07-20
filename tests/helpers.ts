@@ -98,7 +98,6 @@ export async function initLoan(
   );
   console.log(keypair.publicKey.toBase58());
   // await requestAirdrop(connection, keypair.publicKey);
-  const balance = await connection.getBalance(keypair.publicKey);
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
 
@@ -112,8 +111,6 @@ export async function initLoan(
       sellerFeeBasisPoints: 500,
     })
     .run();
-
-  console.log("nft mint: ", nft.mint.address.toBase58());
 
   const loanAccount = await findLoanAddress(
     nft.mint.address,
