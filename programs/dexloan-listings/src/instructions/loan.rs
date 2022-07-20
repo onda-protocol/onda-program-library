@@ -24,13 +24,13 @@ pub fn init(
 
     // Init
     loan.mint = ctx.accounts.mint.key();
+    loan.borrower = ctx.accounts.borrower.key();
     loan.bump = loan_bump;
     //
     loan.amount = amount;
     loan.basis_points = basis_points;
     loan.duration = duration;
     loan.state = LoanState::Listed;
-    loan.borrower = ctx.accounts.borrower.key();
     // Transfer
     anchor_spl::token::approve(
         CpiContext::new(

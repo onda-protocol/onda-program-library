@@ -1,7 +1,10 @@
 import * as anchor from "@project-serum/anchor";
 import * as splToken from "@solana/spl-token";
 import { Metaplex, keypairIdentity } from "@metaplex-foundation/js";
-import { PROGRAM_ID as METADATA_PROGRAM_ID } from "@metaplex-foundation/mpl-token-metadata";
+import {
+  BurnNftStruct,
+  PROGRAM_ID as METADATA_PROGRAM_ID,
+} from "@metaplex-foundation/mpl-token-metadata";
 import { IDL, DexloanListings } from "../target/types/dexloan_listings";
 
 const PROGRAM_ID = new anchor.web3.PublicKey(
@@ -96,7 +99,6 @@ export async function initLoan(
   console.log(keypair.publicKey.toBase58());
   // await requestAirdrop(connection, keypair.publicKey);
   const balance = await connection.getBalance(keypair.publicKey);
-  console.log("balance: ", balance);
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
 
@@ -118,7 +120,7 @@ export async function initLoan(
     keypair.publicKey
   );
 
-  await wait(1);
+  await wait(2);
 
   const largestAccounts = await connection.getTokenLargestAccounts(
     nft.mint.address
@@ -203,64 +205,77 @@ export async function giveLoan(connection: anchor.web3.Connection, borrower) {
   };
 }
 
-// export async function initCallOption(
-//   connection: anchor.web3.Connection,
-//   options: {
-//     amount: number;
-//     strikePrice: number;
-//     expiry: number;
-//   }
-// ) {
-//   const keypair = anchor.web3.Keypair.generate();
-//   const provider = getProvider(connection, keypair);
-//   const program = getProgram(provider);
-//   await requestAirdrop(connection, keypair.publicKey);
+export async function initCallOption(
+  connection: anchor.web3.Connection,
+  options: {
+    amount: number;
+    strikePrice: number;
+    expiry: number;
+  }
+) {
+  const keypair = anchor.web3.Keypair.generate();
+  const provider = getProvider(connection, keypair);
+  const program = getProgram(provider);
+  await requestAirdrop(connection, keypair.publicKey);
 
-//   const { mint, associatedAddress } = await mintNFT(connection, keypair);
+  const metaplex = Metaplex.make(connection).use(keypairIdentity(keypair));
 
-//   const callOptionAccount = await findCallOptionAddress(
-//     mint,
-//     keypair.publicKey
-//   );
+  const { nft } = await metaplex
+    .nfts()
+    .create({
+      uri: "https://arweave.net/123",
+      name: "My NFT",
+      sellerFeeBasisPoints: 500,
+    })
+    .run();
 
-//   const [escrowAccount] = await anchor.web3.PublicKey.findProgramAddress(
-//     [Buffer.from("escrow"), mint.toBuffer()],
-//     program.programId
-//   );
-//   const amount = new anchor.BN(options.amount);
-//   const strikePrice = new anchor.BN(options.strikePrice);
-//   const expiry = new anchor.BN(options.expiry);
+  await wait(2);
 
-//   try {
-//     await program.methods
-//       .initCallOption(amount, strikePrice, expiry)
-//       .accounts({
-//         mint,
-//         escrowAccount,
-//         callOptionAccount,
-//         seller: keypair.publicKey,
-//         depositTokenAccount: associatedAddress,
-//         tokenProgram: splToken.TOKEN_PROGRAM_ID,
-//         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-//         systemProgram: anchor.web3.SystemProgram.programId,
-//         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-//       })
-//       .rpc();
-//   } catch (error) {
-//     console.log(error.logs);
-//     throw error;
-//   }
+  const largestAccounts = await connection.getTokenLargestAccounts(
+    nft.mint.address
+  );
+  const depositTokenAccount = largestAccounts.value[0].address;
 
-//   return {
-//     mint,
-//     keypair,
-//     provider,
-//     program,
-//     callOptionAccount,
-//     escrowAccount,
-//     associatedAddress,
-//   };
-// }
+  const callOptionAccount = await findCallOptionAddress(
+    nft.mint.address,
+    keypair.publicKey
+  );
+
+  const amount = new anchor.BN(options.amount);
+  const strikePrice = new anchor.BN(options.strikePrice);
+  const expiry = new anchor.BN(options.expiry);
+
+  try {
+    await program.methods
+      .initCallOption(amount, strikePrice, expiry)
+      .accounts({
+        callOptionAccount,
+        mint: nft.mint.address,
+        edition: nft.edition.address,
+        seller: keypair.publicKey,
+        depositTokenAccount: depositTokenAccount,
+        metadataProgram: METADATA_PROGRAM_ID,
+        tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+      })
+      .rpc();
+  } catch (error) {
+    console.log(error.logs);
+    throw error;
+  }
+
+  return {
+    keypair,
+    provider,
+    program,
+    callOptionAccount,
+    depositTokenAccount,
+    mint: nft.mint.address,
+    edition: nft.edition.address,
+  };
+}
 
 export async function buyCallOption(
   connection: anchor.web3.Connection,
@@ -271,7 +286,7 @@ export async function buyCallOption(
   const program = getProgram(provider);
   // await requestAirdrop(connection, keypair.publicKey);
 
-  const associatedAddress = await splToken.getOrCreateAssociatedTokenAccount(
+  const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
     connection,
     keypair,
     seller.mint,
@@ -301,7 +316,7 @@ export async function buyCallOption(
     keypair,
     provider,
     program,
-    associatedAddress: associatedAddress.address,
+    tokenAccount: tokenAccount.address,
   };
 }
 
