@@ -457,7 +457,7 @@ describe("dexloan_listings", () => {
     });
   });
 
-  describe("Call Options", () => {
+  describe.only("Call Options", () => {
     describe("Exercise call option", () => {
       let options;
       let seller;
@@ -519,8 +519,7 @@ describe("dexloan_listings", () => {
           );
           assert.ok(false);
         } catch (err) {
-          console.log(err);
-          assert.ok(err);
+          assert.ok(err.logs.includes("Program log: Error: Account is frozen"));
         }
       });
 
