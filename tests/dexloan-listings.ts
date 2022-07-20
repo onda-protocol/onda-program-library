@@ -465,7 +465,7 @@ describe("dexloan_listings", () => {
   });
 
   describe("Call Options", () => {
-    describe("Exercise call options", () => {
+    describe("Exercise call option", () => {
       let options;
       let seller;
       let buyer;
@@ -607,112 +607,149 @@ describe("dexloan_listings", () => {
         assert.deepEqual(callOption.state, { exercised: {} });
         assert.equal(buyerTokenAccount.amount, BigInt(1));
       });
+
+      it("Can be closed after being exercised", async () => {
+        await seller.program.methods
+          .closeCallOption()
+          .accounts({
+            seller: seller.keypair.publicKey,
+            callOptionAccount: seller.callOptionAccount,
+            depositTokenAccount: seller.depositTokenAccount,
+            mint: seller.mint,
+            edition: seller.edition,
+            metadataProgram: METADATA_PROGRAM_ID,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: splToken.TOKEN_PROGRAM_ID,
+            clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+          })
+          .rpc();
+
+        try {
+          await seller.program.account.callOption.fetch(
+            seller.callOptionAccount
+          );
+          assert.fail();
+        } catch (error) {
+          assert.ok(error.message.includes("Account does not exist"));
+        }
+        const sellerTokenAccount = await splToken.getAccount(
+          connection,
+          seller.associatedAddress
+        );
+
+        assert.equal(sellerTokenAccount.amount, BigInt(1));
+        assert.equal(sellerTokenAccount.delegate, null);
+      });
+    });
+
+    describe("Call option expiry", () => {
+      let options;
+      let seller;
+      let buyer;
+
+      it("Creates a dexloan call option", async () => {
+        options = {
+          amount: 1_000_000,
+          strikePrice: anchor.web3.LAMPORTS_PER_SOL,
+          expiry: Math.round(Date.now() / 1000) + 5, // 5 seconds
+        };
+        seller = await helpers.initCallOption(connection, options);
+
+        const callOption = await seller.program.account.callOption.fetch(
+          seller.callOptionAccount
+        );
+        const sellerTokenAccount = await splToken.getAccount(
+          connection,
+          seller.depositTokenAccount
+        );
+
+        assert.equal(
+          sellerTokenAccount.delegate,
+          seller.callOptionAccount.toBase58()
+        );
+        assert.equal(
+          callOption.seller.toBase58(),
+          seller.keypair.publicKey.toBase58()
+        );
+        assert.equal(callOption.strikePrice.toNumber(), options.strikePrice);
+        assert.equal(callOption.expiry.toNumber(), options.expiry);
+        assert.equal(callOption.mint.toBase58(), seller.mint.toBase58());
+        assert.deepEqual(callOption.state, { listed: {} });
+        assert.equal(sellerTokenAccount.amount, BigInt(1));
+      });
+
+      it("Buys a call option", async () => {
+        buyer = await helpers.buyCallOption(connection, seller);
+        await helpers.wait(5);
+
+        const callOption = await seller.program.account.callOption.fetch(
+          seller.callOptionAccount
+        );
+
+        assert.equal(
+          callOption.seller.toBase58(),
+          seller.keypair.publicKey.toBase58()
+        );
+        assert.deepEqual(callOption.state, { active: {} });
+      });
+
+      it("Cannot be exercised if expired", async () => {
+        try {
+          await buyer.program.methods
+            .exerciseCallOption()
+            .accounts({
+              seller: seller.keypair.publicKey,
+              buyer: buyer.keypair.publicKey,
+              buyerTokenAccount: buyer.tokenAccount,
+              callOptionAccount: seller.callOptionAccount,
+              mint: seller.mint,
+              edition: seller.edition,
+              metadataProgram: METADATA_PROGRAM_ID,
+              systemProgram: anchor.web3.SystemProgram.programId,
+              tokenProgram: splToken.TOKEN_PROGRAM_ID,
+              clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+              rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+            })
+            .rpc();
+
+          assert.fail("Expected error");
+        } catch (error) {
+          assert.ok(error.message.includes("Option expired"));
+        }
+      });
+
+      it("Can be closed by seller when expired", async () => {
+        await seller.program.methods
+          .closeCallOption()
+          .accounts({
+            seller: seller.keypair.publicKey,
+            callOptionAccount: seller.callOptionAccount,
+            depositTokenAccount: seller.depositTokenAccount,
+            mint: seller.mint,
+            edition: seller.edition,
+            metadataProgram: METADATA_PROGRAM_ID,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: splToken.TOKEN_PROGRAM_ID,
+            clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+          })
+          .rpc();
+
+        try {
+          await seller.program.account.callOption.fetch(
+            seller.callOptionAccount
+          );
+          assert.fail();
+        } catch (error) {
+          assert.ok(error.message.includes("Account does not exist"));
+        }
+        const sellerTokenAccount = await splToken.getAccount(
+          connection,
+          seller.associatedAddress
+        );
+
+        assert.equal(sellerTokenAccount.amount, BigInt(1));
+        assert.equal(sellerTokenAccount.delegate, null);
+      });
     });
   });
 });
-
-//   it("Will NOT allow a call option to be exercised if expired", async () => {
-//     const options = {
-//       amount: 1_000_000,
-//       strikePrice: anchor.web3.LAMPORTS_PER_SOL,
-//       expiry: Math.round(Date.now() / 1000) + 2, // 2 seconds
-//     };
-//     const seller = await helpers.initCallOption(connection, options);
-//     const buyer = await helpers.buyCallOption(connection, seller);
-
-//     await wait(2);
-
-//     try {
-//       await buyer.program.methods
-//         .exerciseCallOption()
-//         .accounts({
-//           seller: seller.keypair.publicKey,
-//           buyer: buyer.keypair.publicKey,
-//           buyerTokenAccount: buyer.associatedAddress,
-//           callOptionAccount: seller.callOptionAccount,
-//           escrowAccount: seller.escrowAccount,
-//           mint: seller.mint,
-//           systemProgram: anchor.web3.SystemProgram.programId,
-//           tokenProgram: splToken.TOKEN_PROGRAM_ID,
-//           clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-//           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-//         })
-//         .rpc();
-
-//       assert.fail("Expected error");
-//     } catch (error) {
-//       assert.ok(error.message.includes("Option expired"));
-//     }
-//   });
-
-//   it("Will allow a call option to be closed if not active", async () => {
-//     const options = {
-//       amount: 1_000_000,
-//       strikePrice: anchor.web3.LAMPORTS_PER_SOL,
-//       expiry: Math.round(Date.now() / 1000) + 30 * 24 * 60 * 2, // 2 days
-//     };
-//     const seller = await helpers.initCallOption(connection, options);
-
-//     await seller.program.methods
-//       .closeCallOption()
-//       .accounts({
-//         depositTokenAccount: seller.associatedAddress,
-//         callOptionAccount: seller.callOptionAccount,
-//         escrowAccount: seller.escrowAccount,
-//         mint: seller.mint,
-//         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-//       })
-//       .rpc();
-
-//     try {
-//       await seller.program.account.callOption.fetch(seller.callOptionAccount);
-//       assert.fail();
-//     } catch (error) {
-//       assert.ok(error.message.includes("Account does not exist"));
-//     }
-//     const sellerTokenAccount = await splToken.getAccount(
-//       connection,
-//       seller.associatedAddress
-//     );
-
-//     assert.equal(sellerTokenAccount.amount, BigInt(1));
-//     assert.equal(sellerTokenAccount.delegate, null);
-//   });
-
-//   it("Will allow a call option to be closed if expired", async () => {
-//     const options = {
-//       amount: 1_000_000,
-//       strikePrice: anchor.web3.LAMPORTS_PER_SOL,
-//       expiry: Math.round(Date.now() / 1000) + 2, // 2 seconds
-//     };
-//     const seller = await helpers.initCallOption(connection, options);
-//     await helpers.buyCallOption(connection, seller);
-
-//     await wait(2);
-
-//     await seller.program.methods
-//       .closeCallOption()
-//       .accounts({
-//         depositTokenAccount: seller.associatedAddress,
-//         callOptionAccount: seller.callOptionAccount,
-//         escrowAccount: seller.escrowAccount,
-//         mint: seller.mint,
-//         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-//       })
-//       .rpc();
-
-//     try {
-//       await seller.program.account.callOption.fetch(seller.callOptionAccount);
-//       assert.fail();
-//     } catch (error) {
-//       assert.ok(error.message.includes("Account does not exist"));
-//     }
-//     const sellerTokenAccount = await splToken.getAccount(
-//       connection,
-//       seller.associatedAddress
-//     );
-
-//     assert.equal(sellerTokenAccount.amount, BigInt(1));
-//     assert.equal(sellerTokenAccount.delegate, null);
-//   });
-// });
