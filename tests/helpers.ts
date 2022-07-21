@@ -80,6 +80,17 @@ export async function findCallOptionAddress(
   return callOptionAccount;
 }
 
+export function getBorrowerKeypair() {
+  return anchor.web3.Keypair.fromSecretKey(
+    new Uint8Array([
+      71, 35, 95, 48, 212, 238, 241, 57, 118, 77, 120, 148, 138, 225, 184, 200,
+      163, 169, 55, 8, 181, 69, 2, 6, 107, 129, 115, 87, 113, 58, 117, 26, 57,
+      7, 172, 250, 17, 17, 24, 22, 59, 192, 224, 136, 245, 121, 67, 41, 137,
+      218, 59, 249, 200, 31, 142, 149, 179, 204, 75, 22, 43, 108, 22, 243,
+    ])
+  );
+}
+
 export async function initLoan(
   connection: anchor.web3.Connection,
   options: {
@@ -88,14 +99,7 @@ export async function initLoan(
     duration: number;
   }
 ) {
-  const keypair = anchor.web3.Keypair.fromSecretKey(
-    new Uint8Array([
-      71, 35, 95, 48, 212, 238, 241, 57, 118, 77, 120, 148, 138, 225, 184, 200,
-      163, 169, 55, 8, 181, 69, 2, 6, 107, 129, 115, 87, 113, 58, 117, 26, 57,
-      7, 172, 250, 17, 17, 24, 22, 59, 192, 224, 136, 245, 121, 67, 41, 137,
-      218, 59, 249, 200, 31, 142, 149, 179, 204, 75, 22, 43, 108, 22, 243,
-    ])
-  );
+  const keypair = getBorrowerKeypair();
   console.log(keypair.publicKey.toBase58());
   // await requestAirdrop(connection, keypair.publicKey);
   const provider = getProvider(connection, keypair);
@@ -210,10 +214,10 @@ export async function initCallOption(
     expiry: number;
   }
 ) {
-  const keypair = anchor.web3.Keypair.generate();
+  const keypair = getBorrowerKeypair();
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
-  await requestAirdrop(connection, keypair.publicKey);
+  // await requestAirdrop(connection, keypair.publicKey);
 
   const metaplex = Metaplex.make(connection).use(keypairIdentity(keypair));
 
@@ -278,27 +282,21 @@ export async function buyCallOption(
   connection: anchor.web3.Connection,
   seller
 ) {
-  const keypair = anchor.web3.Keypair.generate();
+  const keypair = getLenderKeypair();
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
-  // await requestAirdrop(connection, keypair.publicKey);
-
-  const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
-    connection,
-    keypair,
-    seller.mint,
-    keypair.publicKey
-  );
 
   try {
     await program.methods
       .buyCallOption()
       .accounts({
-        callOptionAccount: seller.callOptionAccount,
         seller: seller.keypair.publicKey,
         buyer: keypair.publicKey,
+        callOptionAccount: seller.callOptionAccount,
+        depositTokenAccount: seller.depositTokenAccount,
         mint: seller.mint,
-        depositTokenAccount: seller.associatedAddress,
+        edition: seller.edition,
+        metadataProgram: METADATA_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
@@ -313,7 +311,6 @@ export async function buyCallOption(
     keypair,
     provider,
     program,
-    tokenAccount: tokenAccount.address,
   };
 }
 

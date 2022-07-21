@@ -100,18 +100,6 @@ pub fn exercise(ctx: Context<ExerciseCallOption>) -> Result<()> {
 
     call_option.state = CallOptionState::Exercised;
 
-    anchor_lang::solana_program::program::invoke(
-        &anchor_lang::solana_program::system_instruction::transfer(
-            &call_option.buyer,
-            &call_option.seller,
-            call_option.strike_price,
-        ),
-        &[
-            ctx.accounts.seller.to_account_info(),
-            ctx.accounts.buyer.to_account_info(),
-        ]
-    )?;
-
     let signer_bump = &[call_option.bump];
     let signer_seeds = &[&[
         CallOption::PREFIX,
@@ -119,6 +107,28 @@ pub fn exercise(ctx: Context<ExerciseCallOption>) -> Result<()> {
         call_option.seller.as_ref(),
         signer_bump
     ][..]];
+
+    thaw(
+        FreezeParams {
+            delegate: call_option.to_account_info(),
+            token_account: ctx.accounts.deposit_token_account.to_account_info(),
+            edition: ctx.accounts.edition.to_account_info(),
+            mint: ctx.accounts.mint.to_account_info(),
+            signer_seeds,
+        }
+    )?;
+
+    anchor_lang::solana_program::program::invoke(
+        &anchor_lang::solana_program::system_instruction::transfer(
+            &call_option.buyer,
+            &call_option.seller,
+            call_option.strike_price,
+        ),
+        &[
+            ctx.accounts.buyer.to_account_info(),
+            ctx.accounts.seller.to_account_info(),
+        ]
+    )?;
 
     anchor_spl::token::transfer(
         CpiContext::new_with_signer(
@@ -265,7 +275,7 @@ pub struct CloseCallOption<'info> {
         bump = call_option_account.bump,
         constraint = call_option_account.seller == seller.key(),
         constraint = call_option_account.mint == mint.key(),
-        constraint = call_option_account.state != CallOptionState::Exercised,
+        constraint = call_option_account.state != CallOptionState::Active,
         close = seller
     )]
     pub call_option_account: Account<'info, CallOption>,

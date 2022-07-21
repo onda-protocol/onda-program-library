@@ -458,7 +458,7 @@ describe("dexloan_listings", () => {
   });
 
   describe.only("Call Options", () => {
-    describe("Exercise call option", () => {
+    describe.only("Exercise call option", () => {
       let options;
       let seller;
       let buyer;
@@ -559,27 +559,40 @@ describe("dexloan_listings", () => {
         }
       });
 
-      it("Allows a call option to be exercised", async () => {
+      it("Exercises a call option", async () => {
         const beforeExerciseBalance = await connection.getBalance(
           buyer.keypair.publicKey
         );
 
-        await buyer.program.methods
-          .exerciseCallOption()
-          .accounts({
-            seller: seller.keypair.publicKey,
-            buyer: buyer.keypair.publicKey,
-            buyerTokenAccount: buyer.tokenAccount,
-            callOptionAccount: seller.callOptionAccount,
-            mint: seller.mint,
-            edition: seller.edition,
-            metadataProgram: METADATA_PROGRAM_ID,
-            systemProgram: anchor.web3.SystemProgram.programId,
-            tokenProgram: splToken.TOKEN_PROGRAM_ID,
-            clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-          })
-          .rpc();
+        const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
+          connection,
+          buyer.keypair,
+          seller.mint,
+          buyer.keypair.publicKey
+        );
+
+        try {
+          await buyer.program.methods
+            .exerciseCallOption()
+            .accounts({
+              seller: seller.keypair.publicKey,
+              buyer: buyer.keypair.publicKey,
+              callOptionAccount: seller.callOptionAccount,
+              buyerTokenAccount: tokenAccount.address,
+              depositTokenAccount: seller.depositTokenAccount,
+              mint: seller.mint,
+              edition: seller.edition,
+              metadataProgram: METADATA_PROGRAM_ID,
+              systemProgram: anchor.web3.SystemProgram.programId,
+              tokenProgram: splToken.TOKEN_PROGRAM_ID,
+              clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+              rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+            })
+            .rpc();
+        } catch (err) {
+          console.log(err);
+          assert.fail(err.message);
+        }
 
         const afterExerciseBalance = await connection.getBalance(
           buyer.keypair.publicKey
@@ -589,7 +602,7 @@ describe("dexloan_listings", () => {
         );
         const buyerTokenAccount = await splToken.getAccount(
           connection,
-          buyer.tokenAccount
+          tokenAccount.address
         );
 
         assert.equal(
