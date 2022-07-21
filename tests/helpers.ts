@@ -36,7 +36,7 @@ export async function requestAirdrop(
   const blockhashWithExpiryBlockHeight = await connection.getLatestBlockhash();
   const signature = await connection.requestAirdrop(
     publicKey,
-    anchor.web3.LAMPORTS_PER_SOL
+    anchor.web3.LAMPORTS_PER_SOL * 2
   );
   await connection.confirmTransaction({
     signature,
@@ -100,10 +100,10 @@ export async function initLoan(
   }
 ) {
   const keypair = getBorrowerKeypair();
-  console.log(keypair.publicKey.toBase58());
-  // await requestAirdrop(connection, keypair.publicKey);
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
+  // await requestAirdrop(connection, keypair.publicKey);
+  console.log("borrower: ", keypair.publicKey.toBase58());
 
   const metaplex = Metaplex.make(connection).use(keypairIdentity(keypair));
 
@@ -178,6 +178,7 @@ export async function giveLoan(connection: anchor.web3.Connection, borrower) {
   const keypair = getLenderKeypair();
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
+  console.log("lender: ", keypair.publicKey.toBase58());
   // await requestAirdrop(connection, keypair.publicKey);
 
   try {
@@ -218,6 +219,7 @@ export async function initCallOption(
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
   // await requestAirdrop(connection, keypair.publicKey);
+  console.log("seller: ", keypair.publicKey.toBase58());
 
   const metaplex = Metaplex.make(connection).use(keypairIdentity(keypair));
 
@@ -285,6 +287,8 @@ export async function buyCallOption(
   const keypair = getLenderKeypair();
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
+  // await requestAirdrop(connection, keypair.publicKey);
+  console.log("buyer: ", keypair.publicKey.toBase58());
 
   try {
     await program.methods

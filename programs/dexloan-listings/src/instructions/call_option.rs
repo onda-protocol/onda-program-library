@@ -147,18 +147,27 @@ pub fn exercise(ctx: Context<ExerciseCallOption>) -> Result<()> {
 }
 
 pub fn close(ctx: Context<CloseCallOption>) -> Result<()> {
+    let call_option = &ctx.accounts.call_option_account;
+    let unix_timestamp = ctx.accounts.clock.unix_timestamp;
+
+    if call_option.state == CallOptionState::Active {
+        if call_option.expiry > unix_timestamp {
+            return Err(DexloanError::OptionNotExpired.into())
+        }
+    }
+
     if ctx.accounts.deposit_token_account.is_frozen() {
         let signer_bump = &[ctx.accounts.call_option_account.bump];
         let signer_seeds = &[&[
             CallOption::PREFIX,
-            ctx.accounts.call_option_account.mint.as_ref(),
-            ctx.accounts.call_option_account.seller.as_ref(),
+            call_option.mint.as_ref(),
+            call_option.seller.as_ref(),
             signer_bump
         ][..]];
 
         thaw(
             FreezeParams {
-                delegate: ctx.accounts.call_option_account.to_account_info(),
+                delegate: call_option.to_account_info(),
                 token_account: ctx.accounts.deposit_token_account.to_account_info(),
                 edition: ctx.accounts.edition.to_account_info(),
                 mint: ctx.accounts.mint.to_account_info(),
@@ -275,7 +284,6 @@ pub struct CloseCallOption<'info> {
         bump = call_option_account.bump,
         constraint = call_option_account.seller == seller.key(),
         constraint = call_option_account.mint == mint.key(),
-        constraint = call_option_account.state != CallOptionState::Active,
         close = seller
     )]
     pub call_option_account: Account<'info, CallOption>,

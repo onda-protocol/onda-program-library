@@ -4,7 +4,7 @@
     "sync": "node sync-idl.js",
     "get-mints": "node ./scripts/fetch-mints-by-update-authority.js",
     "snapshot": "ts-node ./scripts/snapshot.ts",
-    "test": "anchor test --provider.cluster devnet --skip-deploy --skip-local-validator"
+    "test": "anchor test --provider.cluster devnet --skip-build --skip-deploy --skip-local-validator"
   },
   "dependencies": {
     "@project-serum/anchor": "^0.24.2",
