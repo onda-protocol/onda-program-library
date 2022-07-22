@@ -5,7 +5,7 @@ use anchor_lang::{
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{CallOption, CallOptionState};
 use crate::error::{DexloanError};
-use crate::utils::{freeze, thaw, FreezeParams};
+use crate::utils::{pay_creator_fees, freeze, thaw, FreezeParams};
 
 pub fn init(
     ctx: Context<InitCallOption>,
@@ -88,11 +88,11 @@ pub fn buy(ctx: Context<BuyCallOption>) -> Result<()> {
     Ok(())
 }
 
-pub fn exercise(ctx: Context<ExerciseCallOption>) -> Result<()> {
+pub fn exercise<'info>(ctx: Context<'_, '_, '_, 'info, ExerciseCallOption<'info>>) -> Result<()> {
     let call_option = &mut ctx.accounts.call_option_account;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
-    msg!("Strike price: {} lamports", call_option.strike_price);
+    msg!("Exercise with strike price: {} lamports", call_option.strike_price);
 
     if unix_timestamp > call_option.expiry {
         return Err(DexloanError::OptionExpired.into())
@@ -118,11 +118,18 @@ pub fn exercise(ctx: Context<ExerciseCallOption>) -> Result<()> {
         }
     )?;
 
+    let remaining_amount = pay_creator_fees(
+        &mut ctx.remaining_accounts.iter(),
+        call_option.strike_price,
+        &ctx.accounts.metadata.to_account_info(),
+        &ctx.accounts.buyer.to_account_info(),
+    )?;
+
     anchor_lang::solana_program::program::invoke(
         &anchor_lang::solana_program::system_instruction::transfer(
             &call_option.buyer,
             &call_option.seller,
-            call_option.strike_price,
+            remaining_amount,
         ),
         &[
             ctx.accounts.buyer.to_account_info(),
@@ -341,6 +348,8 @@ pub struct ExerciseCallOption<'info> {
     pub mint: Account<'info, Mint>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
+    /// CHECK: deserialized
+    pub metadata: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
     pub metadata_program: UncheckedAccount<'info>, 
     /// Misc

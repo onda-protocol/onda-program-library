@@ -1,14 +1,17 @@
 use {
+  std::{slice::Iter},
   anchor_lang::{
     prelude::*,
     solana_program::{
-        program::{invoke_signed},
+        program::{invoke, invoke_signed},
     },
   },
   mpl_token_metadata::{
     instruction::{freeze_delegated_account, thaw_delegated_account}
   },
+  metaplex_token_metadata::state::{Metadata}
 };
+use crate::error::{DexloanError};
 
 pub struct FreezeParams<'a, 'b> {
   /// CHECK
@@ -78,4 +81,61 @@ pub fn thaw<'a, 'b>(params: FreezeParams<'a, 'b>) -> Result<()> {
   )?;
 
   Ok(())
+}
+
+pub fn pay_creator_fees<'a>(
+    remaining_accounts: &mut Iter<AccountInfo<'a>>,
+    amount: u64,
+    metadata_info: &AccountInfo<'a>,
+    fee_payer: &AccountInfo<'a>,
+) -> Result<u64> {
+    let metadata = Metadata::from_account_info(metadata_info)?;
+    let fees = metadata.data.seller_fee_basis_points;
+    let total_fee = (fees as u128)
+            .checked_mul(amount as u128)
+            .ok_or(DexloanError::NumericalOverflow)?
+            .checked_div(10000)
+            .ok_or(DexloanError::NumericalOverflow)? as u64;
+
+    let mut remaining_fee = total_fee;
+    let remaining_amount = amount
+            .checked_sub(total_fee)
+            .ok_or(DexloanError::NumericalOverflow)?;
+        
+        match metadata.data.creators {
+            Some(creators) => {
+                for creator in creators {
+                    let pct = creator.share as u128;
+                    let creator_fee = pct.checked_mul(total_fee as u128)
+                            .ok_or(DexloanError::NumericalOverflow)?
+                            .checked_div(100)
+                            .ok_or(DexloanError::NumericalOverflow)? as u64;
+                    remaining_fee = remaining_fee
+                            .checked_sub(creator_fee)
+                            .ok_or(DexloanError::NumericalOverflow)?;
+
+                    let current_creator_info = next_account_info(remaining_accounts)?;
+
+                    if creator_fee > 0 {
+                        invoke(
+                            &anchor_lang::solana_program::system_instruction::transfer(
+                                &fee_payer.key(),
+                                &current_creator_info.key(),
+                                creator_fee,
+                            ),
+                            &[
+                                current_creator_info.to_account_info(),
+                                fee_payer.to_account_info(),
+                            ]
+                        )?;
+                    }
+                }
+            }
+            None => {
+                msg!("No creators found in metadata");
+            }
+        }
+
+    // Any dust is returned to the party posting the NFT
+    Ok(remaining_amount.checked_add(remaining_fee).ok_or(DexloanError::NumericalOverflow)?)
 }
