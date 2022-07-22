@@ -27,7 +27,6 @@ pub struct Loan {
     pub mint: Pubkey,
     /// Misc
     pub bump: u8,
-    pub escrow_bump: u8,
 }
 
 impl Loan {

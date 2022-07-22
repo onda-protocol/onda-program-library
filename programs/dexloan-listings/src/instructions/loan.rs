@@ -336,13 +336,6 @@ pub struct Lend<'info> {
         constraint = loan_account.state == LoanState::Listed,
     )]
     pub loan_account: Account<'info, Loan>,
-    #[account(
-        mut,
-        constraint = deposit_token_account.owner == borrower.key(),
-        associated_token::mint = mint,
-        associated_token::authority = borrower,
-    )]
-    pub deposit_token_account: Account<'info, TokenAccount>,
     pub mint: Account<'info, Mint>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,

@@ -25,7 +25,6 @@ pub struct CallOption {
     pub mint: Pubkey,
     /// Misc
     pub bump: u8,
-    pub escrow_bump: u8,
 }
 
 impl CallOption {
