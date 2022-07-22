@@ -121,8 +121,10 @@ pub fn exercise<'info>(ctx: Context<'_, '_, '_, 'info, ExerciseCallOption<'info>
     let remaining_amount = pay_creator_fees(
         &mut ctx.remaining_accounts.iter(),
         call_option.strike_price,
+        &ctx.accounts.mint.to_account_info(),
         &ctx.accounts.metadata.to_account_info(),
         &ctx.accounts.buyer.to_account_info(),
+        &ctx.accounts.deposit_token_account,
     )?;
 
     anchor_lang::solana_program::program::invoke(

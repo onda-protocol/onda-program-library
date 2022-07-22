@@ -12,6 +12,12 @@ pub enum DexloanError {
     InvalidListingType,
     #[msg("Option expired")]
     OptionExpired,
+    #[msg("Invalid mint")]
+    InvalidMint,
+    #[msg("Metadata doesnt exist")]
+    MetadataDoesntExist,
+    #[msg("Derived key invalid")]
+    DerivedKeyInvalid,
     #[msg("Option not expired")]
     OptionNotExpired,
     #[msg("NumericalOverflow")]
