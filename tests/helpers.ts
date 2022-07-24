@@ -77,6 +77,18 @@ export async function findCallOptionAddress(
   return callOptionAccount;
 }
 
+export async function findHireAddress(
+  mint: anchor.web3.PublicKey,
+  lender: anchor.web3.PublicKey
+): Promise<anchor.web3.PublicKey> {
+  const [callOptionAccount] = await anchor.web3.PublicKey.findProgramAddress(
+    [Buffer.from("hire"), mint.toBuffer(), lender.toBuffer()],
+    PROGRAM_ID
+  );
+
+  return callOptionAccount;
+}
+
 export async function findMetadataAddress(mint: anchor.web3.PublicKey) {
   return anchor.web3.PublicKey.findProgramAddress(
     [Buffer.from("metadata"), METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
@@ -317,6 +329,68 @@ export async function buyCallOption(
     provider,
     program,
   };
+}
+
+export async function initHire(
+  connection: anchor.web3.Connection,
+  options: {
+    amount: number;
+    expiry: number;
+    borrower?: anchor.web3.PublicKey;
+  }
+) {
+  const keypair = getLenderKeypair();
+  const provider = getProvider(connection, keypair);
+  const program = getProgram(provider);
+
+  const metaplex = Metaplex.make(connection).use(keypairIdentity(keypair));
+
+  const { nft } = await metaplex
+    .nfts()
+    .create({
+      uri: "https://arweave.net/123",
+      name: "My NFT",
+      sellerFeeBasisPoints: 500,
+    })
+    .run();
+
+  await wait(2);
+
+  const largestAccounts = await connection.getTokenLargestAccounts(
+    nft.mint.address
+  );
+  const depositTokenAccount = largestAccounts.value[0].address;
+
+  const hireAccount = await findLoanAddress(
+    nft.mint.address,
+    keypair.publicKey
+  );
+
+  const amount = new anchor.BN(options.amount);
+  const expiry = new anchor.BN(options.expiry);
+  const borrower = options.borrower
+    ? new anchor.web3.PublicKey(options.borrower)
+    : null;
+
+  try {
+    await program.methods
+      .initHire(amount, expiry, borrower)
+      .accounts({
+        hireAccount,
+        lender: keypair.publicKey,
+        depositTokenAccount: depositTokenAccount,
+        mint: nft.mint.address,
+        edition: nft.edition.address,
+        metadataProgram: METADATA_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+      })
+      .rpc();
+  } catch (error) {
+    console.log(error.logs);
+    throw error;
+  }
 }
 
 export async function wait(seconds) {

@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 mod instructions;
-use instructions::{call_option::*, loan::*, listing::*};
+use instructions::{call_option::*, loan::*, hire::*, listing::*};
 
 pub mod error;
 pub mod state;
@@ -13,8 +13,9 @@ declare_id!("H6FCxCy2KCPJwCoUb9eQCSv41WZBKQaYfB6x5oFajzfj");
 pub mod dexloan_listings {
     use super::*;
 
+    // Loans
     pub fn init_loan<'info>(
-        ctx: Context<InitLoan>,
+        ctx: Context<'_, '_, '_, 'info, InitLoan<'info>>,
         amount: u64,
         basis_points: u32,
         duration: u64
@@ -38,6 +39,7 @@ pub mod dexloan_listings {
         instructions::loan::repossess(ctx)
     }
 
+    // Call Options
     pub fn init_call_option(
         ctx: Context<InitCallOption>,
         amount: u64,
@@ -59,11 +61,34 @@ pub mod dexloan_listings {
         instructions::call_option::close(ctx)
     }
 
-    pub fn cancel_listing<'info>(ctx: Context<'_, '_, '_, 'info, CancelListing<'info>>) -> Result<()> {
-        instructions::listing::cancel_listing(ctx)
+    // Hires
+    pub fn init_hire<'info>(
+        ctx: Context<'_, '_, '_, 'info, InitHire<'info>>,
+        amount: u64,
+        expiry: i64,
+        borrower: Option<Pubkey>
+    ) -> Result<()> {
+        instructions::hire::init(ctx, amount, expiry, borrower)
     }
 
+    pub fn take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>) -> Result<()> {
+        instructions::hire::take(ctx)
+    }
+
+    pub fn revoke_hire<'info>(ctx: Context<'_, '_, '_, 'info, RevokeHire<'info>>) -> Result<()> {
+        instructions::hire::revoke(ctx)
+    }
+
+    pub fn close_hire<'info>(ctx: Context<'_, '_, '_, 'info, CloseHire<'info>>) -> Result<()> {
+        instructions::hire::close(ctx)
+    }
+
+    // Deprecated v1 Listings
     pub fn close_listing<'info>(ctx: Context<'_, '_, '_, 'info, CloseListing<'info>>) -> Result<()> {
         instructions::listing::close(ctx)
+    }
+
+    pub fn cancel_listing<'info>(ctx: Context<'_, '_, '_, 'info, CancelListing<'info>>) -> Result<()> {
+        instructions::listing::cancel_listing(ctx)
     }
 }

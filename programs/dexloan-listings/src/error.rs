@@ -4,6 +4,8 @@ use anchor_lang::prelude::*;
 pub enum DexloanError {
     #[msg("This loan is not overdue")]
     NotOverdue,
+    #[msg("Not expired")]
+    NotExpired,
     #[msg("Invalid expiry")]
     InvalidExpiry,
     #[msg("Invalid state")]

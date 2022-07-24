@@ -354,7 +354,7 @@ pub struct ExerciseCallOption<'info> {
     pub mint: Account<'info, Mint>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
-    /// CHECK: deserialized
+    /// CHECK: deserialized and checked
     pub metadata: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
     pub metadata_program: UncheckedAccount<'info>, 
