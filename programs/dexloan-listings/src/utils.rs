@@ -101,7 +101,19 @@ pub fn assert_metadata_valid<'a>(
     }
   
     Ok(())
-  }
+}
+  
+pub fn calculate_fee_from_basis_points(
+    amount: u128,
+    basis_points: u128,
+) -> Result<u64> {
+    let total_fee = basis_points.checked_mul(amount)
+        .ok_or(DexloanError::NumericalOverflow)?
+        .checked_div(10_000)
+        .ok_or(DexloanError::NumericalOverflow)? as u64;
+    
+    Ok(total_fee)
+}
 
 pub fn pay_creator_fees<'a>(
     remaining_accounts: &mut Iter<AccountInfo<'a>>,
@@ -123,11 +135,7 @@ pub fn pay_creator_fees<'a>(
     )?;
 
     let fees = metadata.data.seller_fee_basis_points;
-    let total_fee = (fees as u128)
-            .checked_mul(amount as u128)
-            .ok_or(DexloanError::NumericalOverflow)?
-            .checked_div(10000)
-            .ok_or(DexloanError::NumericalOverflow)? as u64;
+    let total_fee = calculate_fee_from_basis_points(amount as u128, fees as u128)?;
 
     let mut remaining_fee = total_fee;
     let remaining_amount = amount
@@ -170,4 +178,18 @@ pub fn pay_creator_fees<'a>(
 
     // Any dust is returned to the party posting the NFT
     Ok(remaining_amount.checked_add(remaining_fee).ok_or(DexloanError::NumericalOverflow)?)
+}
+
+pub fn calculate_loan_repayment(
+    amount: u64,
+    basis_points: u32,
+    duration: u64
+) -> Result<u64> {
+    let annual_fee = calculate_fee_from_basis_points(amount as u128, basis_points as u128)?;
+    msg!("annual interest fee {}", annual_fee);
+    let fee_divisor = (31_536_000 as f64) / (duration as f64);
+    msg!("fee_divisor {}", fee_divisor);
+    let pro_rata_fee = (annual_fee as f64 / fee_divisor).round() as u64;
+    msg!("pro_rata_fee {}", pro_rata_fee);
+    Ok(amount + pro_rata_fee)
 }

@@ -24,6 +24,7 @@ pub struct CallOption {
     /// The mint of the token being used for collateral
     pub mint: Pubkey,
     /// Misc
+    pub padding: [u8; 64],
     pub bump: u8,
 }
 
@@ -35,10 +36,10 @@ impl CallOption {
         32 + // seller
         32 + // buyer
         8 + // expiry
-        8 + // exercise price
+        8 + // strike price
         32 + // mint
-        1 + // bump
-        1 // escrow bump
+        64 + // padding
+        1 // bump
     }
 
     pub const PREFIX: &'static [u8] = b"call_option";

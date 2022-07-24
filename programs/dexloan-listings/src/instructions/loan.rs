@@ -7,7 +7,7 @@ use anchor_lang::{
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{Loan, LoanState};
 use crate::error::{DexloanError};
-use crate::utils::{freeze, thaw, FreezeParams};
+use crate::utils::*;
 
 pub fn init(
     ctx: Context<InitLoan>,
@@ -63,6 +63,8 @@ pub fn init(
 
 pub fn close(ctx: Context<CloseLoan>) -> Result<()> {
     if ctx.accounts.deposit_token_account.is_frozen() {
+        msg!("Account is frozen");
+
         let signer_bump = &[ctx.accounts.loan_account.bump];
         let signer_seeds = &[&[
             Loan::PREFIX,
@@ -80,6 +82,8 @@ pub fn close(ctx: Context<CloseLoan>) -> Result<()> {
                 signer_seeds: signer_seeds
             }
         )?;
+    } else {
+        msg!("Account is NOT frozen");
     }
 
     anchor_spl::token::revoke(
@@ -120,11 +124,10 @@ pub fn lend(ctx: Context<Lend>) -> Result<()> {
 pub fn repay(ctx: Context<RepayLoan>) -> Result<()> {
     let loan = &mut ctx.accounts.loan_account;
 
-    let amount_due = calculate_repayment(
+    let amount_due = calculate_loan_repayment(
         loan.amount,
         loan.basis_points,
-        loan.start_date,
-        ctx.accounts.clock.unix_timestamp
+        loan.duration
     )?;
 
     // Transfer payment
@@ -169,28 +172,6 @@ pub fn repay(ctx: Context<RepayLoan>) -> Result<()> {
     )?;
 
     Ok(())
-}
-
-pub const SECONDS_PER_YEAR: f64 = 31_536_000.0;
-
-pub fn calculate_repayment(
-    amount: u64,
-    basis_points: u32,
-    start_date: i64,
-    unix_timestamp: i64,
-) -> Result<u64> {
-    let time_elapsed = (unix_timestamp - start_date) as f64;
-    let pro_rata_interest_rate = (f64::from(basis_points / 10_000) / SECONDS_PER_YEAR) * time_elapsed;
-    let interest_due = amount as f64 * pro_rata_interest_rate;
-    let amount_due = amount as f64 + interest_due.round();
-
-    msg!("Loan amount: {} LAMPORTS", amount);
-    msg!("Time elapsed: {}", time_elapsed);
-    msg!("Pro Rata interest rate: {}%", pro_rata_interest_rate);
-    msg!("Interest due: {} LAMPORTS", interest_due);
-    msg!("Total amount due: {} LAMPORTS", amount_due);
-
-    Ok(amount_due as u64)
 }
 
 pub fn repossess(ctx: Context<Repossess>) -> Result<()> {

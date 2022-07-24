@@ -166,6 +166,8 @@ pub fn close(ctx: Context<CloseCallOption>) -> Result<()> {
     }
 
     if ctx.accounts.deposit_token_account.is_frozen() {
+        msg!("Account is frozen");
+
         let signer_bump = &[ctx.accounts.call_option_account.bump];
         let signer_seeds = &[&[
             CallOption::PREFIX,
@@ -173,16 +175,18 @@ pub fn close(ctx: Context<CloseCallOption>) -> Result<()> {
             call_option.seller.as_ref(),
             signer_bump
         ][..]];
-
+    
         thaw(
             FreezeParams {
-                delegate: call_option.to_account_info(),
+                delegate: ctx.accounts.call_option_account.to_account_info(),
                 token_account: ctx.accounts.deposit_token_account.to_account_info(),
                 edition: ctx.accounts.edition.to_account_info(),
                 mint: ctx.accounts.mint.to_account_info(),
-                signer_seeds,
+                signer_seeds: signer_seeds
             }
         )?;
+    } else {
+        msg!("Account is NOT frozen");
     }
 
     anchor_spl::token::revoke(

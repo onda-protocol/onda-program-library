@@ -1,10 +1,7 @@
 import * as anchor from "@project-serum/anchor";
 import * as splToken from "@solana/spl-token";
 import { Metaplex, keypairIdentity } from "@metaplex-foundation/js";
-import {
-  BurnNftStruct,
-  PROGRAM_ID as METADATA_PROGRAM_ID,
-} from "@metaplex-foundation/mpl-token-metadata";
+import { PROGRAM_ID as METADATA_PROGRAM_ID } from "@metaplex-foundation/mpl-token-metadata";
 import { IDL, DexloanListings } from "../target/types/dexloan_listings";
 
 const PROGRAM_ID = new anchor.web3.PublicKey(
@@ -80,6 +77,13 @@ export async function findCallOptionAddress(
   return callOptionAccount;
 }
 
+export async function findMetadataAddress(mint: anchor.web3.PublicKey) {
+  return anchor.web3.PublicKey.findProgramAddress(
+    [Buffer.from("metadata"), METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+    METADATA_PROGRAM_ID
+  );
+}
+
 export function getBorrowerKeypair() {
   return anchor.web3.Keypair.fromSecretKey(
     new Uint8Array([
@@ -102,8 +106,7 @@ export async function initLoan(
   const keypair = getBorrowerKeypair();
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
-  // await requestAirdrop(connection, keypair.publicKey);
-  console.log("borrower: ", keypair.publicKey.toBase58());
+  await requestAirdrop(connection, keypair.publicKey);
 
   const metaplex = Metaplex.make(connection).use(keypairIdentity(keypair));
 
@@ -179,7 +182,7 @@ export async function giveLoan(connection: anchor.web3.Connection, borrower) {
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
   console.log("lender: ", keypair.publicKey.toBase58());
-  // await requestAirdrop(connection, keypair.publicKey);
+  await requestAirdrop(connection, keypair.publicKey);
 
   try {
     await program.methods
@@ -187,7 +190,6 @@ export async function giveLoan(connection: anchor.web3.Connection, borrower) {
       .accounts({
         loanAccount: borrower.loanAccount,
         borrower: borrower.keypair.publicKey,
-        depositTokenAccount: borrower.depositTokenAccount,
         lender: keypair.publicKey,
         mint: borrower.mint,
         systemProgram: anchor.web3.SystemProgram.programId,
@@ -219,7 +221,6 @@ export async function initCallOption(
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
   // await requestAirdrop(connection, keypair.publicKey);
-  console.log("seller: ", keypair.publicKey.toBase58());
 
   const metaplex = Metaplex.make(connection).use(keypairIdentity(keypair));
 

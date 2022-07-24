@@ -26,6 +26,7 @@ pub struct Loan {
     /// The mint of the token being used for collateral
     pub mint: Pubkey,
     /// Misc
+    pub padding: [u8; 64],
     pub bump: u8,
 }
 
@@ -40,8 +41,8 @@ impl Loan {
         8 + // duration
         8 + // start_date
         32 + // mint
-        1 + // bump
-        1 // escrow bump
+        64 + // padding
+        1 // bump
     }
 
     pub const PREFIX: &'static [u8] = b"loan";

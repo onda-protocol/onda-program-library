@@ -1,5 +1,8 @@
 import assert from "assert";
-import { PROGRAM_ID as METADATA_PROGRAM_ID } from "@metaplex-foundation/mpl-token-metadata";
+import {
+  Metadata,
+  PROGRAM_ID as METADATA_PROGRAM_ID,
+} from "@metaplex-foundation/mpl-token-metadata";
 import * as anchor from "@project-serum/anchor";
 import * as splToken from "@solana/spl-token";
 import * as helpers from "./helpers";
@@ -12,8 +15,8 @@ describe("dexloan_listings", () => {
   );
 
   describe("Loan repossessions", () => {
-    let borrower;
-    let lender;
+    let borrower: Awaited<ReturnType<typeof helpers.initLoan>>;
+    let lender: Awaited<ReturnType<typeof helpers.giveLoan>>;
     let options;
 
     it("Creates a dexloan loan", async () => {
@@ -190,20 +193,24 @@ describe("dexloan_listings", () => {
     });
 
     it("Will allow accounts to be closed once overdue loans are repossessed", async () => {
-      await borrower.program.methods
-        .closeLoan()
-        .accounts({
-          borrower: borrower.keypair.publicKey,
-          depositTokenAccount: borrower.depositTokenAccount,
-          escrowAccount: borrower.escrowAccount,
-          loanAccount: borrower.loanAccount,
-          mint: borrower.mint,
-          edition: borrower.edition,
-          metadataProgram: METADATA_PROGRAM_ID,
-          systemProgram: anchor.web3.SystemProgram.programId,
-          tokenProgram: splToken.TOKEN_PROGRAM_ID,
-        })
-        .rpc();
+      try {
+        await borrower.program.methods
+          .closeLoan()
+          .accounts({
+            borrower: borrower.keypair.publicKey,
+            depositTokenAccount: borrower.depositTokenAccount,
+            loanAccount: borrower.loanAccount,
+            mint: borrower.mint,
+            edition: borrower.edition,
+            metadataProgram: METADATA_PROGRAM_ID,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: splToken.TOKEN_PROGRAM_ID,
+          })
+          .rpc();
+      } catch (err) {
+        console.log(err.logs);
+        assert.fail(err);
+      }
 
       try {
         await borrower.program.account.loan.fetch(borrower.loanAccount);
@@ -217,8 +224,8 @@ describe("dexloan_listings", () => {
   });
 
   describe("Loan repayments", () => {
-    let borrower;
-    let lender;
+    let borrower: Awaited<ReturnType<typeof helpers.initLoan>>;
+    let lender: Awaited<ReturnType<typeof helpers.giveLoan>>;
     let options;
 
     it("Creates a dexloan loan", async () => {
@@ -460,8 +467,8 @@ describe("dexloan_listings", () => {
   describe("Call Options", () => {
     describe("Exercise call option", () => {
       let options;
-      let seller;
-      let buyer;
+      let seller: Awaited<ReturnType<typeof helpers.initCallOption>>;
+      let buyer: Awaited<ReturnType<typeof helpers.buyCallOption>>;
 
       it("Creates a dexloan call option", async () => {
         options = {
@@ -544,7 +551,6 @@ describe("dexloan_listings", () => {
             .accounts({
               callOptionAccount: seller.callOptionAccount,
               seller: seller.keypair.publicKey,
-              depositTokenAccount: buyer.depositTokenAccount,
               mint: seller.mint,
               edition: seller.edition,
               metadataProgram: METADATA_PROGRAM_ID,
@@ -571,6 +577,13 @@ describe("dexloan_listings", () => {
           buyer.keypair.publicKey
         );
 
+        const [metadataAddress] = await helpers.findMetadataAddress(
+          seller.mint
+        );
+
+        const accountInfo = await connection.getAccountInfo(metadataAddress);
+        const [metadata] = Metadata.fromAccountInfo(accountInfo);
+
         try {
           await buyer.program.methods
             .exerciseCallOption()
@@ -582,12 +595,20 @@ describe("dexloan_listings", () => {
               depositTokenAccount: seller.depositTokenAccount,
               mint: seller.mint,
               edition: seller.edition,
+              metadata: metadataAddress,
               metadataProgram: METADATA_PROGRAM_ID,
               systemProgram: anchor.web3.SystemProgram.programId,
               tokenProgram: splToken.TOKEN_PROGRAM_ID,
               clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
               rent: anchor.web3.SYSVAR_RENT_PUBKEY,
             })
+            .remainingAccounts(
+              metadata.data.creators.map((creator) => ({
+                pubkey: creator.address,
+                isSigner: false,
+                isWritable: true,
+              }))
+            )
             .rpc();
         } catch (err) {
           console.log(err);
@@ -649,8 +670,8 @@ describe("dexloan_listings", () => {
 
     describe("Call option expiry", () => {
       let options;
-      let seller;
-      let buyer;
+      let seller: Awaited<ReturnType<typeof helpers.initCallOption>>;
+      let buyer: Awaited<ReturnType<typeof helpers.buyCallOption>>;
 
       it("Creates a dexloan call option", async () => {
         options = {
@@ -701,13 +722,20 @@ describe("dexloan_listings", () => {
         console.log("waiting...");
         await helpers.wait(20);
 
+        const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
+          connection,
+          buyer.keypair,
+          seller.mint,
+          buyer.keypair.publicKey
+        );
+
         try {
           await buyer.program.methods
             .exerciseCallOption()
             .accounts({
               seller: seller.keypair.publicKey,
               buyer: buyer.keypair.publicKey,
-              buyerTokenAccount: buyer.tokenAccount,
+              buyerTokenAccount: tokenAccount.address,
               callOptionAccount: seller.callOptionAccount,
               mint: seller.mint,
               edition: seller.edition,
