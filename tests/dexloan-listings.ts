@@ -799,13 +799,40 @@ describe("dexloan_listings", () => {
     });
   });
 
-  describe("Hires", () => {
-    it("Initializes a hire", async () => {});
+  describe.only("Hires", () => {
+    describe("Specified borrower", async () => {
+      let lender: Awaited<ReturnType<typeof helpers.initHire>>;
+      let borrower: Awaited<ReturnType<typeof helpers.takeHire>>;
+      let options;
 
-    it("Allows a hire to be taken", async () => {});
+      it.only("Initializes a hire", async () => {
+        options = {
+          amount: 0,
+          expiry: Date.now() / 1000 + 20,
+          borrower: helpers.getBorrowerKeypair().publicKey,
+        };
+        lender = await helpers.initHire(connection, options);
 
-    it("Does not allow a hire to be recovered before expiry", async () => {});
+        const hire = await lender.program.account.hire.fetch(
+          lender.hireAccount
+        );
 
-    it("Allows a hire to be recovered after expiry", async () => {});
+        assert.equal(hire.amount.toNumber(), options.amount);
+        assert.equal(
+          hire.lender.toBase58(),
+          lender.keypair.publicKey.toBase58()
+        );
+        assert.equal(hire.borrower.toBase58(), options.borrower.toBase58());
+        assert.deepEqual(hire.state, { listed: {} });
+      });
+
+      it("Allows a hire to be taken", async () => {});
+
+      it("Does not allow a hire to be recovered before expiry", async () => {});
+
+      it("Allows a hire to be recovered after expiry", async () => {});
+    });
+
+    describe("Open hire", async () => {});
   });
 });

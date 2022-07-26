@@ -189,7 +189,10 @@ export function getLenderKeypair() {
   );
 }
 
-export async function giveLoan(connection: anchor.web3.Connection, borrower) {
+export async function giveLoan(
+  connection: anchor.web3.Connection,
+  borrower: Awaited<ReturnType<typeof initLoan>>
+) {
   const keypair = getLenderKeypair();
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
@@ -295,7 +298,7 @@ export async function initCallOption(
 
 export async function buyCallOption(
   connection: anchor.web3.Connection,
-  seller
+  seller: Awaited<ReturnType<typeof initCallOption>>
 ) {
   const keypair = getLenderKeypair();
   const provider = getProvider(connection, keypair);
@@ -361,7 +364,7 @@ export async function initHire(
   );
   const depositTokenAccount = largestAccounts.value[0].address;
 
-  const hireAccount = await findLoanAddress(
+  const hireAccount = await findHireAddress(
     nft.mint.address,
     keypair.publicKey
   );
@@ -391,6 +394,61 @@ export async function initHire(
     console.log(error.logs);
     throw error;
   }
+
+  return {
+    keypair,
+    program,
+    provider,
+    hireAccount,
+    depositTokenAccount,
+    mint: nft.mint.address,
+    edition: nft.mint.address,
+  };
+}
+
+export async function takeHire(
+  connection: anchor.web3.Connection,
+  lender: Awaited<ReturnType<typeof initHire>>
+) {
+  const keypair = getBorrowerKeypair();
+  const provider = getProvider(connection, keypair);
+  const program = getProgram(provider);
+
+  const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
+    connection,
+    keypair,
+    lender.mint,
+    keypair.publicKey
+  );
+
+  try {
+    await program.methods
+      .takeHire()
+      .accounts({
+        borrower: keypair.publicKey,
+        lender: lender.keypair.publicKey,
+        hireAccount: lender.hireAccount,
+        depositTokenAccount: lender.depositTokenAccount,
+        hireTokenAccount: tokenAccount.address,
+        mint: lender.mint,
+        edition: lender.edition,
+        metadataProgram: METADATA_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+      })
+      .rpc();
+  } catch (error) {
+    console.log(error.logs);
+    throw error;
+  }
+
+  return {
+    keypair,
+    provider,
+    program,
+    hireTokenAccount: tokenAccount.address,
+  };
 }
 
 export async function wait(seconds) {

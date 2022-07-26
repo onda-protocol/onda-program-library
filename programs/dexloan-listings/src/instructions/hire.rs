@@ -30,7 +30,7 @@ pub fn init(
   hire.state = HireState::Listed;
 
   if borrower.is_some() {
-    hire.borrower = borrower.unwrap();
+    hire.borrower = borrower;
   }
 
   // Delegate authority
@@ -70,6 +70,12 @@ pub fn init(
 pub fn take<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>) -> Result<()> {
     let hire = &mut ctx.accounts.hire_account;
 
+    if hire.borrower.is_some() {
+        require_keys_eq!(hire.borrower.unwrap(), ctx.accounts.borrower.key());
+    } else {
+        hire.borrower = Some(ctx.accounts.borrower.key());
+    }
+
     hire.state = HireState::Hired;
     
     let signer_bump = &[hire.bump];
@@ -92,7 +98,7 @@ pub fn take<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>) -> Result<(
     // Transfer fee
     anchor_lang::solana_program::program::invoke(
         &anchor_lang::solana_program::system_instruction::transfer(
-            &hire.borrower,
+            &hire.borrower.unwrap(),
             &hire.lender,
             remaining_amount,
         ),
@@ -306,7 +312,7 @@ pub struct RevokeHire<'info> {
         ],
         bump,
         constraint = hire_account.state == HireState::Hired,
-        constraint = hire_account.borrower == borrower.key(),
+        constraint = hire_account.borrower.unwrap() == borrower.key(),
     )]
     pub hire_account: Account<'info, Hire>,    
     #[account(constraint = mint.supply == 1)]

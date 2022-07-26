@@ -13,7 +13,7 @@ pub struct Hire {
     /// The cost to hire
     pub amount: u64,
     /// The NFT holder
-    pub borrower: Pubkey,
+    pub borrower: Option<Pubkey>,
     /// The issuer of the loan
     pub lender: Pubkey,
     /// The expiry of the hire
@@ -29,7 +29,7 @@ impl Hire {
         8 + // key
         1 + // state
         8 + // amount
-        32 + // borrower
+        (1 + 32) + // borrower
         32 + // lender
         8 + // expiry
         32 + // mint
