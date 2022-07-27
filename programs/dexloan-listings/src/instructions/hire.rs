@@ -2,7 +2,7 @@ use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{Hire, HireState};
 use crate::error::{DexloanError};
-use crate::utils::{pay_creator_fees, freeze, thaw, FreezeParams};
+use crate::utils::*;
 
 pub fn init(
   ctx: Context<InitHire>,
@@ -77,14 +77,6 @@ pub fn take<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>) -> Result<(
     }
 
     hire.state = HireState::Hired;
-    
-    let signer_bump = &[hire.bump];
-    let signer_seeds = &[&[
-        Hire::PREFIX,
-        hire.mint.as_ref(),
-        hire.lender.as_ref(),
-        signer_bump
-    ][..]];
 
     let remaining_amount = pay_creator_fees(
         &mut ctx.remaining_accounts.iter(),
@@ -109,13 +101,21 @@ pub fn take<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>) -> Result<(
     )?;
 
     // Thaw & Transfer NFT to hire account
+    let signer_bump = &[hire.bump];
+    let signer_seeds = &[&[
+        Hire::PREFIX,
+        hire.mint.as_ref(),
+        hire.lender.as_ref(),
+        signer_bump
+    ][..]];
+
     thaw(
         FreezeParams {
             delegate: hire.to_account_info(),
             token_account: ctx.accounts.deposit_token_account.to_account_info(),
             edition: ctx.accounts.edition.to_account_info(),
             mint: ctx.accounts.mint.to_account_info(),
-            signer_seeds: signer_seeds
+            signer_seeds,
         }
     )?;
     anchor_spl::token::transfer(
@@ -138,7 +138,7 @@ pub fn take<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>) -> Result<(
             anchor_spl::token::Approve {
                 to: ctx.accounts.hire_token_account.to_account_info(),
                 delegate: hire.to_account_info(),
-                authority: ctx.accounts.lender.to_account_info(),
+                authority: ctx.accounts.borrower.to_account_info(),
             }
         ),
         1
@@ -266,11 +266,8 @@ pub struct TakeHire<'info> {
     pub lender: AccountInfo<'info>,
     #[account(mut)]
     pub borrower: Signer<'info>,
-    #[account(mut)]
-    pub deposit_token_account: Account<'info, TokenAccount>,
-    #[account(mut)]
-    pub hire_token_account: Account<'info, TokenAccount>,
     #[account(
+        mut,
         seeds = [
           Hire::PREFIX,
           mint.key().as_ref(),
@@ -278,7 +275,19 @@ pub struct TakeHire<'info> {
         ],
         bump,
     )]
-    pub hire_account: Account<'info, Hire>,    
+    pub hire_account: Account<'info, Hire>,   
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = lender
+    )]
+    pub deposit_token_account: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = borrower
+    )]
+    pub hire_token_account: Account<'info, TokenAccount>, 
     #[account(constraint = mint.supply == 1)]
     pub mint: Account<'info, Mint>,
     /// CHECK: validated in cpi

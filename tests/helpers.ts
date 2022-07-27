@@ -1,7 +1,10 @@
 import * as anchor from "@project-serum/anchor";
 import * as splToken from "@solana/spl-token";
 import { Metaplex, keypairIdentity } from "@metaplex-foundation/js";
-import { PROGRAM_ID as METADATA_PROGRAM_ID } from "@metaplex-foundation/mpl-token-metadata";
+import {
+  Metadata,
+  PROGRAM_ID as METADATA_PROGRAM_ID,
+} from "@metaplex-foundation/mpl-token-metadata";
 import { IDL, DexloanListings } from "../target/types/dexloan_listings";
 
 const PROGRAM_ID = new anchor.web3.PublicKey(
@@ -402,7 +405,8 @@ export async function initHire(
     hireAccount,
     depositTokenAccount,
     mint: nft.mint.address,
-    edition: nft.mint.address,
+    edition: nft.edition.address,
+    metadata: nft.metadataAddress,
   };
 }
 
@@ -421,6 +425,9 @@ export async function takeHire(
     keypair.publicKey
   );
 
+  const metadataAccountInfo = await connection.getAccountInfo(lender.metadata);
+  const [metadata] = Metadata.fromAccountInfo(metadataAccountInfo);
+
   try {
     await program.methods
       .takeHire()
@@ -432,11 +439,19 @@ export async function takeHire(
         hireTokenAccount: tokenAccount.address,
         mint: lender.mint,
         edition: lender.edition,
+        metadata: lender.metadata,
         metadataProgram: METADATA_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
       })
+      .remainingAccounts(
+        metadata.data.creators.map((creator) => ({
+          pubkey: creator.address,
+          isSigner: false,
+          isWritable: true,
+        }))
+      )
       .rpc();
   } catch (error) {
     console.log(error.logs);

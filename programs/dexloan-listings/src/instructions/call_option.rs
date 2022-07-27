@@ -332,11 +332,9 @@ pub struct ExerciseCallOption<'info> {
             mint.key().as_ref(),
             seller.key().as_ref(),
         ],
-        bump = call_option_account.bump,
-        constraint = call_option_account.seller == seller.key(),
         constraint = call_option_account.buyer == buyer.key(),
-        constraint = call_option_account.mint == mint.key(),
         constraint = call_option_account.state == CallOptionState::Active,
+        bump,
     )]
     pub call_option_account: Account<'info, CallOption>,
     #[account(

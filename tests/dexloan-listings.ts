@@ -805,7 +805,7 @@ describe("dexloan_listings", () => {
       let borrower: Awaited<ReturnType<typeof helpers.takeHire>>;
       let options;
 
-      it.only("Initializes a hire", async () => {
+      it("Initializes a hire", async () => {
         options = {
           amount: 0,
           expiry: Date.now() / 1000 + 20,
@@ -817,6 +817,17 @@ describe("dexloan_listings", () => {
           lender.hireAccount
         );
 
+        const tokenAddress = (
+          await connection.getTokenLargestAccounts(lender.mint)
+        ).value[0].address;
+
+        const tokenAccount = await splToken.getAccount(
+          connection,
+          tokenAddress
+        );
+
+        assert.ok(tokenAccount.isFrozen);
+        assert.ok(tokenAccount.delegate.equals(lender.hireAccount));
         assert.equal(hire.amount.toNumber(), options.amount);
         assert.equal(
           hire.lender.toBase58(),
@@ -826,11 +837,33 @@ describe("dexloan_listings", () => {
         assert.deepEqual(hire.state, { listed: {} });
       });
 
-      it("Allows a hire to be taken", async () => {});
+      it("Allows a hire to be taken", async () => {
+        borrower = await helpers.takeHire(connection, lender);
 
-      it("Does not allow a hire to be recovered before expiry", async () => {});
+        const hire = await lender.program.account.hire.fetch(
+          lender.hireAccount
+        );
+        const tokenAddress = (
+          await connection.getTokenLargestAccounts(lender.mint)
+        ).value[0].address;
 
-      it("Allows a hire to be recovered after expiry", async () => {});
+        const tokenAccount = await splToken.getAccount(
+          connection,
+          tokenAddress
+        );
+
+        assert.deepEqual(hire.state, { hired: {} });
+        assert.equal(tokenAccount.isFrozen, true);
+        assert.equal(tokenAccount.amount, BigInt(1));
+        assert.equal(
+          hire.borrower.toBase58(),
+          borrower.keypair.publicKey.toBase58()
+        );
+      });
+
+      // it("Does not allow a hire to be recovered before expiry", async () => {});
+
+      // it("Allows a hire to be recovered after expiry", async () => {});
     });
 
     describe("Open hire", async () => {});
