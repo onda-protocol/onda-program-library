@@ -421,7 +421,6 @@ export async function takeHire(
   const keypair = getBorrowerKeypair();
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
-  console.log(keypair.publicKey.toBase58());
 
   const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
     connection,

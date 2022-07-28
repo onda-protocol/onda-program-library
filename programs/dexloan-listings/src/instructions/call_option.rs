@@ -166,8 +166,6 @@ pub fn close(ctx: Context<CloseCallOption>) -> Result<()> {
     }
 
     if ctx.accounts.deposit_token_account.is_frozen() {
-        msg!("Account is frozen");
-
         let signer_bump = &[ctx.accounts.call_option_account.bump];
         let signer_seeds = &[&[
             CallOption::PREFIX,
@@ -185,8 +183,6 @@ pub fn close(ctx: Context<CloseCallOption>) -> Result<()> {
                 signer_seeds: signer_seeds
             }
         )?;
-    } else {
-        msg!("Account is NOT frozen");
     }
 
     anchor_spl::token::revoke(

@@ -875,10 +875,18 @@ describe("dexloan_listings", () => {
       });
 
       it("Allows a hire to be recovered after expiry", async () => {
-        await helpers.wait(20); // Wait for expiry
+        const hire = await lender.program.account.hire.fetch(
+          lender.hireAccount
+        );
+
+        const timeUntilExpiry = Math.max(
+          0,
+          hire.expiry.toNumber() - Date.now() / 1000
+        );
+        await helpers.wait(timeUntilExpiry + 2); // Wait for expiry + padding
         await helpers.recoverHire(connection, lender, borrower);
 
-        const hire = await lender.program.account.hire.fetch(
+        const updatedHire = await lender.program.account.hire.fetch(
           lender.hireAccount
         );
         const depositTokenAccount = await splToken.getAccount(
@@ -890,8 +898,8 @@ describe("dexloan_listings", () => {
           borrower.hireTokenAccount
         );
 
-        assert.deepEqual(hire.state, { listed: {} });
-        assert.deepEqual(hire.borrower, null);
+        assert.deepEqual(updatedHire.state, { listed: {} });
+        assert.equal(updatedHire.borrower, null);
         assert.equal(depositTokenAccount.amount, BigInt(1));
         assert.equal(hireTokenAccount.amount, BigInt(0));
         assert.equal(depositTokenAccount.isFrozen, true);
