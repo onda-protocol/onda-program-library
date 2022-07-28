@@ -10,12 +10,14 @@ pub enum HireState {
 pub struct Hire {
     /// Whether the loan is active
     pub state: HireState,
-    /// The cost to hire
+    /// The daily cost to hire
     pub amount: u64,
     /// The NFT holder
     pub borrower: Option<Pubkey>,
     /// The issuer of the loan
     pub lender: Pubkey,
+    /// The duration of the current hire
+    pub current_expiry: i64,
     /// The expiry of the hire
     pub expiry: i64,
     /// The mint of the token being used for collateral
@@ -31,6 +33,8 @@ impl Hire {
         8 + // amount
         (1 + 32) + // borrower
         32 + // lender
+        8 + // max duration
+        8 + // start date
         8 + // expiry
         32 + // mint
         1 // bump

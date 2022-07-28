@@ -67,8 +67,11 @@ pub fn init(
   Ok(())
 }
 
-pub fn take<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>) -> Result<()> {
+const SECONDS_PER_DAY: i64 = 86_400;
+
+pub fn take<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>, days: u16) -> Result<()> {
     let hire = &mut ctx.accounts.hire_account;
+    let start_date = ctx.accounts.clock.unix_timestamp;
 
     if hire.borrower.is_some() {
         require_keys_eq!(hire.borrower.unwrap(), ctx.accounts.borrower.key());
@@ -76,29 +79,45 @@ pub fn take<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>) -> Result<(
         hire.borrower = Some(ctx.accounts.borrower.key());
     }
 
+    if hire.amount == 0 {
+        hire.current_expiry = hire.expiry;
+    } else {
+        let amount = u64::from(days) * hire.amount;
+        let duration = i64::from(days) *  SECONDS_PER_DAY;
+        let current_expiry = start_date + duration;
+        msg!("amount {}", amount);
+        msg!("duration {}", duration);
+
+        if current_expiry > hire.expiry {
+            return err!(DexloanError::InvalidExpiry)
+        }
+
+        hire.current_expiry = current_expiry;
+
+        let remaining_amount = pay_creator_fees(
+            &mut ctx.remaining_accounts.iter(),
+            amount,
+            &ctx.accounts.mint.to_account_info(),
+            &ctx.accounts.metadata.to_account_info(),
+            &ctx.accounts.lender.to_account_info(),
+            &ctx.accounts.deposit_token_account,
+        )?;
+    
+        // Transfer fee
+        anchor_lang::solana_program::program::invoke(
+            &anchor_lang::solana_program::system_instruction::transfer(
+                &hire.borrower.unwrap(),
+                &hire.lender,
+                remaining_amount,
+            ),
+            &[
+                ctx.accounts.borrower.to_account_info(),
+                ctx.accounts.lender.to_account_info(),
+            ]
+        )?;
+    }
+
     hire.state = HireState::Hired;
-
-    let remaining_amount = pay_creator_fees(
-        &mut ctx.remaining_accounts.iter(),
-        hire.amount,
-        &ctx.accounts.mint.to_account_info(),
-        &ctx.accounts.metadata.to_account_info(),
-        &ctx.accounts.lender.to_account_info(),
-        &ctx.accounts.deposit_token_account,
-    )?;
-
-    // Transfer fee
-    anchor_lang::solana_program::program::invoke(
-        &anchor_lang::solana_program::system_instruction::transfer(
-            &hire.borrower.unwrap(),
-            &hire.lender,
-            remaining_amount,
-        ),
-        &[
-            ctx.accounts.borrower.to_account_info(),
-            ctx.accounts.lender.to_account_info(),
-        ]
-    )?;
 
     // Thaw & Transfer NFT to hire account
     let signer_bump = &[hire.bump];
@@ -260,6 +279,7 @@ pub struct InitHire<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(days: u16)]
 pub struct TakeHire<'info> {
     #[account(mut)]
     /// CHECK: validated seeds constraints

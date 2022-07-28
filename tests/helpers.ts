@@ -412,7 +412,8 @@ export async function initHire(
 
 export async function takeHire(
   connection: anchor.web3.Connection,
-  lender: Awaited<ReturnType<typeof initHire>>
+  lender: Awaited<ReturnType<typeof initHire>>,
+  days: number
 ) {
   const keypair = getBorrowerKeypair();
   const provider = getProvider(connection, keypair);
@@ -430,7 +431,7 @@ export async function takeHire(
 
   try {
     await program.methods
-      .takeHire()
+      .takeHire(days)
       .accounts({
         borrower: keypair.publicKey,
         lender: lender.keypair.publicKey,

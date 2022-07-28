@@ -71,8 +71,8 @@ pub mod dexloan_listings {
         instructions::hire::init(ctx, amount, expiry, borrower)
     }
 
-    pub fn take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>) -> Result<()> {
-        instructions::hire::take(ctx)
+    pub fn take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>, days: u16) -> Result<()> {
+        instructions::hire::take(ctx, days)
     }
 
     pub fn revoke_hire<'info>(ctx: Context<'_, '_, '_, 'info, RevokeHire<'info>>) -> Result<()> {

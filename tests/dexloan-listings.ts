@@ -838,7 +838,9 @@ describe("dexloan_listings", () => {
       });
 
       it("Allows a hire to be taken", async () => {
-        borrower = await helpers.takeHire(connection, lender);
+        const days = 0;
+
+        borrower = await helpers.takeHire(connection, lender, days);
 
         const hire = await lender.program.account.hire.fetch(
           lender.hireAccount
@@ -859,6 +861,7 @@ describe("dexloan_listings", () => {
           hire.borrower.toBase58(),
           borrower.keypair.publicKey.toBase58()
         );
+        assert.equal(hire.currentExpiry.toNumber, hire.expiry.toNumber());
       });
 
       // it("Does not allow a hire to be recovered before expiry", async () => {});
