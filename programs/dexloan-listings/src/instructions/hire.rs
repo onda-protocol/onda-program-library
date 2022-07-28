@@ -73,6 +73,8 @@ pub fn take<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>, days: u16) 
     let hire = &mut ctx.accounts.hire_account;
     let start_date = ctx.accounts.clock.unix_timestamp;
 
+    hire.state = HireState::Hired;
+
     if hire.borrower.is_some() {
         require_keys_eq!(hire.borrower.unwrap(), ctx.accounts.borrower.key());
     } else {
@@ -80,7 +82,7 @@ pub fn take<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>, days: u16) 
     }
 
     if hire.amount == 0 {
-        hire.current_expiry = hire.expiry;
+        hire.current_expiry = Some(hire.expiry);
     } else {
         let amount = u64::from(days) * hire.amount;
         let duration = i64::from(days) *  SECONDS_PER_DAY;
@@ -92,7 +94,7 @@ pub fn take<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>, days: u16) 
             return err!(DexloanError::InvalidExpiry)
         }
 
-        hire.current_expiry = current_expiry;
+        hire.current_expiry = Some(current_expiry);
 
         let remaining_amount = pay_creator_fees(
             &mut ctx.remaining_accounts.iter(),
@@ -116,8 +118,6 @@ pub fn take<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>, days: u16) 
             ]
         )?;
     }
-
-    hire.state = HireState::Hired;
 
     // Thaw & Transfer NFT to hire account
     let signer_bump = &[hire.bump];
@@ -176,13 +176,22 @@ pub fn take<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>, days: u16) 
     Ok(())
 }
 
-pub fn revoke(ctx: Context<RevokeHire>) -> Result<()> {
+pub fn recover(ctx: Context<RecoverHire>) -> Result<()> {
     let hire = &mut ctx.accounts.hire_account;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
-    if hire.expiry > unix_timestamp {
+    if !hire.current_expiry.is_some() {
+        return err!(DexloanError::NumericalOverflow)
+    }
+
+    let current_expiry = hire.current_expiry.unwrap();
+
+    if current_expiry > unix_timestamp {
         return Err(DexloanError::NotExpired.into());
     }
+
+    hire.current_expiry = None;
+    hire.state = HireState::Listed;
 
     let signer_bump = &[hire.bump];
     let signer_seeds = &[&[
@@ -196,7 +205,7 @@ pub fn revoke(ctx: Context<RevokeHire>) -> Result<()> {
     thaw(
         FreezeParams {
             delegate: hire.to_account_info(),
-            token_account: ctx.accounts.deposit_token_account.to_account_info(),
+            token_account: ctx.accounts.hire_token_account.to_account_info(),
             edition: ctx.accounts.edition.to_account_info(),
             mint: ctx.accounts.mint.to_account_info(),
             signer_seeds: signer_seeds
@@ -206,24 +215,46 @@ pub fn revoke(ctx: Context<RevokeHire>) -> Result<()> {
         CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
             anchor_spl::token::Transfer {
-                from: ctx.accounts.deposit_token_account.to_account_info(),
-                to: ctx.accounts.hire_token_account.to_account_info(),
+                from: ctx.accounts.hire_token_account.to_account_info(),
+                to: ctx.accounts.deposit_token_account.to_account_info(),
                 authority: hire.to_account_info(),
             },
             signer_seeds
         ),
         1
     )?;
-
-    // Revoke delegation on deposit account
+    // Revoke delegation on hire account
     anchor_spl::token::revoke(
         CpiContext::new(
             ctx.accounts.token_program.to_account_info(),
             anchor_spl::token::Revoke {
-                source: ctx.accounts.deposit_token_account.to_account_info(),
+                source: ctx.accounts.hire_token_account.to_account_info(),
                 authority: ctx.accounts.lender.to_account_info(),
             }
         )
+    )?;
+
+    // Delegate authority & freeze deposit token account again
+    anchor_spl::token::approve(
+        CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            anchor_spl::token::Approve {
+                to: ctx.accounts.deposit_token_account.to_account_info(),
+                delegate: hire.to_account_info(),
+                authority: ctx.accounts.borrower.to_account_info(),
+            }
+        ),
+        1
+    )?;
+
+    freeze(
+        FreezeParams {
+            delegate: hire.to_account_info(),
+            token_account: ctx.accounts.deposit_token_account.to_account_info(),
+            edition: ctx.accounts.edition.to_account_info(),
+            mint: ctx.accounts.mint.to_account_info(),
+            signer_seeds: signer_seeds
+        }
     )?;
 
     Ok(())
@@ -323,17 +354,26 @@ pub struct TakeHire<'info> {
 }
 
 #[derive(Accounts)]
-pub struct RevokeHire<'info> {
+pub struct RecoverHire<'info> {
     #[account(mut)]
     pub lender: Signer<'info>,
     #[account(mut)]
     /// CHECK: validated in constraints
     pub borrower: AccountInfo<'info>,
-    #[account(mut)]
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = lender
+    )]
     pub deposit_token_account: Account<'info, TokenAccount>,
-    #[account(mut)]
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = borrower
+    )]
     pub hire_token_account: Account<'info, TokenAccount>,
     #[account(
+        mut,
         seeds = [
           Hire::PREFIX,
           mint.key().as_ref(),
@@ -341,13 +381,15 @@ pub struct RevokeHire<'info> {
         ],
         bump,
         constraint = hire_account.state == HireState::Hired,
-        constraint = hire_account.borrower.unwrap() == borrower.key(),
+        constraint = hire_account.borrower.is_some() && hire_account.borrower.unwrap() == borrower.key(),
     )]
     pub hire_account: Account<'info, Hire>,    
     #[account(constraint = mint.supply == 1)]
     pub mint: Account<'info, Mint>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
+    /// CHECK: deserialized and checked
+    pub metadata: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
     pub metadata_program: UncheckedAccount<'info>, 
     /// Misc

@@ -337,6 +337,9 @@ export async function buyCallOption(
   };
 }
 
+export type HireLender = Awaited<ReturnType<typeof initHire>>;
+export type HireBorrower = Awaited<ReturnType<typeof takeHire>>;
+
 export async function initHire(
   connection: anchor.web3.Connection,
   options: {
@@ -418,6 +421,7 @@ export async function takeHire(
   const keypair = getBorrowerKeypair();
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
+  console.log(keypair.publicKey.toBase58());
 
   const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
     connection,
@@ -454,9 +458,9 @@ export async function takeHire(
         }))
       )
       .rpc();
-  } catch (error) {
-    console.log(error.logs);
-    throw error;
+  } catch (err) {
+    console.log(err.logs);
+    throw err;
   }
 
   return {
@@ -465,6 +469,45 @@ export async function takeHire(
     program,
     hireTokenAccount: tokenAccount.address,
   };
+}
+
+export async function recoverHire(
+  connection: anchor.web3.Connection,
+  lender: HireLender,
+  borrower: HireBorrower
+) {
+  const metadataAccountInfo = await connection.getAccountInfo(lender.metadata);
+  const [metadata] = Metadata.fromAccountInfo(metadataAccountInfo);
+
+  try {
+    await lender.program.methods
+      .recoverHire()
+      .accounts({
+        borrower: borrower.keypair.publicKey,
+        lender: lender.keypair.publicKey,
+        hireAccount: lender.hireAccount,
+        depositTokenAccount: lender.depositTokenAccount,
+        hireTokenAccount: borrower.hireTokenAccount,
+        mint: lender.mint,
+        edition: lender.edition,
+        metadata: lender.metadata,
+        metadataProgram: METADATA_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+      })
+      .remainingAccounts(
+        metadata.data.creators.map((creator) => ({
+          pubkey: creator.address,
+          isSigner: false,
+          isWritable: true,
+        }))
+      )
+      .rpc();
+  } catch (err) {
+    console.log(err.logs);
+    throw err;
+  }
 }
 
 export async function wait(seconds) {

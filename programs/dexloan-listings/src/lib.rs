@@ -75,8 +75,8 @@ pub mod dexloan_listings {
         instructions::hire::take(ctx, days)
     }
 
-    pub fn revoke_hire<'info>(ctx: Context<'_, '_, '_, 'info, RevokeHire<'info>>) -> Result<()> {
-        instructions::hire::revoke(ctx)
+    pub fn recover_hire<'info>(ctx: Context<'_, '_, '_, 'info, RecoverHire<'info>>) -> Result<()> {
+        instructions::hire::recover(ctx)
     }
 
     pub fn close_hire<'info>(ctx: Context<'_, '_, '_, 'info, CloseHire<'info>>) -> Result<()> {

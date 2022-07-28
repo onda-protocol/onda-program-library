@@ -861,14 +861,44 @@ describe("dexloan_listings", () => {
           hire.borrower.toBase58(),
           borrower.keypair.publicKey.toBase58()
         );
-        assert.equal(hire.currentExpiry.toNumber, hire.expiry.toNumber());
+        assert.equal(hire.currentExpiry.toNumber(), hire.expiry.toNumber());
       });
 
-      // it("Does not allow a hire to be recovered before expiry", async () => {});
+      it("Does not allow a hire to be recovered before expiry", async () => {
+        try {
+          await helpers.recoverHire(connection, lender, borrower);
+          assert.fail("Recover should fail");
+        } catch (err) {
+          console.log(err);
+          assert.ok(err);
+        }
+      });
 
-      // it("Allows a hire to be recovered after expiry", async () => {});
+      it("Allows a hire to be recovered after expiry", async () => {
+        await helpers.wait(20); // Wait for expiry
+        await helpers.recoverHire(connection, lender, borrower);
+
+        const hire = await lender.program.account.hire.fetch(
+          lender.hireAccount
+        );
+        const depositTokenAccount = await splToken.getAccount(
+          connection,
+          lender.depositTokenAccount
+        );
+        const hireTokenAccount = await splToken.getAccount(
+          connection,
+          borrower.hireTokenAccount
+        );
+
+        assert.deepEqual(hire.state, { listed: {} });
+        assert.deepEqual(hire.borrower, null);
+        assert.equal(depositTokenAccount.amount, BigInt(1));
+        assert.equal(hireTokenAccount.amount, BigInt(0));
+        assert.equal(depositTokenAccount.isFrozen, true);
+        assert.equal(hireTokenAccount.isFrozen, false);
+      });
     });
 
-    describe("Open hire", async () => {});
+    // describe("Open hire", async () => {});
   });
 });
