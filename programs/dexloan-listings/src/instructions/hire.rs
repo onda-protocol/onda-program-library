@@ -6,18 +6,22 @@ use crate::utils::*;
 
 pub fn init(
   ctx: Context<InitHire>,
-  amount: u64,
-  expiry: i64,
-  borrower: Option<Pubkey>,
+  args: HireArgs,
+//   amount: u64,
+//   expiry: i64,
+//   borrower: Option<Pubkey>,
 ) -> Result<()> {
   let hire = &mut ctx.accounts.hire_account;
   let unix_timestamp = ctx.accounts.clock.unix_timestamp;
   
-  msg!("unix_timestamp: {} seconds", unix_timestamp);
-  msg!("expiry: {} seconds", expiry);
+  msg!("expiry: {}", args.expiry);
   
-  if unix_timestamp > expiry {
-      return Err(DexloanError::InvalidExpiry.into())
+  if unix_timestamp > args.expiry {
+      return err!(DexloanError::InvalidExpiry)
+  }
+
+  if args.amount == 0 && args.borrower.is_none() {
+    return err!(DexloanError::BorrowerNotSpecified)
   }
 
   // Init
@@ -25,12 +29,12 @@ pub fn init(
   hire.mint = ctx.accounts.mint.key();
   hire.bump = *ctx.bumps.get("hire_account").unwrap();
   //
-  hire.amount = amount;
-  hire.expiry = expiry;
+  hire.amount = args.amount;
+  hire.expiry = args.expiry;
   hire.state = HireState::Listed;
 
-  if borrower.is_some() {
-    hire.borrower = borrower;
+  if args.borrower.is_some() {
+    hire.borrower = args.borrower;
   }
 
   // Delegate authority
@@ -185,7 +189,8 @@ pub fn recover(ctx: Context<RecoverHire>) -> Result<()> {
     }
 
     let current_expiry = hire.current_expiry.unwrap();
-
+    msg!("current_expiry {}", current_expiry);
+    msg!("unix_timestamp {}", unix_timestamp);
     if current_expiry > unix_timestamp {
         return Err(DexloanError::NotExpired.into());
     }
@@ -285,8 +290,14 @@ pub fn close(ctx: Context<CloseHire>) -> Result<()> {
     Ok(())
 }
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct HireArgs {
+    amount: u64,
+    expiry: i64,
+    borrower: Option<Pubkey>,
+}
+
 #[derive(Accounts)]
-#[instruction(amount: u64, expiry: i64, borrower: Option<Pubkey>)]
 pub struct InitHire<'info> {
   #[account(mut)]
   pub lender: Signer<'info>,

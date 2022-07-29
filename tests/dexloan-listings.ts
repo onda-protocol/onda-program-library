@@ -756,8 +756,7 @@ describe("dexloan_listings", () => {
               rent: anchor.web3.SYSVAR_RENT_PUBKEY,
             })
             .rpc();
-
-          assert.fail("Expected error");
+          assert.fail();
         } catch (error) {
           console.log(error.logs);
           assert.ok(true);
@@ -805,7 +804,7 @@ describe("dexloan_listings", () => {
       let borrower: Awaited<ReturnType<typeof helpers.takeHire>>;
       let options;
 
-      it("Initializes a hire", async () => {
+      it("Initializes a hire with a borrower", async () => {
         options = {
           amount: 0,
           expiry: Date.now() / 1000 + 20,
@@ -837,7 +836,57 @@ describe("dexloan_listings", () => {
         assert.deepEqual(hire.state, { listed: {} });
       });
 
-      it("Allows a hire to be taken", async () => {
+      it("Does not allow a different address to take the hire", async () => {
+        const newKeypair = anchor.web3.Keypair.generate();
+        await helpers.requestAirdrop(connection, newKeypair.publicKey);
+        const provider = helpers.getProvider(connection, newKeypair);
+        const program = helpers.getProgram(provider);
+
+        const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
+          connection,
+          newKeypair,
+          lender.mint,
+          newKeypair.publicKey
+        );
+
+        const metadataAccountInfo = await connection.getAccountInfo(
+          lender.metadata
+        );
+        const [metadata] = Metadata.fromAccountInfo(metadataAccountInfo);
+
+        try {
+          await program.methods
+            .takeHire(0)
+            .accounts({
+              borrower: newKeypair.publicKey,
+              lender: lender.keypair.publicKey,
+              hireAccount: lender.hireAccount,
+              depositTokenAccount: lender.depositTokenAccount,
+              hireTokenAccount: tokenAccount.address,
+              mint: lender.mint,
+              edition: lender.edition,
+              metadata: lender.metadata,
+              metadataProgram: METADATA_PROGRAM_ID,
+              systemProgram: anchor.web3.SystemProgram.programId,
+              tokenProgram: splToken.TOKEN_PROGRAM_ID,
+              clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+            })
+            .remainingAccounts(
+              metadata.data.creators.map((creator) => ({
+                pubkey: creator.address,
+                isSigner: false,
+                isWritable: true,
+              }))
+            )
+            .rpc();
+          assert.fail("Expected to fail");
+        } catch (err) {
+          console.log(err.logs);
+          assert.ok(true);
+        }
+      });
+
+      it("Allows a hire to be taken by the borrower", async () => {
         const days = 0;
 
         borrower = await helpers.takeHire(connection, lender, days);
@@ -845,13 +894,10 @@ describe("dexloan_listings", () => {
         const hire = await lender.program.account.hire.fetch(
           lender.hireAccount
         );
-        const tokenAddress = (
-          await connection.getTokenLargestAccounts(lender.mint)
-        ).value[0].address;
 
         const tokenAccount = await splToken.getAccount(
           connection,
-          tokenAddress
+          borrower.hireTokenAccount
         );
 
         assert.deepEqual(hire.state, { hired: {} });
@@ -864,12 +910,31 @@ describe("dexloan_listings", () => {
         assert.equal(hire.currentExpiry.toNumber(), hire.expiry.toNumber());
       });
 
+      it("Does not allow hire token account to be closed", async () => {
+        try {
+          await splToken.closeAccount(
+            connection,
+            borrower.keypair,
+            borrower.hireTokenAccount,
+            lender.depositTokenAccount,
+            borrower.keypair
+          );
+          assert.fail();
+        } catch (err) {
+          assert.ok(
+            err.logs.includes(
+              "Program log: Error: Non-native account can only be closed if its balance is zero"
+            )
+          );
+        }
+      });
+
       it("Does not allow a hire to be recovered before expiry", async () => {
         try {
           await helpers.recoverHire(connection, lender, borrower);
-          assert.fail("Recover should fail");
+          assert.fail();
         } catch (err) {
-          console.log(err);
+          console.log(err.logs);
           assert.ok(err);
         }
       });
@@ -907,6 +972,71 @@ describe("dexloan_listings", () => {
       });
     });
 
-    // describe("Open hire", async () => {});
+    describe.only("Open hire", async () => {
+      let options;
+      let lender: helpers.HireLender;
+      let borrower: helpers.HireBorrower;
+
+      it("Initializes an open hire", async () => {
+        options = {
+          amount: 10_000,
+          expiry: Date.now() / 1000 + 86_400 * 180,
+        };
+        lender = await helpers.initHire(connection, options);
+
+        const hire = await lender.program.account.hire.fetch(
+          lender.hireAccount
+        );
+
+        const tokenAddress = (
+          await connection.getTokenLargestAccounts(lender.mint)
+        ).value[0].address;
+
+        const tokenAccount = await splToken.getAccount(
+          connection,
+          tokenAddress
+        );
+
+        assert.ok(tokenAccount.isFrozen);
+        assert.ok(tokenAccount.delegate.equals(lender.hireAccount));
+        assert.equal(hire.amount.toNumber(), options.amount);
+        assert.equal(
+          hire.lender.toBase58(),
+          lender.keypair.publicKey.toBase58()
+        );
+        assert.equal(hire.borrower, null);
+        assert.deepEqual(hire.state, { listed: {} });
+      });
+
+      it("Allows a hire to be taken for x days", async () => {
+        const days = 2;
+        const estimatedCurrentExpiry = Date.now() / 1000 + 86_400 * 2;
+        borrower = await helpers.takeHire(connection, lender, days);
+
+        const hire = await lender.program.account.hire.fetch(
+          lender.hireAccount
+        );
+        const tokenAddress = (
+          await connection.getTokenLargestAccounts(lender.mint)
+        ).value[0].address;
+
+        const tokenAccount = await splToken.getAccount(
+          connection,
+          tokenAddress
+        );
+
+        assert.deepEqual(hire.state, { hired: {} });
+        assert.equal(tokenAccount.isFrozen, true);
+        assert.equal(tokenAccount.amount, BigInt(1));
+        assert.equal(
+          hire.borrower.toBase58(),
+          borrower.keypair.publicKey.toBase58()
+        );
+        assert.ok(
+          hire.currentExpiry.toNumber() >= estimatedCurrentExpiry &&
+            hire.currentExpiry.toNumber() <= estimatedCurrentExpiry + 10
+        );
+      });
+    });
   });
 });

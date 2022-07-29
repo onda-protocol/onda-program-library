@@ -379,11 +379,11 @@ export async function initHire(
   const expiry = new anchor.BN(options.expiry);
   const borrower = options.borrower
     ? new anchor.web3.PublicKey(options.borrower)
-    : null;
+    : undefined;
 
   try {
     await program.methods
-      .initHire(amount, expiry, borrower)
+      .initHire({ amount, expiry, borrower: null })
       .accounts({
         hireAccount,
         lender: keypair.publicKey,

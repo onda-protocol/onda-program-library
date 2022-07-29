@@ -22,6 +22,8 @@ pub enum DexloanError {
     DerivedKeyInvalid,
     #[msg("Option not expired")]
     OptionNotExpired,
-    #[msg("NumericalOverflow")]
-    NumericalOverflow
+    #[msg("Numerical overflow")]
+    NumericalOverflow,
+    #[msg("Borrower not specified")]
+    BorrowerNotSpecified
 }

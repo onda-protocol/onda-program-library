@@ -64,11 +64,12 @@ pub mod dexloan_listings {
     // Hires
     pub fn init_hire<'info>(
         ctx: Context<'_, '_, '_, 'info, InitHire<'info>>,
-        amount: u64,
-        expiry: i64,
-        borrower: Option<Pubkey>
+        args: HireArgs
+        // amount: u64,
+        // expiry: i64,
+        // borrower: Option<Pubkey>
     ) -> Result<()> {
-        instructions::hire::init(ctx, amount, expiry, borrower)
+        instructions::hire::init(ctx, args)
     }
 
     pub fn take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>, days: u16) -> Result<()> {
