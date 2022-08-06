@@ -798,7 +798,7 @@ describe("dexloan_listings", () => {
     });
   });
 
-  describe.only("Hires", () => {
+  describe("Hires", () => {
     describe("Specified borrower", async () => {
       let lender: Awaited<ReturnType<typeof helpers.initHire>>;
       let borrower: Awaited<ReturnType<typeof helpers.takeHire>>;
