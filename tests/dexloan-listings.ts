@@ -931,7 +931,7 @@ describe("dexloan_listings", () => {
 
       it("Does not allow a hire to be recovered before expiry", async () => {
         try {
-          await helpers.recoverHire(connection, lender, borrower);
+          await helpers.recoverHire(lender, borrower);
           assert.fail();
         } catch (err) {
           console.log(err.logs);
@@ -949,7 +949,7 @@ describe("dexloan_listings", () => {
           hire.expiry.toNumber() - Date.now() / 1000
         );
         await helpers.wait(timeUntilExpiry + 2); // Wait for expiry + padding
-        await helpers.recoverHire(connection, lender, borrower);
+        await helpers.recoverHire(lender, borrower);
 
         const updatedHire = await lender.program.account.hire.fetch(
           lender.hireAccount
@@ -972,7 +972,7 @@ describe("dexloan_listings", () => {
       });
     });
 
-    describe.only("Open hire", async () => {
+    describe("Open hire", async () => {
       let options;
       let lender: helpers.HireLender;
       let borrower: helpers.HireBorrower;

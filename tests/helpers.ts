@@ -377,13 +377,11 @@ export async function initHire(
 
   const amount = new anchor.BN(options.amount);
   const expiry = new anchor.BN(options.expiry);
-  const borrower = options.borrower
-    ? new anchor.web3.PublicKey(options.borrower)
-    : undefined;
+  const borrower = options.borrower ?? null;
 
   try {
     await program.methods
-      .initHire({ amount, expiry, borrower: null })
+      .initHire({ amount, expiry, borrower })
       .accounts({
         hireAccount,
         lender: keypair.publicKey,
@@ -470,13 +468,9 @@ export async function takeHire(
   };
 }
 
-export async function recoverHire(
-  connection: anchor.web3.Connection,
-  lender: HireLender,
-  borrower: HireBorrower
-) {
-  const metadataAccountInfo = await connection.getAccountInfo(lender.metadata);
-  const [metadata] = Metadata.fromAccountInfo(metadataAccountInfo);
+export async function recoverHire(lender: HireLender, borrower: HireBorrower) {
+  // const metadataAccountInfo = await connection.getAccountInfo(lender.metadata);
+  // const [metadata] = Metadata.fromAccountInfo(metadataAccountInfo);
 
   try {
     await lender.program.methods
@@ -489,19 +483,19 @@ export async function recoverHire(
         hireTokenAccount: borrower.hireTokenAccount,
         mint: lender.mint,
         edition: lender.edition,
-        metadata: lender.metadata,
+        // metadata: lender.metadata,
         metadataProgram: METADATA_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
       })
-      .remainingAccounts(
-        metadata.data.creators.map((creator) => ({
-          pubkey: creator.address,
-          isSigner: false,
-          isWritable: true,
-        }))
-      )
+      // .remainingAccounts(
+      //   metadata.data.creators.map((creator) => ({
+      //     pubkey: creator.address,
+      //     isSigner: false,
+      //     isWritable: true,
+      //   }))
+      // )
       .rpc();
   } catch (err) {
     console.log(err.logs);

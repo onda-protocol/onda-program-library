@@ -7,9 +7,6 @@ use crate::utils::*;
 pub fn init(
   ctx: Context<InitHire>,
   args: HireArgs,
-//   amount: u64,
-//   expiry: i64,
-//   borrower: Option<Pubkey>,
 ) -> Result<()> {
   let hire = &mut ctx.accounts.hire_account;
   let unix_timestamp = ctx.accounts.clock.unix_timestamp;
@@ -105,7 +102,7 @@ pub fn take<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>, days: u16) 
             amount,
             &ctx.accounts.mint.to_account_info(),
             &ctx.accounts.metadata.to_account_info(),
-            &ctx.accounts.lender.to_account_info(),
+            &ctx.accounts.borrower.to_account_info(),
             &ctx.accounts.deposit_token_account,
         )?;
     
@@ -411,8 +408,6 @@ pub struct RecoverHire<'info> {
     pub mint: Account<'info, Mint>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
-    /// CHECK: deserialized and checked
-    pub metadata: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
     pub metadata_program: UncheckedAccount<'info>, 
     /// Misc
