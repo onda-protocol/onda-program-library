@@ -76,6 +76,10 @@ pub mod dexloan_listings {
         handle_take_hire(ctx, days)
     }
 
+    pub fn extend_hire<'info>(ctx: Context<'_, '_, '_, 'info, ExtendHire<'info>>, days: u16) -> Result<()> {
+        handle_extend_hire(ctx, days)
+    }
+
     pub fn recover_hire<'info>(ctx: Context<'_, '_, '_, 'info, RecoverHire<'info>>) -> Result<()> {
         handle_recover_hire(ctx)
     }
