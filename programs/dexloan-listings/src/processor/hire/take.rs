@@ -2,9 +2,8 @@ use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{Hire, HireState};
 use crate::error::{DexloanError};
+use crate::constants::*;
 use crate::utils::*;
-
-const SECONDS_PER_DAY: i64 = 86_400;
 
 #[derive(Accounts)]
 #[instruction(days: u16)]
@@ -66,7 +65,7 @@ pub fn handle_take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>,
       hire.current_expiry = Some(hire.expiry);
   } else {
       let amount = u64::from(days) * hire.amount;
-      let duration = i64::from(days) *  SECONDS_PER_DAY;
+      let duration = i64::from(days) * SECONDS_PER_DAY;
       let current_expiry = start_date + duration;
       msg!("amount {}", amount);
       msg!("duration {}", duration);
@@ -83,7 +82,6 @@ pub fn handle_take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>,
           &ctx.accounts.mint.to_account_info(),
           &ctx.accounts.metadata.to_account_info(),
           &ctx.accounts.borrower.to_account_info(),
-          &ctx.accounts.deposit_token_account,
       )?;
   
       // Transfer fee

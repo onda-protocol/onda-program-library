@@ -6,7 +6,7 @@ use {
         program::{invoke, invoke_signed},
     },
   },
-  anchor_spl::token::{TokenAccount},
+  anchor_spl::token::{Mint},
   mpl_token_metadata::{
     instruction::{freeze_delegated_account, thaw_delegated_account}
   },
@@ -86,10 +86,10 @@ pub fn thaw<'a, 'b>(params: FreezeParams<'a, 'b>) -> Result<()> {
 
 pub fn assert_metadata_valid<'a>(
     metadata: &AccountInfo<'a>,
-    token_account: &Account<'a, TokenAccount>,
+    mint: &AccountInfo<'a>,
   ) -> Result<()> {
     let (key, _) = mpl_token_metadata::pda::find_metadata_account(
-      &token_account.mint
+      &mint.key()
     );
   
     if key != metadata.to_account_info().key() {
@@ -121,7 +121,6 @@ pub fn pay_creator_fees<'a>(
     mint: &AccountInfo<'a>,
     metadata_info: &AccountInfo<'a>,
     fee_payer: &AccountInfo<'a>,
-    deposit_token_account: &Account<'a, TokenAccount>,
 ) -> Result<u64> {
     let metadata = Metadata::from_account_info(metadata_info)?;
 
@@ -131,7 +130,7 @@ pub fn pay_creator_fees<'a>(
 
     assert_metadata_valid(
         &metadata_info,
-        &deposit_token_account
+        &mint
     )?;
 
     let fees = metadata.data.seller_fee_basis_points;

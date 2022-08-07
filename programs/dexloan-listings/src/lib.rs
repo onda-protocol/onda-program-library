@@ -1,12 +1,14 @@
 pub mod processor;
 pub mod error;
 pub mod state;
+pub mod constants;
 pub mod utils;
 
 use anchor_lang::prelude::*;
 pub use processor::*;
 pub use error::*;
 pub use state::*;
+pub use constants::*;
 pub use utils::*;
 declare_id!("H6FCxCy2KCPJwCoUb9eQCSv41WZBKQaYfB6x5oFajzfj");
 

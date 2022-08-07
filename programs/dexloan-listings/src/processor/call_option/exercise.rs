@@ -88,7 +88,6 @@ pub fn handle_exercise_call_option<'info>(ctx: Context<'_, '_, '_, 'info, Exerci
       &ctx.accounts.mint.to_account_info(),
       &ctx.accounts.metadata.to_account_info(),
       &ctx.accounts.buyer.to_account_info(),
-      &ctx.accounts.deposit_token_account,
   )?;
 
   anchor_lang::solana_program::program::invoke(
