@@ -1,12 +1,13 @@
-use anchor_lang::prelude::*;
-
-mod instructions;
-use instructions::{call_option::*, loan::*, hire::*, listing::*};
-
+pub mod processor;
 pub mod error;
 pub mod state;
 pub mod utils;
 
+use anchor_lang::prelude::*;
+pub use processor::*;
+pub use error::*;
+pub use state::*;
+pub use utils::*;
 declare_id!("H6FCxCy2KCPJwCoUb9eQCSv41WZBKQaYfB6x5oFajzfj");
 
 #[program]
@@ -20,23 +21,23 @@ pub mod dexloan_listings {
         basis_points: u32,
         duration: u64
     ) -> Result<()> {
-        instructions::loan::init(ctx, amount, basis_points, duration)
+        handle_init_loan(ctx, amount, basis_points, duration)
     }
 
     pub fn close_loan<'info>(ctx: Context<'_, '_, '_, 'info, CloseLoan<'info>>) -> Result<()> {
-        instructions::loan::close(ctx)
+        handle_close_loan(ctx)
     }
 
-    pub fn give_loan<'info>(ctx: Context<'_, '_, '_, 'info, Lend<'info>>) -> Result<()> {
-        instructions::loan::lend(ctx)
+    pub fn give_loan<'info>(ctx: Context<'_, '_, '_, 'info, GiveLoan<'info>>) -> Result<()> {
+        handle_give_loan(ctx)
     }
 
     pub fn repay_loan<'info>(ctx: Context<'_, '_, '_, 'info, RepayLoan<'info>>) -> Result<()> {
-        instructions::loan::repay(ctx)
+        handle_repay_loan(ctx)
     }
 
-    pub fn repossess_collateral<'info>(ctx: Context<'_, '_, '_, 'info, Repossess<'info>>) -> Result<()> {
-        instructions::loan::repossess(ctx)
+    pub fn repossess_collateral<'info>(ctx: Context<'_, '_, '_, 'info, RepossessCollateral<'info>>) -> Result<()> {
+        handle_repossess_collateral(ctx)
     }
 
     // Call Options
@@ -46,50 +47,47 @@ pub mod dexloan_listings {
         strike_price: u64,
         expiry: i64
     ) -> Result<()> {
-        instructions::call_option::init(ctx, amount, strike_price, expiry)
+        handle_init_call_option(ctx, amount, strike_price, expiry)
     }
 
     pub fn buy_call_option<'info>(ctx: Context<'_, '_, '_, 'info, BuyCallOption<'info>>) -> Result<()> {
-        instructions::call_option::buy(ctx)
+        handle_buy_call_option(ctx)
     }
 
     pub fn exercise_call_option<'info>(ctx: Context<'_, '_, '_, 'info, ExerciseCallOption<'info>>) -> Result<()> {
-        instructions::call_option::exercise(ctx)
+        handle_exercise_call_option(ctx)
     }
 
     pub fn close_call_option<'info>(ctx: Context<'_, '_, '_, 'info, CloseCallOption<'info>>) -> Result<()> {
-        instructions::call_option::close(ctx)
+        handle_close_call_option(ctx)
     }
 
     // Hires
     pub fn init_hire<'info>(
         ctx: Context<'_, '_, '_, 'info, InitHire<'info>>,
         args: HireArgs
-        // amount: u64,
-        // expiry: i64,
-        // borrower: Option<Pubkey>
     ) -> Result<()> {
-        instructions::hire::init(ctx, args)
+        handle_init_hire(ctx, args)
     }
 
     pub fn take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>, days: u16) -> Result<()> {
-        instructions::hire::take(ctx, days)
+        handle_take_hire(ctx, days)
     }
 
     pub fn recover_hire<'info>(ctx: Context<'_, '_, '_, 'info, RecoverHire<'info>>) -> Result<()> {
-        instructions::hire::recover(ctx)
+        handle_recover_hire(ctx)
     }
 
     pub fn close_hire<'info>(ctx: Context<'_, '_, '_, 'info, CloseHire<'info>>) -> Result<()> {
-        instructions::hire::close(ctx)
+        handle_close_hire(ctx)
     }
 
     // Deprecated v1 Listings
     pub fn close_listing<'info>(ctx: Context<'_, '_, '_, 'info, CloseListing<'info>>) -> Result<()> {
-        instructions::listing::close(ctx)
+        handle_close_listing(ctx)
     }
 
     pub fn cancel_listing<'info>(ctx: Context<'_, '_, '_, 'info, CancelListing<'info>>) -> Result<()> {
-        instructions::listing::cancel_listing(ctx)
+        handle_cancel_listing(ctx)
     }
 }
