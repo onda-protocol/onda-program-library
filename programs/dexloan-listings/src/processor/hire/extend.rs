@@ -1,5 +1,5 @@
 use anchor_lang::{prelude::*};
-use anchor_spl::token::{Mint, Token, TokenAccount};
+use anchor_spl::token::{Mint, Token};
 use crate::state::{Hire, HireState};
 use crate::constants::*;
 use crate::utils::*;
@@ -24,13 +24,6 @@ pub struct ExtendHire<'info> {
       constraint = hire_account.borrower.is_some() && hire_account.borrower.unwrap() == borrower.key(), 
   )]
   pub hire_account: Account<'info, Hire>,   
-  #[account(
-      mut,
-      associated_token::mint = mint,
-      associated_token::authority = borrower,
-      constraint = hire_token_account.amount == 1
-  )]
-  pub hire_token_account: Account<'info, TokenAccount>, 
   #[account(constraint = mint.supply == 1)]
   pub mint: Account<'info, Mint>,
   /// CHECK: deserialized and checked
