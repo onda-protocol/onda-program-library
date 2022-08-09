@@ -25,10 +25,16 @@ pub struct Repossess<'info> {
     pub deposit_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
-        constraint = loan.lender == lender.key(),
-        constraint = loan.mint == mint.key(),
+        seeds = [
+            Loan::PREFIX,
+            mint.key().as_ref(),
+            borrower.key().as_ref(),
+        ],
+        bump,
+        has_one = borrower,
+        has_one = lender,
+        has_one = mint,
         constraint = loan.state == LoanState::Active,
-        constraint = loan.borrower == borrower.key()
     )]
     pub loan: Box<Account<'info, Loan>>,
     #[account(
@@ -73,7 +79,7 @@ pub fn handle_repossess(ctx: Context<Repossess>) -> Result<()> {
   thaw_and_transfer_from_token_account(
     token_manager,
     ctx.accounts.token_program.to_account_info(),
-    ctx.accounts.lender.to_account_info(),
+    ctx.accounts.borrower.to_account_info(),
     ctx.accounts.deposit_token_account.to_account_info(),
     ctx.accounts.lender_token_account.to_account_info(),
     ctx.accounts.mint.to_account_info(),

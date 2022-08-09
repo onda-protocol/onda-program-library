@@ -15,7 +15,7 @@ describe("dexloan_listings", () => {
   );
 
   describe.only("Loans", () => {
-    describe.only("Loan repossessions", () => {
+    describe("Loan repossessions", () => {
       let borrower: Awaited<ReturnType<typeof helpers.initLoan>>;
       let lender: Awaited<ReturnType<typeof helpers.giveLoan>>;
       let options;
@@ -36,12 +36,23 @@ describe("dexloan_listings", () => {
         const loan = await borrower.program.account.loan.fetch(
           borrower.loanAccount
         );
-
-        assert.equal(
-          borrowerTokenAccount.delegate,
-          borrower.loanAccount.toBase58()
+        const tokenManager = await borrower.program.account.tokenManager.fetch(
+          borrower.tokenManager
         );
-        assert.equal(loan.borrower, borrower.keypair.publicKey.toBase58());
+
+        assert.deepEqual(tokenManager.accounts, {
+          hire: false,
+          callOption: false,
+          loan: false,
+        });
+        assert.equal(
+          borrowerTokenAccount.delegate.toBase58(),
+          borrower.tokenManager.toBase58()
+        );
+        assert.equal(
+          loan.borrower.toBase58(),
+          borrower.keypair.publicKey.toBase58()
+        );
         assert.equal(loan.basisPoints, options.basisPoints);
         assert.equal(loan.duration.toNumber(), options.duration);
         assert.equal(loan.mint.toBase58(), borrower.mint.toBase58());
@@ -87,6 +98,9 @@ describe("dexloan_listings", () => {
         const loan = await borrower.program.account.loan.fetch(
           borrower.loanAccount
         );
+        const tokenManager = await borrower.program.account.tokenManager.fetch(
+          borrower.tokenManager
+        );
         const borrowerPostLoanBalance = await connection.getBalance(
           borrower.keypair.publicKey
         );
@@ -94,7 +108,12 @@ describe("dexloan_listings", () => {
           connection,
           borrower.depositTokenAccount
         );
-        assert.ok(true);
+
+        assert.deepEqual(tokenManager.accounts, {
+          hire: false,
+          callOption: false,
+          loan: true,
+        });
         assert.equal(borrowerTokenAccount.amount, BigInt(1));
         assert.equal(
           borrowerPreLoanBalance + options.amount,
@@ -192,9 +211,18 @@ describe("dexloan_listings", () => {
           connection,
           tokenAccount.address
         );
+        const tokenManager = await borrower.program.account.tokenManager.fetch(
+          borrower.tokenManager
+        );
         const defaultedListing = await borrower.program.account.loan.fetch(
           borrower.loanAccount
         );
+
+        assert.deepEqual(tokenManager.accounts, {
+          hire: false,
+          callOption: false,
+          loan: false,
+        });
         assert.equal(lenderTokenAccount.amount, BigInt(1));
         assert.deepEqual(defaultedListing.state, { defaulted: {} });
       });
@@ -231,7 +259,7 @@ describe("dexloan_listings", () => {
       });
     });
 
-    describe("Loan repayments", () => {
+    describe.only("Loan repayments", () => {
       let borrower: Awaited<ReturnType<typeof helpers.initLoan>>;
       let lender: Awaited<ReturnType<typeof helpers.giveLoan>>;
       let options;
@@ -251,13 +279,23 @@ describe("dexloan_listings", () => {
         const loan = await borrower.program.account.loan.fetch(
           borrower.loanAccount
         );
-
-        assert.ok(true);
-        assert.equal(
-          borrowerTokenAccount.delegate,
-          borrower.loanAccount.toBase58()
+        const tokenManager = await borrower.program.account.tokenManager.fetch(
+          borrower.tokenManager
         );
-        assert.equal(loan.borrower, borrower.keypair.publicKey.toBase58());
+
+        assert.deepEqual(tokenManager.accounts, {
+          hire: false,
+          callOption: false,
+          loan: false,
+        });
+        assert.equal(
+          borrowerTokenAccount.delegate.toBase58(),
+          borrower.tokenManager.toBase58()
+        );
+        assert.equal(
+          loan.borrower.toBase58(),
+          borrower.keypair.publicKey.toBase58()
+        );
         assert.equal(loan.basisPoints, options.basisPoints);
         assert.equal(loan.duration.toNumber(), options.duration);
         assert.equal(loan.mint.toBase58(), borrower.mint.toBase58());
@@ -326,7 +364,7 @@ describe("dexloan_listings", () => {
         assert.equal(borrowerTokenAccount.amount, BigInt(1));
         assert.equal(
           borrowerTokenAccount.delegate.toBase58(),
-          borrower.loanAccount.toBase58()
+          borrower.tokenManager.toBase58()
         );
         assert.deepEqual(loan.state, { listed: {} });
         assert.equal(
@@ -808,7 +846,7 @@ describe("dexloan_listings", () => {
     });
   });
 
-  describe.only("Hires", () => {
+  describe("Hires", () => {
     describe("Specified borrower", async () => {
       let lender: Awaited<ReturnType<typeof helpers.initHire>>;
       let borrower: Awaited<ReturnType<typeof helpers.takeHire>>;

@@ -22,9 +22,15 @@ pub struct RepossessWithHire<'info> {
     pub lender_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
-        has_one = mint,
-        has_one = lender,
+        seeds = [
+            Loan::PREFIX,
+            mint.key().as_ref(),
+            borrower.key().as_ref(),
+        ],
+        bump,
         has_one = borrower,
+        has_one = lender,
+        has_one = mint,
         constraint = loan.state == LoanState::Active,
     )]
     pub loan: Box<Account<'info, Loan>>,
