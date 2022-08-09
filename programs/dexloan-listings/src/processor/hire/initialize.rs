@@ -64,6 +64,7 @@ pub fn handle_init_hire(
 ) -> Result<()> {
     let hire = &mut ctx.accounts.hire;
     let token_manager = &mut ctx.accounts.token_manager;
+    let deposit_token_account = &mut ctx.accounts.deposit_token_account;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
     if unix_timestamp > args.expiry {
@@ -88,14 +89,37 @@ pub fn handle_init_hire(
         hire.borrower = args.borrower;
     }
 
-    delegate_and_freeze_token_account(
-        token_manager,
-        ctx.accounts.token_program.to_account_info(),
-        ctx.accounts.deposit_token_account.to_account_info(),
-        ctx.accounts.lender.to_account_info(),
-        ctx.accounts.edition.to_account_info(),
-        ctx.accounts.mint.to_account_info(),
-    )?;
+    if deposit_token_account.delegate.is_some() {
+        if !deposit_token_account.is_frozen() && deposit_token_account.delegate.unwrap() != token_manager.key()  {
+            anchor_spl::token::revoke(
+                CpiContext::new(
+                    ctx.accounts.token_program.to_account_info(),
+                    anchor_spl::token::Revoke {
+                        source: deposit_token_account.to_account_info(),
+                        authority: ctx.accounts.lender.to_account_info(),
+                    }
+                )
+            )?;
+
+            delegate_and_freeze_token_account(
+                token_manager,
+                ctx.accounts.token_program.to_account_info(),
+                deposit_token_account.to_account_info(),
+                ctx.accounts.lender.to_account_info(),
+                ctx.accounts.edition.to_account_info(),
+                ctx.accounts.mint.to_account_info(),
+            )?;
+        }
+    } else {
+        delegate_and_freeze_token_account(
+            token_manager,
+            ctx.accounts.token_program.to_account_info(),
+            deposit_token_account.to_account_info(),
+            ctx.accounts.lender.to_account_info(),
+            ctx.accounts.edition.to_account_info(),
+            ctx.accounts.mint.to_account_info(),
+        )?;
+    }
 
     Ok(())
 }
