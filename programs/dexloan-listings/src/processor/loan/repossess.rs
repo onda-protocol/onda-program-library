@@ -11,9 +11,17 @@ pub struct RepossessCollateral<'info> {
     /// CHECK: contrained on loan_account
     #[account(mut)]
     pub borrower: AccountInfo<'info>,
-    #[account(mut)]
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = lender
+    )]
     pub lender_token_account: Account<'info, TokenAccount>,
-    #[account(mut)]
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = borrower
+    )]
     pub deposit_token_account: Account<'info, TokenAccount>,
     #[account(
         mut,
@@ -31,6 +39,8 @@ pub struct RepossessCollateral<'info> {
             borrower.key().as_ref()
         ],
         bump,
+        constraint = token_manager_account.accounts.hire == false,
+        constraint = token_manager_account.accounts.loan == true,
     )]   
     pub token_manager_account: Account<'info, TokenManager>,
     pub mint: Account<'info, Mint>,
@@ -46,6 +56,7 @@ pub struct RepossessCollateral<'info> {
 
 pub fn handle_repossess_collateral(ctx: Context<RepossessCollateral>) -> Result<()> {
   let loan = &mut ctx.accounts.loan_account;
+  let token_manager = &mut ctx.accounts.token_manager_account;
 
   let unix_timestamp = ctx.accounts.clock.unix_timestamp as u64;
   let loan_start_date = loan.start_date as u64;
@@ -60,37 +71,15 @@ pub fn handle_repossess_collateral(ctx: Context<RepossessCollateral>) -> Result<
   }
   
   loan.state = LoanState::Defaulted;
+  token_manager.accounts.loan = false;
 
-  let signer_bump = &[loan.bump];
-  let signer_seeds = &[&[
-      Loan::PREFIX,
-      loan.mint.as_ref(),
-      loan.borrower.as_ref(),
-      signer_bump
-  ][..]];
-
-  thaw(
-      FreezeParams {
-          delegate: loan.to_account_info(),
-          token_account: ctx.accounts.deposit_token_account.to_account_info(),
-          edition: ctx.accounts.edition.to_account_info(),
-          mint: ctx.accounts.mint.to_account_info(),
-          signer_seeds: signer_seeds
-      }
-  )?;
-
-  // Transfer NFT
-  anchor_spl::token::transfer(
-      CpiContext::new_with_signer(
-          ctx.accounts.token_program.to_account_info(),
-          anchor_spl::token::Transfer {
-              from: ctx.accounts.deposit_token_account.to_account_info(),
-              to: ctx.accounts.lender_token_account.to_account_info(),
-              authority: loan.to_account_info(),
-          },
-          signer_seeds
-      ),
-      1
+  thaw_and_transfer_from_token_account(
+    token_manager,
+    ctx.accounts.token_program.to_account_info(),
+    ctx.accounts.deposit_token_account.to_account_info(),
+    ctx.accounts.lender_token_account.to_account_info(),
+    ctx.accounts.mint.to_account_info(),
+    ctx.accounts.edition.to_account_info()
   )?;
 
   Ok(())

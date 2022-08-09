@@ -8,9 +8,10 @@ use crate::utils::*;
 
 #[derive(Accounts)]
 pub struct ExerciseCallOptionWithHire<'info> {
-    /// CHECK: contrained on listing_account
+    /// CHECK: contrained on call_option_account
     #[account(mut)]
     pub seller: AccountInfo<'info>,
+    /// CHECK: contrained on hire_account
     #[account(mut)]
     pub borrower: AccountInfo<'info>,
     #[account(mut)]
@@ -60,9 +61,9 @@ pub struct ExerciseCallOptionWithHire<'info> {
     #[account(
         mut,
         associated_token::mint = mint,
-        associated_token::authority = seller
+        associated_token::authority = hire_account.borrower.unwrap()
     )]
-    pub deposit_token_account: Account<'info, TokenAccount>,
+    pub hire_token_account: Account<'info, TokenAccount>,
     pub mint: Account<'info, Mint>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
@@ -99,9 +100,11 @@ pub fn handle_exercise_call_option_with_hire<'info>(ctx: Context<'_, '_, '_, 'in
         unix_timestamp,
     )?;
 
-    thaw_token_account(
+    thaw_and_transfer_from_token_account(
         token_manager,
-        ctx.accounts.deposit_token_account.to_account_info(),
+        ctx.accounts.token_program.to_account_info(),
+        ctx.accounts.hire_token_account.to_account_info(),
+        ctx.accounts.buyer_token_account.to_account_info(),
         ctx.accounts.mint.to_account_info(),
         ctx.accounts.edition.to_account_info()
     )?;
@@ -112,7 +115,7 @@ pub fn handle_exercise_call_option_with_hire<'info>(ctx: Context<'_, '_, '_, 'in
         &ctx.accounts.mint.to_account_info(),
         &ctx.accounts.metadata.to_account_info(),
         &ctx.accounts.buyer.to_account_info(),
-    )?;  
+    )?;
 
     anchor_lang::solana_program::program::invoke(
         &anchor_lang::solana_program::system_instruction::transfer(
@@ -125,27 +128,6 @@ pub fn handle_exercise_call_option_with_hire<'info>(ctx: Context<'_, '_, '_, 'in
             ctx.accounts.seller.to_account_info(),
         ]
     )?;
-
-    let signer_bump = &[token_manager.bump];
-    let signer_seeds = &[&[
-        TokenManager::PREFIX,
-        token_manager.mint.as_ref(),
-        token_manager.issuer.as_ref(),
-        signer_bump
-    ][..]];
-
-    anchor_spl::token::transfer(
-        CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            anchor_spl::token::Transfer {
-                from: ctx.accounts.deposit_token_account.to_account_info(),
-                to: ctx.accounts.buyer_token_account.to_account_info(),
-                authority: call_option.to_account_info(),
-            },
-            signer_seeds
-        ),
-        1
-    )?;
   
-  Ok(())
+    Ok(())
 }

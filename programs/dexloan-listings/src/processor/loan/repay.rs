@@ -56,54 +56,38 @@ pub struct RepayLoan<'info> {
 }
 
 pub fn handle_repay_loan(ctx: Context<RepayLoan>) -> Result<()> {
-  let loan = &mut ctx.accounts.loan_account;
+    let loan = &mut ctx.accounts.loan_account;
+    let token_manager = &mut ctx.accounts.token_manager_account;
 
-  let amount_due = calculate_loan_repayment(
-      loan.amount,
-      loan.basis_points,
-      loan.duration
-  )?;
+    token_manager.accounts.loan = false;
 
-  // Transfer payment
-  invoke(
-      &anchor_lang::solana_program::system_instruction::transfer(
-          &loan.borrower,
-          &loan.lender,
-          amount_due,
-      ),
-      &[
-          ctx.accounts.borrower.to_account_info(),
-          ctx.accounts.lender.to_account_info(),
-      ]
-  )?;
+    let amount_due = calculate_loan_repayment(
+        loan.amount,
+        loan.basis_points,
+        loan.duration
+    )?;
 
-  let signer_bump = &[loan.bump];
-  let signer_seeds = &[&[
-      Loan::PREFIX,
-      loan.mint.as_ref(),
-      loan.borrower.as_ref(),
-      signer_bump
-  ][..]];
+    // Transfer payment
+    invoke(
+        &anchor_lang::solana_program::system_instruction::transfer(
+            &loan.borrower,
+            &loan.lender,
+            amount_due,
+        ),
+        &[
+            ctx.accounts.borrower.to_account_info(),
+            ctx.accounts.lender.to_account_info(),
+        ]
+    )?;
 
-  thaw(
-      FreezeParams {
-          delegate: loan.to_account_info(),
-          token_account: ctx.accounts.deposit_token_account.to_account_info(),
-          edition: ctx.accounts.edition.to_account_info(),
-          mint: ctx.accounts.mint.to_account_info(),
-          signer_seeds: signer_seeds
-      }
-  )?;
+    thaw_and_revoke_token_account(
+        token_manager,
+        ctx.accounts.token_program.to_account_info(),
+        ctx.accounts.deposit_token_account.to_account_info(),
+        ctx.accounts.borrower.to_account_info(),
+        ctx.accounts.mint.to_account_info(),
+        ctx.accounts.edition.to_account_info()
+    )?;
 
-  anchor_spl::token::revoke(
-      CpiContext::new(
-          ctx.accounts.token_program.to_account_info(),
-          anchor_spl::token::Revoke {
-              source: ctx.accounts.deposit_token_account.to_account_info(),
-              authority: ctx.accounts.borrower.to_account_info(),
-          }
-      )
-  )?;
-
-  Ok(())
+    Ok(())
 }

@@ -46,35 +46,16 @@ pub struct CloseLoan<'info> {
 }
 
 pub fn handle_close_loan(ctx: Context<CloseLoan>) -> Result<()> {
-  if ctx.accounts.deposit_token_account.is_frozen() {
-      let signer_bump = &[ctx.accounts.loan_account.bump];
-      let signer_seeds = &[&[
-          Loan::PREFIX,
-          ctx.accounts.loan_account.mint.as_ref(),
-          ctx.accounts.loan_account.borrower.as_ref(),
-          signer_bump
-      ][..]];
-  
-      thaw(
-          FreezeParams {
-              delegate: ctx.accounts.loan_account.to_account_info(),
-              token_account: ctx.accounts.deposit_token_account.to_account_info(),
-              edition: ctx.accounts.edition.to_account_info(),
-              mint: ctx.accounts.mint.to_account_info(),
-              signer_seeds: signer_seeds
-          }
-      )?;
-  }
+    let token_manager = &mut ctx.accounts.token_manager_account;
 
-  anchor_spl::token::revoke(
-      CpiContext::new(
-          ctx.accounts.token_program.to_account_info(),
-          anchor_spl::token::Revoke {
-              source: ctx.accounts.deposit_token_account.to_account_info(),
-              authority: ctx.accounts.borrower.to_account_info(),
-          }
-      )
-  )?;
+    thaw_and_revoke_token_account(
+        token_manager,
+        ctx.accounts.token_program.to_account_info(),
+        ctx.accounts.deposit_token_account.to_account_info(),
+        ctx.accounts.borrower.to_account_info(),
+        ctx.accounts.mint.to_account_info(),
+        ctx.accounts.edition.to_account_info(),
+    )?;
   
-  Ok(())
+    Ok(())
 }

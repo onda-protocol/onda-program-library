@@ -64,65 +64,46 @@ pub struct ExerciseCallOption<'info> {
 
 
 pub fn handle_exercise_call_option<'info>(ctx: Context<'_, '_, '_, 'info, ExerciseCallOption<'info>>) -> Result<()> {
-  let call_option = &mut ctx.accounts.call_option_account;
-  let token_manager = &mut ctx.accounts.token_manager_account;
-  let unix_timestamp = ctx.accounts.clock.unix_timestamp;
+    let call_option = &mut ctx.accounts.call_option_account;
+    let token_manager = &mut ctx.accounts.token_manager_account;
+    let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
-  msg!("Exercise with strike price: {} lamports", call_option.strike_price);
+    msg!("Exercise with strike price: {} lamports", call_option.strike_price);
 
-  if unix_timestamp > call_option.expiry {
-      return Err(DexloanError::OptionExpired.into())
-  }
+    if unix_timestamp > call_option.expiry {
+        return Err(DexloanError::OptionExpired.into())
+    }
 
-  call_option.state = CallOptionState::Exercised;
+    call_option.state = CallOptionState::Exercised;
 
-  thaw_token_account(
-    token_manager,
-    ctx.accounts.deposit_token_account.to_account_info(),
-    ctx.accounts.mint.to_account_info(),
-    ctx.accounts.edition.to_account_info()
-  )?;
+    thaw_and_transfer_from_token_account(
+        token_manager,
+        ctx.accounts.token_program.to_account_info(),
+        ctx.accounts.deposit_token_account.to_account_info(),
+        ctx.accounts.buyer_token_account.to_account_info(),
+        ctx.accounts.mint.to_account_info(),
+        ctx.accounts.edition.to_account_info()
+    )?;
 
-  let remaining_amount = pay_creator_fees(
-      &mut ctx.remaining_accounts.iter(),
-      call_option.strike_price,
-      &ctx.accounts.mint.to_account_info(),
-      &ctx.accounts.metadata.to_account_info(),
-      &ctx.accounts.buyer.to_account_info(),
-  )?;  
+    let remaining_amount = pay_creator_fees(
+        &mut ctx.remaining_accounts.iter(),
+        call_option.strike_price,
+        &ctx.accounts.mint.to_account_info(),
+        &ctx.accounts.metadata.to_account_info(),
+        &ctx.accounts.buyer.to_account_info(),
+    )?;  
 
-  anchor_lang::solana_program::program::invoke(
-      &anchor_lang::solana_program::system_instruction::transfer(
-          &call_option.buyer,
-          &call_option.seller,
-          remaining_amount,
-      ),
-      &[
-          ctx.accounts.buyer.to_account_info(),
-          ctx.accounts.seller.to_account_info(),
-      ]
-  )?;
-
-  let signer_bump = &[token_manager.bump];
-  let signer_seeds = &[&[
-      TokenManager::PREFIX,
-      token_manager.mint.as_ref(),
-      token_manager.issuer.as_ref(),
-      signer_bump
-  ][..]];
-
-  anchor_spl::token::transfer(
-      CpiContext::new_with_signer(
-          ctx.accounts.token_program.to_account_info(),
-          anchor_spl::token::Transfer {
-              from: ctx.accounts.deposit_token_account.to_account_info(),
-              to: ctx.accounts.buyer_token_account.to_account_info(),
-              authority: call_option.to_account_info(),
-          },
-          signer_seeds
-      ),
-      1
-  )?;
+    anchor_lang::solana_program::program::invoke(
+        &anchor_lang::solana_program::system_instruction::transfer(
+            &call_option.buyer,
+            &call_option.seller,
+            remaining_amount,
+        ),
+        &[
+            ctx.accounts.buyer.to_account_info(),
+            ctx.accounts.seller.to_account_info(),
+        ]
+    )?;
   
-  Ok(())
+    Ok(())
 }

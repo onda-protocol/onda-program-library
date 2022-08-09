@@ -25,12 +25,14 @@ pub struct GiveLoan<'info> {
     )]
     pub loan_account: Account<'info, Loan>,
     #[account(
-        mut,
+        init_if_needed,
+        payer = borrower,
         seeds = [
             TokenManager::PREFIX,
             mint.key().as_ref(),
             borrower.key().as_ref()
         ],
+        space = TokenManager::space(),
         bump,
     )]   
     pub token_manager_account: Account<'info, TokenManager>,
@@ -42,23 +44,27 @@ pub struct GiveLoan<'info> {
 
 
 pub fn handle_give_loan(ctx: Context<GiveLoan>) -> Result<()> {
-  let listing = &mut ctx.accounts.loan_account;
+    let loan = &mut ctx.accounts.loan_account;
+    let token_manager = &mut ctx.accounts.token_manager_account;
 
-  listing.state = LoanState::Active;
-  listing.lender = ctx.accounts.lender.key();
-  listing.start_date = ctx.accounts.clock.unix_timestamp;
-  // Transfer amount
-  anchor_lang::solana_program::program::invoke(
-      &anchor_lang::solana_program::system_instruction::transfer(
-          &listing.lender,
-          &listing.borrower,
-          listing.amount,
-      ),
-      &[
-          ctx.accounts.lender.to_account_info(),
-          ctx.accounts.borrower.to_account_info(),
-      ]
-  )?;
+    loan.state = LoanState::Active;
+    loan.lender = ctx.accounts.lender.key();
+    loan.start_date = ctx.accounts.clock.unix_timestamp;
+    //
+    token_manager.accounts.loan = true;
 
-  Ok(())
+    // Transfer amount
+    anchor_lang::solana_program::program::invoke(
+        &anchor_lang::solana_program::system_instruction::transfer(
+            &loan.lender,
+            &loan.borrower,
+            loan.amount,
+        ),
+        &[
+            ctx.accounts.lender.to_account_info(),
+            ctx.accounts.borrower.to_account_info(),
+        ]
+    )?;
+
+    Ok(())
 }
