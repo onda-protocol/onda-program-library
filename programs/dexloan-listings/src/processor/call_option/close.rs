@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{CallOption, CallOptionState};
+use crate::state::{CallOption, CallOptionState, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::{thaw, FreezeParams};
 
@@ -25,6 +25,16 @@ pub struct CloseCallOption<'info> {
     pub call_option_account: Account<'info, CallOption>,
     #[account(
         mut,
+        seeds = [
+            TokenManager::PREFIX,
+            mint.key().as_ref(),
+            seller.key().as_ref()
+        ],
+        bump,
+    )]   
+    pub token_manager_account: Account<'info, TokenManager>,
+    #[account(
+        mut,
         // constraint = deposit_token_account.delegate == COption::Some(escrow_account.key()),
         associated_token::mint = mint,
         associated_token::authority = seller
@@ -43,6 +53,7 @@ pub struct CloseCallOption<'info> {
 
 pub fn handle_close_call_option(ctx: Context<CloseCallOption>) -> Result<()> {
   let call_option = &ctx.accounts.call_option_account;
+  let token_manager = &mut ctx.accounts.token_manager_account;
   let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
   if call_option.state == CallOptionState::Active {
@@ -50,6 +61,8 @@ pub fn handle_close_call_option(ctx: Context<CloseCallOption>) -> Result<()> {
           return Err(DexloanError::OptionNotExpired.into())
       }
   }
+
+  token_manager.accounts.call_option = false;
 
   if ctx.accounts.deposit_token_account.is_frozen() {
       let signer_bump = &[ctx.accounts.call_option_account.bump];

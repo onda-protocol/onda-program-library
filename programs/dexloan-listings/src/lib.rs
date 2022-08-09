@@ -84,6 +84,10 @@ pub mod dexloan_listings {
         handle_recover_hire(ctx)
     }
 
+    pub fn withdraw_from_hire_escrow<'info>(ctx: Context<'_, '_, '_, 'info, WithdrawFromHireEscrow<'info>>) -> Result<()> {
+        handle_withdraw_from_hire_escrow(ctx)
+    }
+
     pub fn close_hire<'info>(ctx: Context<'_, '_, '_, 'info, CloseHire<'info>>) -> Result<()> {
         handle_close_hire(ctx)
     }

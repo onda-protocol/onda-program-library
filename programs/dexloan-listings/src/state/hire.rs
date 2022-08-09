@@ -16,11 +16,15 @@ pub struct Hire {
     pub lender: Pubkey,
     /// The NFT borrower
     pub borrower: Option<Pubkey>,
-    /// The expiry of the hire
+    /// The latest date this NFT may be hired until
     pub expiry: i64,
-    /// The duration of the current hire
+    /// The start date of the current hire
+    pub current_start: Option<i64>,
+    /// The end date of the current hire
     pub current_expiry: Option<i64>,
-    /// The mint of the token being used for collateral
+    /// Any amount withheld in escrow
+    pub escrow_balance: u64,
+    /// The mint of the token being used for collateral,
     pub mint: Pubkey,
     /// Misc
     pub bump: u8,
@@ -34,7 +38,9 @@ impl Hire {
         32 + // lender
         (1 + 32) + // borrower
         8 + // expiry
+        (1 + 8) + // current_start
         (1 + 8) + // current_expiry
+        8 + // escrow_balance
         32 + // mint
         1 // bump
     }

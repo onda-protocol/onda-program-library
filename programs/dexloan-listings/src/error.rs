@@ -25,5 +25,7 @@ pub enum DexloanError {
     #[msg("Numerical overflow")]
     NumericalOverflow,
     #[msg("Borrower not specified")]
-    BorrowerNotSpecified
+    BorrowerNotSpecified,
+    #[msg("Invalid escrow balance")]
+    InvalidEscrowBalance,
 }

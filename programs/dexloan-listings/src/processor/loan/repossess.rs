@@ -1,6 +1,6 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{Loan, LoanState};
+use crate::state::{Loan, LoanState, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
 
@@ -23,6 +23,16 @@ pub struct RepossessCollateral<'info> {
         constraint = loan_account.borrower == borrower.key()
     )]
     pub loan_account: Account<'info, Loan>,
+    #[account(
+        mut,
+        seeds = [
+            TokenManager::PREFIX,
+            mint.key().as_ref(),
+            borrower.key().as_ref()
+        ],
+        bump,
+    )]   
+    pub token_manager_account: Account<'info, TokenManager>,
     pub mint: Account<'info, Mint>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,

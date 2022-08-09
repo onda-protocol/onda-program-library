@@ -1,6 +1,6 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{Hire, HireState};
+use crate::state::{Hire, HireState, TokenManager};
 use crate::utils::*;
 
 #[derive(Accounts)]
@@ -24,8 +24,19 @@ pub struct CloseHire<'info> {
     pub hire_account: Account<'info, Hire>,
     #[account(
         mut,
+        seeds = [
+            TokenManager::PREFIX,
+            mint.key().as_ref(),
+            lender.key().as_ref()
+        ],
+        bump,
+    )]   
+    pub token_manager_account: Account<'info, TokenManager>,
+    #[account(
+        mut,
         associated_token::mint = mint,
-        associated_token::authority = lender
+        associated_token::authority = lender,
+        constraint = deposit_token_account.amount == 1,
     )]
     pub deposit_token_account: Account<'info, TokenAccount>,
     pub mint: Account<'info, Mint>,
@@ -41,34 +52,17 @@ pub struct CloseHire<'info> {
 
 
 pub fn handle_close_hire(ctx: Context<CloseHire>) -> Result<()> {
-  let hire = &mut ctx.accounts.hire_account;
+  let token_manager = &mut ctx.accounts.token_manager_account;
 
-  let signer_bump = &[hire.bump];
-  let signer_seeds = &[&[
-      Hire::PREFIX,
-      hire.mint.as_ref(),
-      hire.lender.as_ref(),
-      signer_bump
-  ][..]];
+  token_manager.accounts.hire = false;
 
-  thaw(
-      FreezeParams {
-          delegate: hire.to_account_info(),
-          token_account: ctx.accounts.deposit_token_account.to_account_info(),
-          edition: ctx.accounts.edition.to_account_info(),
-          mint: ctx.accounts.mint.to_account_info(),
-          signer_seeds: signer_seeds
-      }
-  )?;
-
-  anchor_spl::token::revoke(
-      CpiContext::new(
-          ctx.accounts.token_program.to_account_info(),
-          anchor_spl::token::Revoke {
-              source: ctx.accounts.deposit_token_account.to_account_info(),
-              authority: ctx.accounts.lender.to_account_info(),
-          }
-      )
+  thaw_and_revoke_token_account(
+    token_manager,
+    ctx.accounts.token_program.to_account_info(),
+    ctx.accounts.deposit_token_account.to_account_info(),
+    ctx.accounts.lender.to_account_info(),
+    ctx.accounts.mint.to_account_info(),
+    ctx.accounts.edition.to_account_info()
   )?;
 
   Ok(())

@@ -3,7 +3,7 @@ use anchor_lang::{
   solana_program::program_option::{COption}
 };
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{CallOption, CallOptionState};
+use crate::state::{CallOption, CallOptionState, TokenManager};
 
 #[derive(Accounts)]
 pub struct BuyCallOption<'info> {
@@ -26,7 +26,17 @@ pub struct BuyCallOption<'info> {
         constraint = call_option_account.mint == mint.key(),
         constraint = call_option_account.state == CallOptionState::Listed,
     )]
-    pub call_option_account: Account<'info, CallOption>,    
+    pub call_option_account: Account<'info, CallOption>,   
+    #[account(
+        mut,
+        seeds = [
+            TokenManager::PREFIX,
+            mint.key().as_ref(),
+            seller.key().as_ref()
+        ],
+        bump,
+    )]   
+    pub token_manager_account: Account<'info, TokenManager>, 
     #[account(
         mut,
         constraint = deposit_token_account.amount == 1,

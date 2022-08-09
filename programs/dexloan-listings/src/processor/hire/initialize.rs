@@ -1,6 +1,6 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{Hire, HireState};
+use crate::state::{Hire, HireState, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
 
@@ -33,6 +33,18 @@ pub struct InitHire<'info> {
       bump,
   )]
   pub hire_account: Account<'info, Hire>,    
+  #[account(
+    init_if_needed,
+    payer = lender,
+    seeds = [
+        TokenManager::PREFIX,
+        mint.key().as_ref(),
+        lender.key().as_ref()
+    ],
+    space = TokenManager::space(),
+    bump,
+)]   
+pub token_manager_account: Account<'info, TokenManager>,
   #[account(constraint = mint.supply == 1)]
   pub mint: Account<'info, Mint>,
   /// CHECK: validated in cpi
@@ -51,6 +63,7 @@ pub fn handle_init_hire(
   args: HireArgs,
 ) -> Result<()> {
   let hire = &mut ctx.accounts.hire_account;
+  let token_manager = &mut ctx.accounts.token_manager_account;
   let unix_timestamp = ctx.accounts.clock.unix_timestamp;
   
   msg!("expiry: {}", args.expiry);
@@ -71,41 +84,21 @@ pub fn handle_init_hire(
   hire.amount = args.amount;
   hire.expiry = args.expiry;
   hire.state = HireState::Listed;
-
+  //
   if args.borrower.is_some() {
     hire.borrower = args.borrower;
   }
+  //
+  token_manager.accounts.hire = true;
 
-  // Delegate authority
-  anchor_spl::token::approve(
-      CpiContext::new(
-          ctx.accounts.token_program.to_account_info(),
-          anchor_spl::token::Approve {
-              to: ctx.accounts.deposit_token_account.to_account_info(),
-              delegate: hire.to_account_info(),
-              authority: ctx.accounts.lender.to_account_info(),
-          }
-      ),
-      1
-  )?;
-
-  let signer_bump = &[hire.bump];
-  let signer_seeds = &[&[
-      Hire::PREFIX,
-      hire.mint.as_ref(),
-      hire.lender.as_ref(),
-      signer_bump
-  ][..]];
-
-  freeze(
-      FreezeParams {
-          delegate: hire.to_account_info(),
-          token_account: ctx.accounts.deposit_token_account.to_account_info(),
-          edition: ctx.accounts.edition.to_account_info(),
-          mint: ctx.accounts.mint.to_account_info(),
-          signer_seeds: signer_seeds
-      }
-  )?;
+  delegate_and_freeze_token_account(
+    token_manager,
+    ctx.accounts.token_program.to_account_info(),
+    ctx.accounts.deposit_token_account.to_account_info(),
+    ctx.accounts.lender.to_account_info(),
+    ctx.accounts.edition.to_account_info(),
+    ctx.accounts.mint.to_account_info()
+)?;
 
   Ok(())
 }

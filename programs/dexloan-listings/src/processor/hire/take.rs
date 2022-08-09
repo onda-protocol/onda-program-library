@@ -1,6 +1,6 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{Hire, HireState};
+use crate::state::{Hire, HireState, TokenManager};
 use crate::error::{DexloanError};
 use crate::constants::*;
 use crate::utils::*;
@@ -34,7 +34,17 @@ pub struct TakeHire <'info> {
         associated_token::mint = mint,
         associated_token::authority = borrower
     )]
-    pub hire_token_account: Account<'info, TokenAccount>, 
+    pub hire_token_account: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        seeds = [
+            TokenManager::PREFIX,
+            mint.key().as_ref(),
+            lender.key().as_ref()
+        ],
+        bump,
+    )]   
+    pub token_manager_account: Account<'info, TokenManager>,  
     #[account(constraint = mint.supply == 1)]
     pub mint: Account<'info, Mint>,
     /// CHECK: validated in cpi
@@ -51,7 +61,8 @@ pub struct TakeHire <'info> {
 
 pub fn handle_take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>, days: u16) -> Result<()> {
     let hire = &mut ctx.accounts.hire_account;
-    let start_date = ctx.accounts.clock.unix_timestamp;
+    let token_manager = &mut ctx.accounts.token_manager_account;
+    let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
     hire.state = HireState::Hired;
 
@@ -62,94 +73,84 @@ pub fn handle_take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>,
     }
 
     let duration = i64::from(days) * SECONDS_PER_DAY;
-    let current_expiry = start_date + duration;
+    let current_expiry = unix_timestamp + duration;
 
     if current_expiry > hire.expiry {
         return err!(DexloanError::InvalidExpiry)
     }
 
-    msg!("duration {}", duration);
+    hire.current_start = Some(unix_timestamp);
     hire.current_expiry = Some(current_expiry);
-
 
     if hire.amount > 0 {
         let amount = u64::from(days) * hire.amount;
-        msg!("amount {}", amount);
 
-        let remaining_amount = pay_creator_fees(
-            &mut ctx.remaining_accounts.iter(),
-            amount,
-            &ctx.accounts.mint.to_account_info(),
-            &ctx.accounts.metadata.to_account_info(),
-            &ctx.accounts.borrower.to_account_info(),
-        )?;
-    
-        // Transfer fee
-        anchor_lang::solana_program::program::invoke(
-            &anchor_lang::solana_program::system_instruction::transfer(
-                &hire.borrower.unwrap(),
-                &hire.lender,
-                remaining_amount,
-            ),
-            &[
-                ctx.accounts.borrower.to_account_info(),
-                ctx.accounts.lender.to_account_info(),
-            ]
+        // If call option or loan is active amount is withheld in escrow
+        if token_manager.accounts.call_option == true || token_manager.accounts.loan == true {
+            msg!("Transferring {} lamports to hire escrow", amount);
+
+            hire.escrow_balance = hire.escrow_balance + amount;
+
+            anchor_lang::solana_program::program::invoke(
+                &anchor_lang::solana_program::system_instruction::transfer(
+                    &hire.borrower.unwrap(),
+                    &hire.key(),
+                    amount,
+                ),
+                &[
+                    ctx.accounts.borrower.to_account_info(),
+                    hire.to_account_info(),
+                ]
+            )?;
+        } else {
+            let remaining_amount = pay_creator_fees(
+                &mut ctx.remaining_accounts.iter(),
+                amount,
+                &ctx.accounts.mint.to_account_info(),
+                &ctx.accounts.metadata.to_account_info(),
+                &ctx.accounts.borrower.to_account_info(),
+            )?;
+            msg!("Transferring {} lamports to lender", remaining_amount);
+        
+            anchor_lang::solana_program::program::invoke(
+                &anchor_lang::solana_program::system_instruction::transfer(
+                    &hire.borrower.unwrap(),
+                    &hire.lender,
+                    remaining_amount,
+                ),
+                &[
+                    ctx.accounts.borrower.to_account_info(),
+                    ctx.accounts.lender.to_account_info(),
+                ]
+            )?;
+        }
+
+    }
+
+    if hire.escrow_balance > 0 {
+        withdraw_from_escrow_balance(
+            hire,
+            ctx.accounts.lender.to_account_info(),
+            unix_timestamp,
         )?;
     }
 
-    // Thaw & Transfer NFT to hire account
-    let signer_bump = &[hire.bump];
-    let signer_seeds = &[&[
-        Hire::PREFIX,
-        hire.mint.as_ref(),
-        hire.lender.as_ref(),
-        signer_bump
-    ][..]];
-
-    thaw(
-        FreezeParams {
-            delegate: hire.to_account_info(),
-            token_account: ctx.accounts.deposit_token_account.to_account_info(),
-            edition: ctx.accounts.edition.to_account_info(),
-            mint: ctx.accounts.mint.to_account_info(),
-            signer_seeds,
-        }
-    )?;
-    anchor_spl::token::transfer(
-        CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            anchor_spl::token::Transfer {
-                from: ctx.accounts.deposit_token_account.to_account_info(),
-                to: ctx.accounts.hire_token_account.to_account_info(),
-                authority: hire.to_account_info(),
-            },
-            signer_seeds
-        ),
-        1
+    thaw_and_transfer_from_token_account(
+        token_manager,
+        ctx.accounts.token_program.to_account_info(),
+        ctx.accounts.deposit_token_account.to_account_info(),
+        ctx.accounts.hire_token_account.to_account_info(),
+        ctx.accounts.edition.to_account_info(),
+        ctx.accounts.mint.to_account_info()
     )?;
 
-    // Delegate authority & freeze hire token account
-    anchor_spl::token::approve(
-        CpiContext::new(
-            ctx.accounts.token_program.to_account_info(),
-            anchor_spl::token::Approve {
-                to: ctx.accounts.hire_token_account.to_account_info(),
-                delegate: hire.to_account_info(),
-                authority: ctx.accounts.borrower.to_account_info(),
-            }
-        ),
-        1
-    )?;
-
-    freeze(
-        FreezeParams {
-            delegate: hire.to_account_info(),
-            token_account: ctx.accounts.hire_token_account.to_account_info(),
-            edition: ctx.accounts.edition.to_account_info(),
-            mint: ctx.accounts.mint.to_account_info(),
-            signer_seeds: signer_seeds
-        }
+    delegate_and_freeze_token_account(
+        token_manager,
+        ctx.accounts.token_program.to_account_info(),
+        ctx.accounts.hire_token_account.to_account_info(),
+        ctx.accounts.borrower.to_account_info(),
+        ctx.accounts.edition.to_account_info(),
+        ctx.accounts.mint.to_account_info()
     )?;
 
     Ok(())

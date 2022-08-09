@@ -1,6 +1,6 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token};
-use crate::state::{Loan, LoanState};
+use crate::state::{Loan, LoanState, TokenManager};
 
 #[derive(Accounts)]
 pub struct GiveLoan<'info> {
@@ -24,6 +24,16 @@ pub struct GiveLoan<'info> {
         constraint = loan_account.state == LoanState::Listed,
     )]
     pub loan_account: Account<'info, Loan>,
+    #[account(
+        mut,
+        seeds = [
+            TokenManager::PREFIX,
+            mint.key().as_ref(),
+            borrower.key().as_ref()
+        ],
+        bump,
+    )]   
+    pub token_manager_account: Account<'info, TokenManager>,
     pub mint: Account<'info, Mint>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,

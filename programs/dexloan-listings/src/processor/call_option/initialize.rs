@@ -1,6 +1,6 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{CallOption, CallOptionState};
+use crate::state::{CallOption, CallOptionState, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
 
@@ -28,7 +28,19 @@ pub struct InitCallOption<'info> {
         space = CallOption::space(),
         bump,
     )]
-    pub call_option_account: Account<'info, CallOption>,    
+    pub call_option_account: Account<'info, CallOption>, 
+    #[account(
+        init_if_needed,
+        payer = seller,
+        seeds = [
+            TokenManager::PREFIX,
+            mint.key().as_ref(),
+            seller.key().as_ref()
+        ],
+        space = TokenManager::space(),
+        bump,
+    )]   
+    pub token_manager_account: Account<'info, TokenManager>,
     #[account(constraint = mint.supply == 1)]
     pub mint: Account<'info, Mint>,
     /// CHECK: validated in cpi
@@ -49,6 +61,7 @@ pub fn handle_init_call_option(
   expiry: i64
 ) -> Result<()> {
   let call_option = &mut ctx.accounts.call_option_account;
+  let token_manager = &mut ctx.accounts.token_manager_account;
   let unix_timestamp = ctx.accounts.clock.unix_timestamp;
   
   msg!("unix_timestamp: {} seconds", unix_timestamp);
@@ -67,35 +80,16 @@ pub fn handle_init_call_option(
   call_option.expiry = expiry;
   call_option.strike_price = strike_price;
   call_option.state = CallOptionState::Listed;
-  // Delegate authority
-  anchor_spl::token::approve(
-      CpiContext::new(
-          ctx.accounts.token_program.to_account_info(),
-          anchor_spl::token::Approve {
-              to: ctx.accounts.deposit_token_account.to_account_info(),
-              delegate: call_option.to_account_info(),
-              authority: ctx.accounts.seller.to_account_info(),
-          }
-      ),
-      1
-  )?;
+  //
+  token_manager.accounts.call_option = true;
 
-  let signer_bump = &[call_option.bump];
-  let signer_seeds = &[&[
-      CallOption::PREFIX,
-      call_option.mint.as_ref(),
-      call_option.seller.as_ref(),
-      signer_bump
-  ][..]];
-
-  freeze(
-      FreezeParams {
-          delegate: call_option.to_account_info(),
-          token_account: ctx.accounts.deposit_token_account.to_account_info(),
-          edition: ctx.accounts.edition.to_account_info(),
-          mint: ctx.accounts.mint.to_account_info(),
-          signer_seeds: signer_seeds
-      }
+  delegate_and_freeze_token_account(
+    token_manager,
+    ctx.accounts.token_program.to_account_info(),
+    ctx.accounts.deposit_token_account.to_account_info(),
+    ctx.accounts.seller.to_account_info(),
+    ctx.accounts.mint.to_account_info(),
+    ctx.accounts.edition.to_account_info(),
   )?;
 
   Ok(())

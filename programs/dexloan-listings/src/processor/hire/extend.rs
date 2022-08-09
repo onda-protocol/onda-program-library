@@ -1,37 +1,47 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token};
-use crate::state::{Hire, HireState};
+use crate::state::{Hire, HireState, TokenManager};
 use crate::constants::*;
 use crate::utils::*;
 
 #[derive(Accounts)]
 #[instruction(days: u16)]
 pub struct ExtendHire<'info> {
-  #[account(mut)]
-  /// CHECK: validated seeds constraints
-  pub lender: AccountInfo<'info>,
-  #[account(mut)]
-  pub borrower: Signer<'info>,
-  #[account(
-      mut,
-      seeds = [
-        Hire::PREFIX,
-        mint.key().as_ref(),
-        lender.key().as_ref(),
-      ],
-      bump,
-      constraint = hire_account.state == HireState::Hired,
-      constraint = hire_account.borrower.is_some() && hire_account.borrower.unwrap() == borrower.key(), 
-  )]
-  pub hire_account: Account<'info, Hire>,   
-  #[account(constraint = mint.supply == 1)]
-  pub mint: Account<'info, Mint>,
-  /// CHECK: deserialized and checked
-  pub metadata: UncheckedAccount<'info>,
-  /// Misc
-  pub system_program: Program<'info, System>,
-  pub token_program: Program<'info, Token>,
-  pub clock: Sysvar<'info, Clock>,
+    #[account(mut)]
+    /// CHECK: validated seeds constraints
+    pub lender: AccountInfo<'info>,
+    #[account(mut)]
+    pub borrower: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [
+            Hire::PREFIX,
+            mint.key().as_ref(),
+            lender.key().as_ref(),
+        ],
+        bump,
+        constraint = hire_account.state == HireState::Hired,
+        constraint = hire_account.borrower.is_some() && hire_account.borrower.unwrap() == borrower.key(), 
+    )]
+    pub hire_account: Account<'info, Hire>,   
+    #[account(
+        mut,
+        seeds = [
+            TokenManager::PREFIX,
+            mint.key().as_ref(),
+            lender.key().as_ref()
+        ],
+        bump,
+    )]   
+    pub token_manager_account: Account<'info, TokenManager>,
+    #[account(constraint = mint.supply == 1)]
+    pub mint: Account<'info, Mint>,
+    /// CHECK: deserialized and checked
+    pub metadata: UncheckedAccount<'info>,
+    /// Misc
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+    pub clock: Sysvar<'info, Clock>,
 }
 
 pub fn handle_extend_hire<'info>(ctx: Context<'_, '_, '_, 'info, ExtendHire<'info>>, days: u16) -> Result<()> {
