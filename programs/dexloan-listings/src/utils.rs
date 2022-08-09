@@ -229,9 +229,11 @@ pub fn withdraw_from_escrow_balance<'info>(
 ) -> Result<u64> {
     require_keys_eq!(lender.key(), hire.lender);
     require!(hire.escrow_balance > 0, DexloanError::InvalidEscrowBalance);
+    require!(hire.current_start.is_some(), DexloanError::InvalidState);
+    require!(hire.current_expiry.is_some(), DexloanError::InvalidState);
 
     let start = hire.current_start.unwrap();
-    let end = hire.current_start.unwrap();
+    let end = hire.current_expiry.unwrap();
     let pro_rata_amount = ((unix_timestamp - start) / (end - start)).checked_mul(hire.escrow_balance as i64).ok_or(DexloanError::NumericalOverflow).unwrap();
 
     msg!("Withdrawing {} from escrow balance ", pro_rata_amount);

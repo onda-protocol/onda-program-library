@@ -64,7 +64,14 @@ pub fn handle_take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>,
     let token_manager = &mut ctx.accounts.token_manager_account;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
-    hire.state = HireState::Hired;
+
+    if hire.escrow_balance > 0 {
+        withdraw_from_escrow_balance(
+            hire,
+            ctx.accounts.lender.to_account_info(),
+            unix_timestamp,
+        )?;
+    }
 
     if hire.borrower.is_some() {
         require_keys_eq!(hire.borrower.unwrap(), ctx.accounts.borrower.key());
@@ -81,6 +88,7 @@ pub fn handle_take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>,
 
     hire.current_start = Some(unix_timestamp);
     hire.current_expiry = Some(current_expiry);
+    hire.state = HireState::Hired;
 
     if hire.amount > 0 {
         let amount = u64::from(days) * hire.amount;
@@ -125,14 +133,6 @@ pub fn handle_take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>,
             )?;
         }
 
-    }
-
-    if hire.escrow_balance > 0 {
-        withdraw_from_escrow_balance(
-            hire,
-            ctx.accounts.lender.to_account_info(),
-            unix_timestamp,
-        )?;
     }
 
     thaw_and_transfer_from_token_account(

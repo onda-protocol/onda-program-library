@@ -2,6 +2,7 @@ use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token};
 use crate::state::{Hire, HireState, TokenManager};
 use crate::constants::*;
+use crate::error::*;
 use crate::utils::*;
 
 #[derive(Accounts)]
@@ -46,12 +47,30 @@ pub struct ExtendHire<'info> {
 
 pub fn handle_extend_hire<'info>(ctx: Context<'_, '_, '_, 'info, ExtendHire<'info>>, days: u16) -> Result<()> {
     let hire = &mut ctx.accounts.hire_account;
+    let unix_timestamp = ctx.accounts.clock.unix_timestamp;
+
+    require!(hire.current_start.is_some(), DexloanError::InvalidState);
+    require!(hire.current_expiry.is_some(), DexloanError::InvalidState);
+
+    if hire.escrow_balance > 0 {
+        withdraw_from_escrow_balance(
+            hire,
+            ctx.accounts.lender.to_account_info(),
+            unix_timestamp,
+        )?;
+    }
 
     let amount = u64::from(days) * hire.amount;
     let duration = i64::from(days) * SECONDS_PER_DAY;
-
-    let new_current_expiry = hire.current_expiry.unwrap() + duration;
+    let current_expiry = hire.current_expiry.unwrap();
+    let new_current_expiry = if current_expiry > unix_timestamp {
+        current_expiry + duration
+    } else {
+        unix_timestamp + duration
+    };
+    
     hire.current_expiry = Some(new_current_expiry);
+    hire.current_start = Some(unix_timestamp);
 
     let remaining_amount = pay_creator_fees(
         &mut ctx.remaining_accounts.iter(),

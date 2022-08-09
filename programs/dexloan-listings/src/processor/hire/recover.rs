@@ -62,21 +62,8 @@ pub fn handle_recover_hire(ctx: Context<RecoverHire>) -> Result<()> {
     let token_manager = &mut ctx.accounts.token_manager_account;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
-    if !hire.current_expiry.is_some() {
-        return err!(DexloanError::NumericalOverflow)
-    }
-
-    let current_expiry = hire.current_expiry.unwrap();
-    msg!("current_expiry {}", current_expiry);
-    msg!("unix_timestamp {}", unix_timestamp);
-    if current_expiry > unix_timestamp {
-        return Err(DexloanError::NotExpired.into());
-    }
-
-    hire.current_start = None;
-    hire.current_expiry = None;
-    hire.borrower = None;
-    hire.state = HireState::Listed;
+    require!(hire.current_start.is_some(), DexloanError::InvalidState);
+    require!(hire.current_expiry.is_some(), DexloanError::InvalidState);
 
     if hire.escrow_balance > 0 {
         withdraw_from_escrow_balance(
@@ -85,6 +72,17 @@ pub fn handle_recover_hire(ctx: Context<RecoverHire>) -> Result<()> {
             unix_timestamp,
         )?;
     }
+
+    let current_expiry = hire.current_expiry.unwrap();
+
+    if current_expiry > unix_timestamp {
+        return Err(DexloanError::NotExpired.into());
+    }
+
+    hire.current_start = None;
+    hire.current_expiry = None;
+    hire.borrower = None;
+    hire.state = HireState::Listed;
 
     thaw_and_transfer_from_token_account(
         token_manager,
