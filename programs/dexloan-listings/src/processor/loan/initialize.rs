@@ -64,7 +64,8 @@ pub fn handle_init_loan(
     // Init
     loan.mint = ctx.accounts.mint.key();
     loan.borrower = ctx.accounts.borrower.key();
-    loan.bump = *ctx.bumps.get("loan_account").unwrap();
+    loan.bump = *ctx.bumps.get("loan").unwrap();
+    token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
     //
     loan.amount = amount;
     loan.basis_points = basis_points;

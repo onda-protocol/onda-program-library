@@ -77,7 +77,8 @@ pub fn handle_init_hire(
     // Init
     hire.lender = ctx.accounts.lender.key();
     hire.mint = ctx.accounts.mint.key();
-    hire.bump = *ctx.bumps.get("hire_account").unwrap();
+    hire.bump = *ctx.bumps.get("hire").unwrap();
+    token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
     //
     hire.amount = args.amount;
     hire.expiry = args.expiry;

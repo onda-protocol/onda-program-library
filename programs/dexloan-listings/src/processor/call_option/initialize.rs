@@ -71,7 +71,8 @@ pub fn handle_init_call_option(
   // Init
   call_option.seller = ctx.accounts.seller.key();
   call_option.mint = ctx.accounts.mint.key();
-  call_option.bump = *ctx.bumps.get("call_option_account").unwrap();
+  call_option.bump = *ctx.bumps.get("call_option").unwrap();
+  token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
   //
   call_option.amount = amount;
   call_option.expiry = expiry;

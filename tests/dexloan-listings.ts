@@ -14,8 +14,8 @@ describe("dexloan_listings", () => {
     anchor.AnchorProvider.defaultOptions().preflightCommitment
   );
 
-  describe("Loans", () => {
-    describe("Loan repossessions", () => {
+  describe.only("Loans", () => {
+    describe.only("Loan repossessions", () => {
       let borrower: Awaited<ReturnType<typeof helpers.initLoan>>;
       let lender: Awaited<ReturnType<typeof helpers.giveLoan>>;
       let options;
@@ -127,13 +127,14 @@ describe("dexloan_listings", () => {
 
         try {
           await program.methods
-            .repossessCollateral()
+            .repossess()
             .accounts({
               borrower: borrower.keypair.publicKey,
               depositTokenAccount: borrower.depositTokenAccount,
               lender: lender.keypair.publicKey,
               lenderTokenAccount: tokenAccount.address,
-              loanAccount: borrower.loanAccount,
+              loan: borrower.loanAccount,
+              tokenManager: borrower.tokenManager,
               mint: borrower.mint,
               edition: borrower.edition,
               metadataProgram: METADATA_PROGRAM_ID,
@@ -165,13 +166,14 @@ describe("dexloan_listings", () => {
 
         try {
           await lender.program.methods
-            .repossessCollateral()
+            .repossess()
             .accounts({
               borrower: borrower.keypair.publicKey,
               depositTokenAccount: borrower.depositTokenAccount,
               lender: lender.keypair.publicKey,
               lenderTokenAccount: tokenAccount.address,
-              loanAccount: borrower.loanAccount,
+              loan: borrower.loanAccount,
+              tokenManager: borrower.tokenManager,
               mint: loan.mint,
               edition: borrower.edition,
               metadataProgram: METADATA_PROGRAM_ID,
@@ -204,7 +206,8 @@ describe("dexloan_listings", () => {
             .accounts({
               borrower: borrower.keypair.publicKey,
               depositTokenAccount: borrower.depositTokenAccount,
-              loanAccount: borrower.loanAccount,
+              loan: borrower.loanAccount,
+              tokenManager: borrower.tokenManager,
               mint: borrower.mint,
               edition: borrower.edition,
               metadataProgram: METADATA_PROGRAM_ID,
@@ -267,7 +270,8 @@ describe("dexloan_listings", () => {
           await borrower.program.methods
             .closeLoan()
             .accounts({
-              loanAccount: borrower.loanAccount,
+              loan: borrower.loanAccount,
+              tokenManager: borrower.tokenManager,
               borrower: borrower.keypair.publicKey,
               depositTokenAccount: borrower.depositTokenAccount,
               mint: borrower.mint,
@@ -298,7 +302,8 @@ describe("dexloan_listings", () => {
         await borrower.program.methods
           .initLoan(amount, basisPoints, duration)
           .accounts({
-            loanAccount: borrower.loanAccount,
+            loan: borrower.loanAccount,
+            tokenManager: borrower.tokenManager,
             depositTokenAccount: borrower.depositTokenAccount,
             mint: borrower.mint,
             borrower: borrower.keypair.publicKey,
@@ -373,13 +378,14 @@ describe("dexloan_listings", () => {
 
         try {
           await lender.program.methods
-            .repossessCollateral()
+            .repossess()
             .accounts({
               borrower: borrower.keypair.publicKey,
               depositTokenAccount: borrower.depositTokenAccount,
               lender: lender.keypair.publicKey,
               lenderTokenAccount: tokenAccount.address,
-              loanAccount: borrower.loanAccount,
+              loan: borrower.loanAccount,
+              tokenManager: borrower.tokenManager,
               mint: borrower.mint,
               edition: borrower.edition,
               metadataProgram: METADATA_PROGRAM_ID,
@@ -406,7 +412,8 @@ describe("dexloan_listings", () => {
         await borrower.program.methods
           .repayLoan()
           .accounts({
-            loanAccount: borrower.loanAccount,
+            loan: borrower.loanAccount,
+            tokenManager: borrower.tokenManager,
             borrower: borrower.keypair.publicKey,
             depositTokenAccount: borrower.depositTokenAccount,
             lender: lender.keypair.publicKey,
@@ -455,7 +462,8 @@ describe("dexloan_listings", () => {
               new anchor.BN(1)
             )
             .accounts({
-              loanAccount: borrower.loanAccount,
+              loan: borrower.loanAccount,
+              tokenManager: borrower.tokenManager,
               depositTokenAccount: borrower.depositTokenAccount,
               mint: borrower.mint,
               borrower: borrower.keypair.publicKey,
@@ -600,7 +608,8 @@ describe("dexloan_listings", () => {
             .accounts({
               seller: seller.keypair.publicKey,
               buyer: buyer.keypair.publicKey,
-              callOptionAccount: seller.callOptionAccount,
+              callOption: seller.callOptionAccount,
+              tokenManager: seller.tokenManager,
               buyerTokenAccount: tokenAccount.address,
               depositTokenAccount: seller.depositTokenAccount,
               mint: seller.mint,
@@ -746,7 +755,8 @@ describe("dexloan_listings", () => {
               seller: seller.keypair.publicKey,
               buyer: buyer.keypair.publicKey,
               buyerTokenAccount: tokenAccount.address,
-              callOptionAccount: seller.callOptionAccount,
+              callOption: seller.callOptionAccount,
+              tokenManager: seller.tokenManager,
               mint: seller.mint,
               edition: seller.edition,
               metadataProgram: METADATA_PROGRAM_ID,
@@ -860,7 +870,8 @@ describe("dexloan_listings", () => {
             .accounts({
               borrower: newKeypair.publicKey,
               lender: lender.keypair.publicKey,
-              hireAccount: lender.hireAccount,
+              hire: lender.hireAccount,
+              tokenManager: lender.tokenManager,
               depositTokenAccount: lender.depositTokenAccount,
               hireTokenAccount: tokenAccount.address,
               mint: lender.mint,
