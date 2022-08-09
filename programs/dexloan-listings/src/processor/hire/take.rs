@@ -21,20 +21,22 @@ pub struct TakeHire <'info> {
           lender.key().as_ref(),
         ],
         bump,
+        has_one = mint,
+        has_one = lender,
     )]
-    pub hire_account: Account<'info, Hire>,   
+    pub hire: Box<Account<'info, Hire>>,   
     #[account(
         mut,
         associated_token::mint = mint,
         associated_token::authority = lender
     )]
-    pub deposit_token_account: Account<'info, TokenAccount>,
+    pub deposit_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
         associated_token::mint = mint,
         associated_token::authority = borrower
     )]
-    pub hire_token_account: Account<'info, TokenAccount>,
+    pub hire_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
         seeds = [
@@ -44,9 +46,9 @@ pub struct TakeHire <'info> {
         ],
         bump,
     )]   
-    pub token_manager_account: Account<'info, TokenManager>,  
+    pub token_manager: Box<Account<'info, TokenManager>>,  
     #[account(constraint = mint.supply == 1)]
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
     /// CHECK: deserialized and checked
@@ -60,8 +62,8 @@ pub struct TakeHire <'info> {
 }
 
 pub fn handle_take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>, days: u16) -> Result<()> {
-    let hire = &mut ctx.accounts.hire_account;
-    let token_manager = &mut ctx.accounts.token_manager_account;
+    let hire = &mut ctx.accounts.hire;
+    let token_manager = &mut ctx.accounts.token_manager;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
 
@@ -93,17 +95,25 @@ pub fn handle_take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>,
     if hire.amount > 0 {
         let amount = u64::from(days) * hire.amount;
 
+        let remaining_amount = pay_creator_fees(
+            &mut ctx.remaining_accounts.iter(),
+            amount,
+            &ctx.accounts.mint.to_account_info(),
+            &ctx.accounts.metadata.to_account_info(),
+            &ctx.accounts.borrower.to_account_info(),
+        )?;
+
         // If call option or loan is active amount is withheld in escrow
         if token_manager.accounts.call_option == true || token_manager.accounts.loan == true {
-            msg!("Transferring {} lamports to hire escrow", amount);
+            msg!("Transferring {} lamports to hire escrow", remaining_amount);
 
-            hire.escrow_balance = hire.escrow_balance + amount;
+            hire.escrow_balance = hire.escrow_balance + remaining_amount;
 
             anchor_lang::solana_program::program::invoke(
                 &anchor_lang::solana_program::system_instruction::transfer(
                     &hire.borrower.unwrap(),
                     &hire.key(),
-                    amount,
+                    remaining_amount,
                 ),
                 &[
                     ctx.accounts.borrower.to_account_info(),
@@ -111,13 +121,6 @@ pub fn handle_take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>,
                 ]
             )?;
         } else {
-            let remaining_amount = pay_creator_fees(
-                &mut ctx.remaining_accounts.iter(),
-                amount,
-                &ctx.accounts.mint.to_account_info(),
-                &ctx.accounts.metadata.to_account_info(),
-                &ctx.accounts.borrower.to_account_info(),
-            )?;
             msg!("Transferring {} lamports to lender", remaining_amount);
         
             anchor_lang::solana_program::program::invoke(
@@ -141,7 +144,8 @@ pub fn handle_take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>,
         ctx.accounts.deposit_token_account.to_account_info(),
         ctx.accounts.hire_token_account.to_account_info(),
         ctx.accounts.edition.to_account_info(),
-        ctx.accounts.mint.to_account_info()
+        ctx.accounts.mint.to_account_info(),
+        ctx.accounts.lender.to_account_info()
     )?;
 
     delegate_and_freeze_token_account(

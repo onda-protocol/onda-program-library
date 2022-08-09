@@ -21,10 +21,12 @@ pub struct ExtendHire<'info> {
             lender.key().as_ref(),
         ],
         bump,
-        constraint = hire_account.state == HireState::Hired,
-        constraint = hire_account.borrower.is_some() && hire_account.borrower.unwrap() == borrower.key(), 
+        has_one = mint,
+        has_one = lender,
+        constraint = hire.state == HireState::Hired,
+        constraint = hire.borrower.is_some() && hire.borrower.unwrap() == borrower.key(), 
     )]
-    pub hire_account: Account<'info, Hire>,   
+    pub hire: Box<Account<'info, Hire>>,   
     #[account(
         mut,
         seeds = [
@@ -34,9 +36,9 @@ pub struct ExtendHire<'info> {
         ],
         bump,
     )]   
-    pub token_manager_account: Account<'info, TokenManager>,
+    pub token_manager: Box<Account<'info, TokenManager>>,
     #[account(constraint = mint.supply == 1)]
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
     /// CHECK: deserialized and checked
     pub metadata: UncheckedAccount<'info>,
     /// Misc
@@ -46,7 +48,7 @@ pub struct ExtendHire<'info> {
 }
 
 pub fn handle_extend_hire<'info>(ctx: Context<'_, '_, '_, 'info, ExtendHire<'info>>, days: u16) -> Result<()> {
-    let hire = &mut ctx.accounts.hire_account;
+    let hire = &mut ctx.accounts.hire;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
     require!(hire.current_start.is_some(), DexloanError::InvalidState);

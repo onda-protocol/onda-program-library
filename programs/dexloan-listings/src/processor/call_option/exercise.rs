@@ -20,11 +20,13 @@ pub struct ExerciseCallOption<'info> {
             mint.key().as_ref(),
             seller.key().as_ref(),
         ],
-        constraint = call_option_account.buyer == buyer.key(),
-        constraint = call_option_account.state == CallOptionState::Active,
         bump,
+        has_one = mint,
+        has_one = seller,
+        has_one = buyer,
+        constraint = call_option.state == CallOptionState::Active,
     )]
-    pub call_option_account: Account<'info, CallOption>,
+    pub call_option: Box<Account<'info, CallOption>>,
     #[account(
         seeds = [
             TokenManager::PREFIX,
@@ -32,23 +34,23 @@ pub struct ExerciseCallOption<'info> {
             seller.key().as_ref()
         ],
         bump,
-        constraint = token_manager_account.accounts.hire != true,
-        constraint = token_manager_account.accounts.call_option == true,
+        constraint = token_manager.accounts.hire != true,
+        constraint = token_manager.accounts.call_option == true,
     )]   
-    pub token_manager_account: Account<'info, TokenManager>,
+    pub token_manager: Box<Account<'info, TokenManager>>,
     #[account(
         mut,
         associated_token::mint = mint,
         associated_token::authority = buyer
     )]
-    pub buyer_token_account: Account<'info, TokenAccount>,
+    pub buyer_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
         associated_token::mint = mint,
         associated_token::authority = seller
     )]
-    pub deposit_token_account: Account<'info, TokenAccount>,
-    pub mint: Account<'info, Mint>,
+    pub deposit_token_account: Box<Account<'info, TokenAccount>>,
+    pub mint: Box<Account<'info, Mint>>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
     /// CHECK: deserialized and checked
@@ -64,8 +66,8 @@ pub struct ExerciseCallOption<'info> {
 
 
 pub fn handle_exercise_call_option<'info>(ctx: Context<'_, '_, '_, 'info, ExerciseCallOption<'info>>) -> Result<()> {
-    let call_option = &mut ctx.accounts.call_option_account;
-    let token_manager = &mut ctx.accounts.token_manager_account;
+    let call_option = &mut ctx.accounts.call_option;
+    let token_manager = &mut ctx.accounts.token_manager;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
     msg!("Exercise with strike price: {} lamports", call_option.strike_price);
@@ -75,6 +77,8 @@ pub fn handle_exercise_call_option<'info>(ctx: Context<'_, '_, '_, 'info, Exerci
     }
 
     call_option.state = CallOptionState::Exercised;
+    token_manager.accounts.call_option = false;
+    token_manager.accounts.hire = false;
 
     thaw_and_transfer_from_token_account(
         token_manager,
@@ -82,7 +86,8 @@ pub fn handle_exercise_call_option<'info>(ctx: Context<'_, '_, '_, 'info, Exerci
         ctx.accounts.deposit_token_account.to_account_info(),
         ctx.accounts.buyer_token_account.to_account_info(),
         ctx.accounts.mint.to_account_info(),
-        ctx.accounts.edition.to_account_info()
+        ctx.accounts.edition.to_account_info(),
+        ctx.accounts.seller.to_account_info()
     )?;
 
     let remaining_amount = pay_creator_fees(

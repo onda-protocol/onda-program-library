@@ -16,13 +16,13 @@ pub struct RecoverHire<'info> {
         associated_token::mint = mint,
         associated_token::authority = lender
     )]
-    pub deposit_token_account: Account<'info, TokenAccount>,
+    pub deposit_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
         associated_token::mint = mint,
         associated_token::authority = borrower
     )]
-    pub hire_token_account: Account<'info, TokenAccount>,
+    pub hire_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
         seeds = [
@@ -31,10 +31,12 @@ pub struct RecoverHire<'info> {
           lender.key().as_ref(),
         ],
         bump,
-        constraint = hire_account.state == HireState::Hired,
-        constraint = hire_account.borrower.is_some() && hire_account.borrower.unwrap() == borrower.key(),
+        has_one = mint,
+        has_one = lender,
+        constraint = hire.state == HireState::Hired,
+        constraint = hire.borrower.is_some() && hire.borrower.unwrap() == borrower.key(),
     )]
-    pub hire_account: Account<'info, Hire>,
+    pub hire: Box<Account<'info, Hire>>,
     #[account(
         mut,
         seeds = [
@@ -44,9 +46,9 @@ pub struct RecoverHire<'info> {
         ],
         bump,
     )]   
-    pub token_manager_account: Account<'info, TokenManager>,    
+    pub token_manager: Box<Account<'info, TokenManager>>,    
     #[account(constraint = mint.supply == 1)]
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
@@ -58,8 +60,8 @@ pub struct RecoverHire<'info> {
 }
 
 pub fn handle_recover_hire(ctx: Context<RecoverHire>) -> Result<()> {
-    let hire = &mut ctx.accounts.hire_account;
-    let token_manager = &mut ctx.accounts.token_manager_account;
+    let hire = &mut ctx.accounts.hire;
+    let token_manager = &mut ctx.accounts.token_manager;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
     require!(hire.current_start.is_some(), DexloanError::InvalidState);
@@ -91,6 +93,7 @@ pub fn handle_recover_hire(ctx: Context<RecoverHire>) -> Result<()> {
         ctx.accounts.deposit_token_account.to_account_info(),
         ctx.accounts.mint.to_account_info(),
         ctx.accounts.edition.to_account_info(),
+        ctx.accounts.lender.to_account_info()
     )?;
 
 

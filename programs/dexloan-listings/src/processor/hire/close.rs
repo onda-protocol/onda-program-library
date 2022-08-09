@@ -18,10 +18,12 @@ pub struct CloseHire<'info> {
         ],
         bump,
         close = lender,
-        constraint = hire_account.borrower == None,
-        constraint = hire_account.state != HireState::Hired
+        has_one = mint,
+        has_one = lender,
+        constraint = hire.borrower == None,
+        constraint = hire.state != HireState::Hired
     )]
-    pub hire_account: Account<'info, Hire>,
+    pub hire: Box<Account<'info, Hire>>,
     #[account(
         mut,
         seeds = [
@@ -31,15 +33,14 @@ pub struct CloseHire<'info> {
         ],
         bump,
     )]   
-    pub token_manager_account: Account<'info, TokenManager>,
+    pub token_manager: Box<Account<'info, TokenManager>>,
     #[account(
         mut,
         associated_token::mint = mint,
         associated_token::authority = lender,
-        constraint = deposit_token_account.amount == 1,
     )]
-    pub deposit_token_account: Account<'info, TokenAccount>,
-    pub mint: Account<'info, Mint>,
+    pub deposit_token_account: Box<Account<'info, TokenAccount>>,
+    pub mint: Box<Account<'info, Mint>>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
@@ -52,8 +53,9 @@ pub struct CloseHire<'info> {
 
 
 pub fn handle_close_hire(ctx: Context<CloseHire>) -> Result<()> {
-  let token_manager = &mut ctx.accounts.token_manager_account;
+  let token_manager = &mut ctx.accounts.token_manager;
 
+  // Probably not necessary...
   token_manager.accounts.hire = false;
 
   thaw_and_revoke_token_account(
@@ -62,7 +64,7 @@ pub fn handle_close_hire(ctx: Context<CloseHire>) -> Result<()> {
     ctx.accounts.deposit_token_account.to_account_info(),
     ctx.accounts.lender.to_account_info(),
     ctx.accounts.mint.to_account_info(),
-    ctx.accounts.edition.to_account_info()
+    ctx.accounts.edition.to_account_info(),
   )?;
 
   Ok(())

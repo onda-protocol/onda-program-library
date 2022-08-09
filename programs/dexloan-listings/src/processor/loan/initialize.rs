@@ -15,7 +15,7 @@ pub struct InitLoan<'info> {
         associated_token::mint = mint,
         associated_token::authority = borrower,
     )]
-    pub deposit_token_account: Account<'info, TokenAccount>,
+    pub deposit_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
         init,
         payer = borrower,
@@ -27,7 +27,7 @@ pub struct InitLoan<'info> {
         space = Loan::space(),
         bump,
     )]
-    pub loan_account: Account<'info, Loan>,
+    pub loan: Box<Account<'info, Loan>>,
     #[account(
         init_if_needed,
         payer = borrower,
@@ -39,9 +39,9 @@ pub struct InitLoan<'info> {
         space = TokenManager::space(),
         bump,
     )]   
-    pub token_manager_account: Account<'info, TokenManager>,
+    pub token_manager: Box<Account<'info, TokenManager>>,
     #[account(constraint = mint.supply == 1)]
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
@@ -56,10 +56,10 @@ pub fn handle_init_loan(
   ctx: Context<InitLoan>,
   amount: u64,
   basis_points: u32,
-  duration: u64
+  duration: i64
 ) -> Result<()> {
-    let loan = &mut ctx.accounts.loan_account;
-    let token_manager = &mut ctx.accounts.token_manager_account;
+    let loan = &mut ctx.accounts.loan;
+    let token_manager = &mut ctx.accounts.token_manager;
 
     // Init
     loan.mint = ctx.accounts.mint.key();

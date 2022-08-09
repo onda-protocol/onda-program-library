@@ -20,19 +20,19 @@ pub struct InitHire<'info> {
         associated_token::mint = mint,
         associated_token::authority = lender,
     )]
-    pub deposit_token_account: Account<'info, TokenAccount>,
+    pub deposit_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
         init,
         payer = lender,
         seeds = [
-        Hire::PREFIX,
-        mint.key().as_ref(),
-        lender.key().as_ref(),
+            Hire::PREFIX,
+            mint.key().as_ref(),
+            lender.key().as_ref(),
         ],
         space = Hire::space(),
         bump,
     )]
-    pub hire_account: Account<'info, Hire>,    
+    pub hire: Box<Account<'info, Hire>>,    
     #[account(
         init_if_needed,
         payer = lender,
@@ -44,9 +44,9 @@ pub struct InitHire<'info> {
         space = TokenManager::space(),
         bump,
     )]   
-    pub token_manager_account: Account<'info, TokenManager>,
+    pub token_manager: Box<Account<'info, TokenManager>>,
     #[account(constraint = mint.supply == 1)]
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
@@ -62,8 +62,8 @@ pub fn handle_init_hire(
   ctx: Context<InitHire>,
   args: HireArgs,
 ) -> Result<()> {
-    let hire = &mut ctx.accounts.hire_account;
-    let token_manager = &mut ctx.accounts.token_manager_account;
+    let hire = &mut ctx.accounts.hire;
+    let token_manager = &mut ctx.accounts.token_manager;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
     if unix_timestamp > args.expiry {
@@ -86,8 +86,6 @@ pub fn handle_init_hire(
     if args.borrower.is_some() {
         hire.borrower = args.borrower;
     }
-    //
-    token_manager.accounts.hire = true;
 
     delegate_and_freeze_token_account(
         token_manager,
@@ -95,7 +93,7 @@ pub fn handle_init_hire(
         ctx.accounts.deposit_token_account.to_account_info(),
         ctx.accounts.lender.to_account_info(),
         ctx.accounts.edition.to_account_info(),
-        ctx.accounts.mint.to_account_info()
+        ctx.accounts.mint.to_account_info(),
     )?;
 
     Ok(())

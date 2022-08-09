@@ -16,7 +16,7 @@ pub struct RepayLoan<'info> {
         mut,
         constraint = deposit_token_account.owner == borrower.key(),
     )]
-    pub deposit_token_account: Account<'info, TokenAccount>,
+    pub deposit_token_account: Box<Account<'info, TokenAccount>>,
     /// CHECK: contrained on loan_account
     #[account(mut)]
     pub lender: AccountInfo<'info>,
@@ -27,14 +27,14 @@ pub struct RepayLoan<'info> {
             mint.key().as_ref(),
             borrower.key().as_ref(),
         ],
-        bump = loan_account.bump,
-        constraint = loan_account.borrower == borrower.key(),
-        constraint = loan_account.lender == lender.key(),
-        constraint = loan_account.mint == mint.key(),
-        constraint = loan_account.state == LoanState::Active,
+        bump,
+        has_one = borrower,
+        has_one = lender,
+        has_one = mint,
+        constraint = loan.state == LoanState::Active,
         close = borrower
     )]
-    pub loan_account: Account<'info, Loan>,
+    pub loan: Box<Account<'info, Loan>>,
     #[account(
         mut,
         seeds = [
@@ -44,8 +44,8 @@ pub struct RepayLoan<'info> {
         ],
         bump,
     )]   
-    pub token_manager_account: Account<'info, TokenManager>,
-    pub mint: Account<'info, Mint>,
+    pub token_manager: Box<Account<'info, TokenManager>>,
+    pub mint: Box<Account<'info, Mint>>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
@@ -56,8 +56,8 @@ pub struct RepayLoan<'info> {
 }
 
 pub fn handle_repay_loan(ctx: Context<RepayLoan>) -> Result<()> {
-    let loan = &mut ctx.accounts.loan_account;
-    let token_manager = &mut ctx.accounts.token_manager_account;
+    let loan = &mut ctx.accounts.loan;
+    let token_manager = &mut ctx.accounts.token_manager;
 
     token_manager.accounts.loan = false;
 

@@ -16,7 +16,7 @@ pub struct InitCallOption<'info> {
         associated_token::mint = mint,
         associated_token::authority = seller,
     )]
-    pub deposit_token_account: Account<'info, TokenAccount>,
+    pub deposit_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
         init,
         payer = seller,
@@ -28,7 +28,7 @@ pub struct InitCallOption<'info> {
         space = CallOption::space(),
         bump,
     )]
-    pub call_option_account: Account<'info, CallOption>, 
+    pub call_option: Box<Account<'info, CallOption>>, 
     #[account(
         init_if_needed,
         payer = seller,
@@ -40,9 +40,9 @@ pub struct InitCallOption<'info> {
         space = TokenManager::space(),
         bump,
     )]   
-    pub token_manager_account: Account<'info, TokenManager>,
+    pub token_manager: Box<Account<'info, TokenManager>>,
     #[account(constraint = mint.supply == 1)]
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
@@ -60,12 +60,9 @@ pub fn handle_init_call_option(
   strike_price: u64,
   expiry: i64
 ) -> Result<()> {
-  let call_option = &mut ctx.accounts.call_option_account;
-  let token_manager = &mut ctx.accounts.token_manager_account;
+  let call_option = &mut ctx.accounts.call_option;
+  let token_manager = &mut ctx.accounts.token_manager;
   let unix_timestamp = ctx.accounts.clock.unix_timestamp;
-  
-  msg!("unix_timestamp: {} seconds", unix_timestamp);
-  msg!("expiry: {} seconds", expiry);
   
   if unix_timestamp > expiry {
       return Err(DexloanError::InvalidExpiry.into())
@@ -80,8 +77,6 @@ pub fn handle_init_call_option(
   call_option.expiry = expiry;
   call_option.strike_price = strike_price;
   call_option.state = CallOptionState::Listed;
-  //
-  token_manager.accounts.call_option = true;
 
   delegate_and_freeze_token_account(
     token_manager,

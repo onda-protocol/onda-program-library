@@ -9,7 +9,6 @@ pub struct GiveLoan<'info> {
     pub borrower: AccountInfo<'info>,
     #[account(mut)]
     pub lender: Signer<'info>,
-    /// The listing the loan is being issued against
     #[account(
         mut,
         seeds = [
@@ -17,13 +16,13 @@ pub struct GiveLoan<'info> {
             mint.key().as_ref(),
             borrower.key().as_ref(),
         ],
-        bump = loan_account.bump,
-        constraint = loan_account.borrower == borrower.key(),
-        constraint = loan_account.borrower != lender.key(),
-        constraint = loan_account.mint == mint.key(),
-        constraint = loan_account.state == LoanState::Listed,
+        bump = loan.bump,
+        has_one = mint,
+        has_one = borrower,
+        constraint = loan.borrower != lender.key(),
+        constraint = loan.state == LoanState::Listed,
     )]
-    pub loan_account: Account<'info, Loan>,
+    pub loan: Box<Account<'info, Loan>>,
     #[account(
         init_if_needed,
         payer = borrower,
@@ -35,8 +34,8 @@ pub struct GiveLoan<'info> {
         space = TokenManager::space(),
         bump,
     )]   
-    pub token_manager_account: Account<'info, TokenManager>,
-    pub mint: Account<'info, Mint>,
+    pub token_manager: Box<Account<'info, TokenManager>>,
+    pub mint: Box<Account<'info, Mint>>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub clock: Sysvar<'info, Clock>,
@@ -44,8 +43,8 @@ pub struct GiveLoan<'info> {
 
 
 pub fn handle_give_loan(ctx: Context<GiveLoan>) -> Result<()> {
-    let loan = &mut ctx.accounts.loan_account;
-    let token_manager = &mut ctx.accounts.token_manager_account;
+    let loan = &mut ctx.accounts.loan;
+    let token_manager = &mut ctx.accounts.token_manager;
 
     loan.state = LoanState::Active;
     loan.lender = ctx.accounts.lender.key();

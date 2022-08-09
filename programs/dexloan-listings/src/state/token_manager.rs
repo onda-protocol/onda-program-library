@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct AccountState {
   pub loan: bool,
   pub call_option: bool,
@@ -9,10 +9,6 @@ pub struct AccountState {
 
 #[account]
 pub struct TokenManager {
-    /// The issuer
-    pub issuer: Pubkey,
-    /// The mint of the token being used for collateral
-    pub mint: Pubkey,
     /// Represents
     pub accounts: AccountState,
     /// Misc

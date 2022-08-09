@@ -21,7 +21,7 @@ pub mod dexloan_listings {
         ctx: Context<'_, '_, '_, 'info, InitLoan<'info>>,
         amount: u64,
         basis_points: u32,
-        duration: u64
+        duration: i64
     ) -> Result<()> {
         handle_init_loan(ctx, amount, basis_points, duration)
     }
@@ -38,8 +38,12 @@ pub mod dexloan_listings {
         handle_repay_loan(ctx)
     }
 
-    pub fn repossess_collateral<'info>(ctx: Context<'_, '_, '_, 'info, RepossessCollateral<'info>>) -> Result<()> {
-        handle_repossess_collateral(ctx)
+    pub fn repossess<'info>(ctx: Context<'_, '_, '_, 'info, Repossess<'info>>) -> Result<()> {
+        handle_repossess(ctx)
+    }
+
+    pub fn repossess_with_hire<'info>(ctx: Context<'_, '_, '_, 'info, RepossessWithHire<'info>>) -> Result<()> {
+        handle_repossess_with_hire(ctx)
     }
 
     // Call Options

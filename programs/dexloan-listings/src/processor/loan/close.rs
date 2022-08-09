@@ -10,7 +10,7 @@ pub struct CloseLoan<'info> {
         mut,
         constraint = deposit_token_account.owner == borrower.key(),
     )]
-    pub deposit_token_account: Account<'info, TokenAccount>,
+    pub deposit_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
         seeds = [
@@ -18,13 +18,13 @@ pub struct CloseLoan<'info> {
             mint.key().as_ref(),
             borrower.key().as_ref(),
         ],
-        bump = loan_account.bump,
-        constraint = loan_account.borrower == *borrower.key,
-        constraint = loan_account.mint == mint.key(),
-        constraint = loan_account.state == LoanState::Listed || loan_account.state == LoanState::Defaulted,
+        bump = loan.bump,
+        constraint = loan.borrower == *borrower.key,
+        constraint = loan.mint == mint.key(),
+        constraint = loan.state == LoanState::Listed || loan.state == LoanState::Defaulted,
         close = borrower
     )]
-    pub loan_account: Account<'info, Loan>,
+    pub loan: Box<Account<'info, Loan>>,
     #[account(
         mut,
         seeds = [
@@ -34,8 +34,8 @@ pub struct CloseLoan<'info> {
         ],
         bump,
     )]   
-    pub token_manager_account: Account<'info, TokenManager>,
-    pub mint: Account<'info, Mint>,
+    pub token_manager: Box<Account<'info, TokenManager>>,
+    pub mint: Box<Account<'info, Mint>>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
@@ -46,7 +46,7 @@ pub struct CloseLoan<'info> {
 }
 
 pub fn handle_close_loan(ctx: Context<CloseLoan>) -> Result<()> {
-    let token_manager = &mut ctx.accounts.token_manager_account;
+    let token_manager = &mut ctx.accounts.token_manager;
 
     thaw_and_revoke_token_account(
         token_manager,

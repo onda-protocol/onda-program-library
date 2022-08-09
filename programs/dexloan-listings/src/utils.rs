@@ -91,24 +91,26 @@ pub fn delegate_and_freeze_token_account<'info>(
     authority: AccountInfo<'info>,
     mint: AccountInfo<'info>,
     edition: AccountInfo<'info>,
-) -> Result<()> {
+) -> Result<()> {    
     anchor_spl::token::approve(
         CpiContext::new(
             token_program,
             anchor_spl::token::Approve {
                 to: token_account.clone(),
                 delegate: token_manager.to_account_info(),
-                authority,
+                authority: authority.clone(),
             }
         ),
         1
     )?;
 
+    let mint_pubkey = mint.key();
+    let issuer_pubkey = authority.key();
     let signer_bump = &[token_manager.bump];
     let signer_seeds = &[&[
         TokenManager::PREFIX,
-        token_manager.mint.as_ref(),
-        token_manager.issuer.as_ref(),
+        mint_pubkey.as_ref(),
+        issuer_pubkey.as_ref(),
         signer_bump
     ][..]];
 
@@ -128,14 +130,17 @@ pub fn delegate_and_freeze_token_account<'info>(
 pub fn thaw_token_account<'info>(
     token_manager: &mut Account<'info, TokenManager>,
     token_account: AccountInfo<'info>,
+    authority: AccountInfo<'info>,
     mint: AccountInfo<'info>,
     edition: AccountInfo<'info>,
 ) -> Result<()> {
+    let mint_pubkey = mint.key();
+    let issuer_pubkey = authority.key();
     let signer_bump = &[token_manager.bump];
     let signer_seeds = &[&[
         TokenManager::PREFIX,
-        token_manager.mint.as_ref(),
-        token_manager.issuer.as_ref(),
+        mint_pubkey.as_ref(),
+        issuer_pubkey.as_ref(),
         signer_bump
     ][..]];
   
@@ -163,6 +168,7 @@ pub fn thaw_and_revoke_token_account<'info>(
     thaw_token_account(
         token_manager,
         token_account.clone(),
+        authority.clone(),
         mint,
         edition,
     )?;
@@ -183,16 +189,19 @@ pub fn thaw_and_revoke_token_account<'info>(
 pub fn thaw_and_transfer_from_token_account<'info>(
     token_manager: &mut Account<'info, TokenManager>,
     token_program: AccountInfo<'info>,
+    authority: AccountInfo<'info>,
     from_token_account: AccountInfo<'info>,
     to_token_account: AccountInfo<'info>,
     mint: AccountInfo<'info>,
     edition: AccountInfo<'info>,
 ) -> Result<()> {
+    let mint_pubkey = mint.key();
+    let issuer_pubkey = authority.key();
     let signer_bump = &[token_manager.bump];
     let signer_seeds = &[&[
         TokenManager::PREFIX,
-        token_manager.mint.as_ref(),
-        token_manager.issuer.as_ref(),
+        mint_pubkey.as_ref(),
+        issuer_pubkey.as_ref(),
         signer_bump
     ][..]];
   
@@ -228,9 +237,6 @@ pub fn withdraw_from_escrow_balance<'info>(
     unix_timestamp: i64,
 ) -> Result<u64> {
     require_keys_eq!(lender.key(), hire.lender);
-    require!(hire.escrow_balance > 0, DexloanError::InvalidEscrowBalance);
-    require!(hire.current_start.is_some(), DexloanError::InvalidState);
-    require!(hire.current_expiry.is_some(), DexloanError::InvalidState);
 
     let start = hire.current_start.unwrap();
     let end = hire.current_expiry.unwrap();
@@ -405,7 +411,7 @@ pub fn pay_creator_fees<'a>(
 pub fn calculate_loan_repayment(
     amount: u64,
     basis_points: u32,
-    duration: u64
+    duration: i64
 ) -> Result<u64> {
     let annual_fee = calculate_fee_from_basis_points(amount as u128, basis_points as u128)?;
     msg!("annual interest fee {}", annual_fee);

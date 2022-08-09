@@ -18,11 +18,13 @@ pub struct WithdrawFromHireEscrow<'info> {
         ],
         bump,
         close = lender,
-        constraint = hire_account.borrower == None,
-        constraint = hire_account.state != HireState::Hired,
+        has_one = mint,
+        has_one = lender,
+        constraint = hire.borrower == None,
+        constraint = hire.state != HireState::Hired,
     )]
-    pub hire_account: Account<'info, Hire>,
-    pub mint: Account<'info, Mint>,
+    pub hire: Box<Account<'info, Hire>>,
+    pub mint: Box<Account<'info, Mint>>,
     /// Misc
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
@@ -31,7 +33,7 @@ pub struct WithdrawFromHireEscrow<'info> {
 
 
 pub fn handle_withdraw_from_hire_escrow(ctx: Context<WithdrawFromHireEscrow>) -> Result<()> {
-  let hire = &mut ctx.accounts.hire_account;
+  let hire = &mut ctx.accounts.hire;
 
   withdraw_from_escrow_balance(
     hire,

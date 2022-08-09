@@ -56,16 +56,28 @@ export async function findListingAddress(
   return listingAccount;
 }
 
+export async function findTokenManagerAddress(
+  mint: anchor.web3.PublicKey,
+  issuer: anchor.web3.PublicKey
+): Promise<anchor.web3.PublicKey> {
+  const [tokenManagerAccount] = await anchor.web3.PublicKey.findProgramAddress(
+    [Buffer.from("token_manager"), mint.toBuffer(), issuer.toBuffer()],
+    PROGRAM_ID
+  );
+
+  return tokenManagerAccount;
+}
+
 export async function findLoanAddress(
   mint: anchor.web3.PublicKey,
   borrower: anchor.web3.PublicKey
 ): Promise<anchor.web3.PublicKey> {
-  const [listingAccount] = await anchor.web3.PublicKey.findProgramAddress(
+  const [loanAccount] = await anchor.web3.PublicKey.findProgramAddress(
     [Buffer.from("loan"), mint.toBuffer(), borrower.toBuffer()],
     PROGRAM_ID
   );
 
-  return listingAccount;
+  return loanAccount;
 }
 
 export async function findCallOptionAddress(
@@ -139,6 +151,11 @@ export async function initLoan(
     keypair.publicKey
   );
 
+  const tokenManager = await findTokenManagerAddress(
+    nft.mint.address,
+    keypair.publicKey
+  );
+
   await wait(2);
 
   const largestAccounts = await connection.getTokenLargestAccounts(
@@ -154,8 +171,9 @@ export async function initLoan(
     await program.methods
       .initLoan(amount, basisPoints, duration)
       .accounts({
-        loanAccount,
+        tokenManager,
         depositTokenAccount,
+        loan: loanAccount,
         mint: nft.mint.address,
         borrower: keypair.publicKey,
         edition: nft.edition.address,
@@ -175,6 +193,7 @@ export async function initLoan(
     provider,
     program,
     loanAccount,
+    tokenManager,
     depositTokenAccount,
     edition: nft.edition.address,
     mint: nft.mint.address,
@@ -206,7 +225,8 @@ export async function giveLoan(
     await program.methods
       .giveLoan()
       .accounts({
-        loanAccount: borrower.loanAccount,
+        tokenManager: borrower.tokenManager,
+        loan: borrower.loanAccount,
         borrower: borrower.keypair.publicKey,
         lender: keypair.publicKey,
         mint: borrower.mint,
@@ -263,6 +283,11 @@ export async function initCallOption(
     keypair.publicKey
   );
 
+  const tokenManager = await findTokenManagerAddress(
+    nft.mint.address,
+    keypair.publicKey
+  );
+
   const amount = new anchor.BN(options.amount);
   const strikePrice = new anchor.BN(options.strikePrice);
   const expiry = new anchor.BN(options.expiry);
@@ -271,7 +296,8 @@ export async function initCallOption(
     await program.methods
       .initCallOption(amount, strikePrice, expiry)
       .accounts({
-        callOptionAccount,
+        tokenManager,
+        callOption: callOptionAccount,
         mint: nft.mint.address,
         edition: nft.edition.address,
         seller: keypair.publicKey,
@@ -292,6 +318,7 @@ export async function initCallOption(
     keypair,
     provider,
     program,
+    tokenManager,
     callOptionAccount,
     depositTokenAccount,
     mint: nft.mint.address,
@@ -315,7 +342,8 @@ export async function buyCallOption(
       .accounts({
         seller: seller.keypair.publicKey,
         buyer: keypair.publicKey,
-        callOptionAccount: seller.callOptionAccount,
+        callOption: seller.callOptionAccount,
+        tokenManager: seller.tokenManager,
         depositTokenAccount: seller.depositTokenAccount,
         mint: seller.mint,
         edition: seller.edition,
@@ -370,7 +398,8 @@ export async function initHire(
   );
   const depositTokenAccount = largestAccounts.value[0].address;
 
-  const hireAccount = await findHireAddress(
+  const hire = await findHireAddress(nft.mint.address, keypair.publicKey);
+  const tokenManager = await findTokenManagerAddress(
     nft.mint.address,
     keypair.publicKey
   );
@@ -383,7 +412,8 @@ export async function initHire(
     await program.methods
       .initHire({ amount, expiry, borrower })
       .accounts({
-        hireAccount,
+        hire,
+        tokenManager,
         lender: keypair.publicKey,
         depositTokenAccount: depositTokenAccount,
         mint: nft.mint.address,
@@ -403,7 +433,8 @@ export async function initHire(
     keypair,
     program,
     provider,
-    hireAccount,
+    tokenManager,
+    hireAccount: hire,
     depositTokenAccount,
     mint: nft.mint.address,
     edition: nft.edition.address,
@@ -436,7 +467,8 @@ export async function takeHire(
       .accounts({
         borrower: keypair.publicKey,
         lender: lender.keypair.publicKey,
-        hireAccount: lender.hireAccount,
+        hire: lender.hireAccount,
+        tokenManager: lender.tokenManager,
         depositTokenAccount: lender.depositTokenAccount,
         hireTokenAccount: tokenAccount.address,
         mint: lender.mint,
@@ -469,33 +501,23 @@ export async function takeHire(
 }
 
 export async function recoverHire(lender: HireLender, borrower: HireBorrower) {
-  // const metadataAccountInfo = await connection.getAccountInfo(lender.metadata);
-  // const [metadata] = Metadata.fromAccountInfo(metadataAccountInfo);
-
   try {
     await lender.program.methods
       .recoverHire()
       .accounts({
         borrower: borrower.keypair.publicKey,
         lender: lender.keypair.publicKey,
-        hireAccount: lender.hireAccount,
+        hire: lender.hireAccount,
+        tokenManager: lender.tokenManager,
         depositTokenAccount: lender.depositTokenAccount,
         hireTokenAccount: borrower.hireTokenAccount,
         mint: lender.mint,
         edition: lender.edition,
-        // metadata: lender.metadata,
         metadataProgram: METADATA_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
       })
-      // .remainingAccounts(
-      //   metadata.data.creators.map((creator) => ({
-      //     pubkey: creator.address,
-      //     isSigner: false,
-      //     isWritable: true,
-      //   }))
-      // )
       .rpc();
   } catch (err) {
     console.log(err.logs);

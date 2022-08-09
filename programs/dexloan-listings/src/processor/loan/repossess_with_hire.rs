@@ -1,44 +1,51 @@
 use anchor_lang::{prelude::*};
-use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{Loan, LoanState, TokenManager};
+use anchor_spl::token::{Token, TokenAccount, Mint};
+use crate::state::{Loan, LoanState, Hire, HireState, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
 
 #[derive(Accounts)]
-pub struct RepossessCollateral<'info> {
+pub struct RepossessWithHire<'info> {
     #[account(mut)]
     pub lender: Signer<'info>,
     /// CHECK: contrained on loan_account
     #[account(mut)]
     pub borrower: AccountInfo<'info>,
+    /// CHECK: contrained on hire_account
     #[account(mut)]
-    pub lender_token_account: Account<'info, TokenAccount>,
+    pub hire_borrower: AccountInfo<'info>,
     #[account(
         mut,
-        constraint = loan_account.lender == lender.key(),
-        constraint = loan_account.mint == mint.key(),
-        constraint = loan_account.state == LoanState::Active,
-        constraint = loan_account.borrower == borrower.key()
+        associated_token::mint = mint,
+        associated_token::authority = lender
     )]
-    pub loan_account: Account<'info, Loan>,
+    pub lender_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(
+        mut,
+        has_one = mint,
+        has_one = lender,
+        has_one = borrower,
+        constraint = loan.state == LoanState::Active,
+    )]
+    pub loan: Box<Account<'info, Loan>>,
     #[account(
         mut,
         seeds = [
             Hire::PREFIX,
             mint.key().as_ref(),
-            seller.key().as_ref(),
+            lender.key().as_ref(),
         ],
         bump,
-        constraint = hire_account.state == HireState::Hired,
-        constraint = hire_account.borrower.is_some() && hire_account.borrower.unwrap() == borrower.key(), 
+        constraint = hire.state == HireState::Hired,
+        constraint = hire.borrower.is_some() && hire.borrower.unwrap() == hire_borrower.key(), 
     )]
-    pub hire_account: Account<'info, Hire>,
+    pub hire: Box<Account<'info, Hire>>,
     #[account(
         mut,
         associated_token::mint = mint,
-        associated_token::authority = hire_account.borrower.unwrap()
+        associated_token::authority = hire_borrower
     )]
-    pub hire_token_account: Account<'info, TokenAccount>,
+    pub hire_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
         seeds = [
@@ -47,10 +54,11 @@ pub struct RepossessCollateral<'info> {
             borrower.key().as_ref()
         ],
         bump,
-        constraint = token_manager_account.accounts.hire == true,
-        constraint = token_manager_account.accounts.loan == true,
+        constraint = token_manager.accounts.hire == true,
+        constraint = token_manager.accounts.loan == true,
     )]   
-    pub token_manager_account: Account<'info, TokenManager>,
+    pub token_manager: Box<Account<'info, TokenManager>>,
+    /// CHECK: contrained on loan_account
     pub mint: Account<'info, Mint>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
@@ -62,40 +70,38 @@ pub struct RepossessCollateral<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn handle_repossess_collateral_with_hire(ctx: Context<RepossessCollateral>) -> Result<()> {
-    let loan = &mut ctx.accounts.loan_account;
-    let hire = &mut ctx.account.hire_account;
-    let token_manager = &mut ctx.accounts.token_manager_account;
+pub fn handle_repossess_with_hire(ctx: Context<RepossessWithHire>) -> Result<()> {
+    let loan = &mut ctx.accounts.loan;
+    let hire = &mut ctx.accounts.hire;
+    let token_manager = &mut ctx.accounts.token_manager;
 
-    let unix_timestamp = ctx.accounts.clock.unix_timestamp as u64;
-    let loan_start_date = loan.start_date as u64;
-    let loan_duration = unix_timestamp - loan_start_date;
+    let unix_timestamp = ctx.accounts.clock.unix_timestamp;
+    let start_date = loan.start_date;
+    let duration = unix_timestamp - start_date;
 
-    msg!("Loan start date: {} seconds", loan_start_date);
-    msg!("Loan duration: {} seconds", loan.duration);
-    msg!("Time passed: {} seconds", loan_duration);
-
-    if loan.duration > loan_duration  {
+    if loan.duration > duration  {
         return Err(DexloanError::NotOverdue.into())
     }
 
     loan.state = LoanState::Defaulted;
     token_manager.accounts.loan = false;
+    token_manager.accounts.hire = false;
 
     settle_hire_escrow_balance(
         hire,
+        ctx.accounts.hire_borrower.to_account_info(),
         ctx.accounts.borrower.to_account_info(),
-        ctx.accounts.seller.to_account_info(),
         unix_timestamp,
     )?;
 
     thaw_and_transfer_from_token_account(
         token_manager,
         ctx.accounts.token_program.to_account_info(),
+        ctx.accounts.lender.to_account_info(),
         ctx.accounts.hire_token_account.to_account_info(),
         ctx.accounts.lender_token_account.to_account_info(),
         ctx.accounts.mint.to_account_info(),
-        ctx.accounts.edition.to_account_info()
+        ctx.accounts.edition.to_account_info(),
     )?;
 
     Ok(())
