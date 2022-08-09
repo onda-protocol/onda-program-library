@@ -14,10 +14,10 @@ describe("dexloan_listings", () => {
     anchor.AnchorProvider.defaultOptions().preflightCommitment
   );
 
-  describe.only("Loans", () => {
+  describe("Loans", () => {
     describe("Loan repossessions", () => {
-      let borrower: Awaited<ReturnType<typeof helpers.initLoan>>;
-      let lender: Awaited<ReturnType<typeof helpers.giveLoan>>;
+      let borrower: helpers.LoanBorrower;
+      let lender: helpers.LoanLender;
       let options;
 
       it("Creates a dexloan loan", async () => {
@@ -259,7 +259,7 @@ describe("dexloan_listings", () => {
       });
     });
 
-    describe.only("Loan repayments", () => {
+    describe("Loan repayments", () => {
       let borrower: Awaited<ReturnType<typeof helpers.initLoan>>;
       let lender: Awaited<ReturnType<typeof helpers.giveLoan>>;
       let options;
@@ -389,7 +389,15 @@ describe("dexloan_listings", () => {
           connection,
           borrower.depositTokenAccount
         );
-        assert.ok(true);
+        const tokenManager = await borrower.program.account.tokenManager.fetch(
+          borrower.tokenManager
+        );
+
+        assert.deepEqual(tokenManager.accounts, {
+          hire: false,
+          callOption: false,
+          loan: true,
+        });
         assert.equal(borrowerTokenAccount.amount, BigInt(1));
         assert.equal(
           borrowerPreLoanBalance + options.amount,
@@ -471,6 +479,15 @@ describe("dexloan_listings", () => {
           connection,
           borrower.depositTokenAccount
         );
+        const tokenManager = await borrower.program.account.tokenManager.fetch(
+          borrower.tokenManager
+        );
+
+        assert.deepEqual(tokenManager.accounts, {
+          hire: false,
+          callOption: false,
+          loan: false,
+        });
         assert.equal(borrowerTokenAccount.amount, BigInt(1));
         assert.equal(borrowerTokenAccount.delegate, null);
         assert(lenderPostRepaymentBalance > lenderPreRepaymentBalance);
@@ -487,10 +504,6 @@ describe("dexloan_listings", () => {
           duration,
         });
         await helpers.giveLoan(connection, borrower);
-
-        const loan = await borrower.program.account.loan.fetch(
-          borrower.loanAccount
-        );
 
         try {
           await borrower.program.methods
@@ -846,7 +859,7 @@ describe("dexloan_listings", () => {
     });
   });
 
-  describe("Hires", () => {
+  describe.only("Hires", () => {
     describe("Specified borrower", async () => {
       let lender: Awaited<ReturnType<typeof helpers.initHire>>;
       let borrower: Awaited<ReturnType<typeof helpers.takeHire>>;
@@ -1055,6 +1068,60 @@ describe("dexloan_listings", () => {
           hire.currentExpiry.toNumber() >= estimatedCurrentExpiry &&
             hire.currentExpiry.toNumber() <= estimatedCurrentExpiry + 10
         );
+      });
+    });
+
+    describe.only("Loans with Hires", () => {
+      let borrower: helpers.LoanBorrower;
+      let lender: helpers.LoanLender;
+
+      let hireLender: helpers.HireLender;
+      let hireBorrower: helpers.HireBorrower;
+
+      it("Allows collateralized NFTs to be hired out", async () => {
+        borrower = await helpers.initLoan(connection, {
+          amount: anchor.web3.LAMPORTS_PER_SOL / 100,
+          basisPoints: 500,
+          duration: 20, // 20 seconds
+        });
+        lender = await helpers.giveLoan(connection, borrower);
+        hireLender = await helpers.initHire(connection, {
+          amount: 10_000,
+          expiry: Date.now() / 1000 + 86_400 * 180,
+        });
+        hireBorrower = await helpers.takeHire(connection, hireLender, 2);
+
+        const hire = await lender.program.account.hire.fetch(
+          hireLender.hireAccount
+        );
+        const tokenManager = await lender.program.account.hire.fetch(
+          hireLender.tokenManager
+        );
+        const tokenAddress = (
+          await connection.getTokenLargestAccounts(hireLender.mint)
+        ).value[0].address;
+        const tokenAccount = await splToken.getAccount(
+          connection,
+          tokenAddress
+        );
+
+        assert.deepEqual(tokenManager.accounts, {
+          loan: true,
+          hire: true,
+          callOption: false,
+        });
+        assert.ok(tokenAccount.isFrozen);
+        assert.ok(tokenAccount.delegate.equals(hireLender.hireAccount));
+        assert.equal(
+          hire.lender.toBase58(),
+          hireLender.keypair.publicKey.toBase58()
+        );
+        assert.equal(
+          hire.borrower.toBase58(),
+          hireBorrower.keypair.publicKey.toBase58()
+        );
+        assert.equal(hire.borrower, null);
+        assert.deepEqual(hire.state, { hired: {} });
       });
     });
   });

@@ -111,6 +111,7 @@ export async function findMetadataAddress(mint: anchor.web3.PublicKey) {
   );
 }
 
+// Don't worry these keypairs are only for testing!
 export function getBorrowerKeypair() {
   return anchor.web3.Keypair.fromSecretKey(
     new Uint8Array([
@@ -121,6 +122,9 @@ export function getBorrowerKeypair() {
     ])
   );
 }
+
+export type LoanBorrower = Awaited<ReturnType<typeof initLoan>>;
+export type LoanLender = Awaited<ReturnType<typeof giveLoan>>;
 
 export async function initLoan(
   connection: anchor.web3.Connection,
@@ -133,8 +137,7 @@ export async function initLoan(
   const keypair = getBorrowerKeypair();
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
-  await requestAirdrop(connection, keypair.publicKey);
-
+  console.log("borrower: ", keypair.publicKey.toBase58());
   const metaplex = Metaplex.make(connection).use(keypairIdentity(keypair));
 
   const { nft } = await metaplex
@@ -219,7 +222,6 @@ export async function giveLoan(
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
   console.log("lender: ", keypair.publicKey.toBase58());
-  await requestAirdrop(connection, keypair.publicKey);
 
   try {
     await program.methods
@@ -247,6 +249,9 @@ export async function giveLoan(
   };
 }
 
+export type CallOptionSeller = Awaited<ReturnType<typeof initCallOption>>;
+export type CallOptionBuyer = Awaited<ReturnType<typeof buyCallOption>>;
+
 export async function initCallOption(
   connection: anchor.web3.Connection,
   options: {
@@ -258,7 +263,6 @@ export async function initCallOption(
   const keypair = getBorrowerKeypair();
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
-  // await requestAirdrop(connection, keypair.publicKey);
 
   const metaplex = Metaplex.make(connection).use(keypairIdentity(keypair));
 
