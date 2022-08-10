@@ -60,48 +60,60 @@ export async function findTokenManagerAddress(
   mint: anchor.web3.PublicKey,
   issuer: anchor.web3.PublicKey
 ): Promise<anchor.web3.PublicKey> {
-  const [tokenManagerAccount] = await anchor.web3.PublicKey.findProgramAddress(
+  const [tokenManagerAddress] = await anchor.web3.PublicKey.findProgramAddress(
     [Buffer.from("token_manager"), mint.toBuffer(), issuer.toBuffer()],
     PROGRAM_ID
   );
 
-  return tokenManagerAccount;
+  return tokenManagerAddress;
 }
 
 export async function findLoanAddress(
   mint: anchor.web3.PublicKey,
   borrower: anchor.web3.PublicKey
 ): Promise<anchor.web3.PublicKey> {
-  const [loanAccount] = await anchor.web3.PublicKey.findProgramAddress(
+  const [loanAddress] = await anchor.web3.PublicKey.findProgramAddress(
     [Buffer.from("loan"), mint.toBuffer(), borrower.toBuffer()],
     PROGRAM_ID
   );
 
-  return loanAccount;
+  return loanAddress;
 }
 
 export async function findCallOptionAddress(
   mint: anchor.web3.PublicKey,
   seller: anchor.web3.PublicKey
 ): Promise<anchor.web3.PublicKey> {
-  const [callOptionAccount] = await anchor.web3.PublicKey.findProgramAddress(
+  const [callOptionAddress] = await anchor.web3.PublicKey.findProgramAddress(
     [Buffer.from("call_option"), mint.toBuffer(), seller.toBuffer()],
     PROGRAM_ID
   );
 
-  return callOptionAccount;
+  return callOptionAddress;
 }
 
 export async function findHireAddress(
   mint: anchor.web3.PublicKey,
   lender: anchor.web3.PublicKey
 ): Promise<anchor.web3.PublicKey> {
-  const [callOptionAccount] = await anchor.web3.PublicKey.findProgramAddress(
+  const [hireAddress] = await anchor.web3.PublicKey.findProgramAddress(
     [Buffer.from("hire"), mint.toBuffer(), lender.toBuffer()],
     PROGRAM_ID
   );
 
-  return callOptionAccount;
+  return hireAddress;
+}
+
+export async function findHireEscrowAddress(
+  mint: anchor.web3.PublicKey,
+  lender: anchor.web3.PublicKey
+): Promise<anchor.web3.PublicKey> {
+  const [hireEscrowAddress] = await anchor.web3.PublicKey.findProgramAddress(
+    [Buffer.from("hire_escrow"), mint.toBuffer(), lender.toBuffer()],
+    PROGRAM_ID
+  );
+
+  return hireEscrowAddress;
 }
 
 export async function findMetadataAddress(mint: anchor.web3.PublicKey) {

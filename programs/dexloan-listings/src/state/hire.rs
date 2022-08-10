@@ -46,4 +46,5 @@ impl Hire {
     }
 
     pub const PREFIX: &'static [u8] = b"hire";
+    pub const ESCROW_PREFIX: &'static [u8] = b"hire_escrow";
 }

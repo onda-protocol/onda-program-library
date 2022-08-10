@@ -245,17 +245,19 @@ pub fn calculate_widthdawl_amount<'info>(hire: &mut Account<'info, Hire>, unix_t
 // TODO pay creator fees on escrow withdrawls!
 pub fn withdraw_from_hire_escrow<'info>(
     hire: &mut Account<'info, Hire>,
+    hire_escrow: AccountInfo<'info>,
     lender: AccountInfo<'info>,
     unix_timestamp: i64,
+    hire_escrow_bump: u8,
 ) -> Result<u64> {
     require_keys_eq!(lender.key(), hire.lender);
 
     let amount = calculate_widthdawl_amount(hire, unix_timestamp)?;
     msg!("Withdrawing {} lamports to lender from escrow balance ", amount);
 
-    let signer_bump = &[hire.bump];
+    let signer_bump = &[hire_escrow_bump];
     let signer_seeds = &[&[
-        Hire::PREFIX,
+        Hire::ESCROW_PREFIX,
         hire.mint.as_ref(),
         hire.lender.as_ref(),
         signer_bump
@@ -263,12 +265,12 @@ pub fn withdraw_from_hire_escrow<'info>(
 
     anchor_lang::solana_program::program::invoke_signed(
         &anchor_lang::solana_program::system_instruction::transfer(
-            &hire.key(),
+            &hire_escrow.key(),
             &hire.lender,
             amount,
         ),
         &[
-            hire.to_account_info(),
+            hire_escrow.to_account_info(),
             lender.to_account_info(),
         ],
         signer_seeds
@@ -284,23 +286,27 @@ pub fn withdraw_from_hire_escrow<'info>(
 // Then any unearned balance must be paid back to the hire's borrower
 pub fn settle_hire_escrow_balance<'info>(
     hire: &mut Account<'info, Hire>,
+    hire_escrow: AccountInfo<'info>,
     borrower: AccountInfo<'info>,
     lender: AccountInfo<'info>,
     unix_timestamp: i64,
+    hire_escrow_bump: u8,
 ) -> Result<()> {
     require_keys_eq!(borrower.key(), hire.borrower.unwrap());
 
     let remaining_escrow_balance = withdraw_from_hire_escrow(
         hire,
+        hire_escrow.clone(),
         lender,
         unix_timestamp,
+        hire_escrow_bump,
     )?;
 
     msg!("Returning {} lamports to borrower from escrow balance", remaining_escrow_balance);
 
-    let signer_bump = &[hire.bump];
+    let signer_bump = &[hire_escrow_bump];
     let signer_seeds = &[&[
-        Hire::PREFIX,
+        Hire::ESCROW_PREFIX,
         hire.mint.as_ref(),
         hire.lender.as_ref(),
         signer_bump
@@ -308,7 +314,7 @@ pub fn settle_hire_escrow_balance<'info>(
 
     anchor_lang::solana_program::program::invoke_signed(
         &anchor_lang::solana_program::system_instruction::transfer(
-            &hire.key(),
+            &hire_escrow.key,
             &hire.borrower.unwrap(),
             remaining_escrow_balance,
         ),

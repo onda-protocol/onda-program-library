@@ -11,9 +11,6 @@ pub struct RepossessWithHire<'info> {
     /// CHECK: contrained on loan_account
     #[account(mut)]
     pub borrower: AccountInfo<'info>,
-    /// CHECK: contrained on hire_account
-    #[account(mut)]
-    pub hire_borrower: AccountInfo<'info>,
     #[account(
         mut,
         associated_token::mint = mint,
@@ -39,13 +36,29 @@ pub struct RepossessWithHire<'info> {
         seeds = [
             Hire::PREFIX,
             mint.key().as_ref(),
-            lender.key().as_ref(),
+            borrower.key().as_ref(),
         ],
         bump,
         constraint = hire.state == HireState::Hired,
         constraint = hire.borrower.is_some() && hire.borrower.unwrap() == hire_borrower.key(), 
     )]
     pub hire: Box<Account<'info, Hire>>,
+    /// CHECK: contrained on hire_account
+    #[account(mut)]
+    pub hire_borrower: AccountInfo<'info>,
+    /// CHECK: constrained by seeds
+    #[account(
+        init_if_needed,
+        seeds = [
+            Hire::ESCROW_PREFIX,
+            mint.key().as_ref(),
+            lender.key().as_ref(),
+        ],
+        payer = borrower,
+        space = 0,
+        bump,
+    )]
+    pub hire_escrow: AccountInfo<'info>,  
     #[account(
         mut,
         associated_token::mint = mint,
@@ -93,11 +106,15 @@ pub fn handle_repossess_with_hire(ctx: Context<RepossessWithHire>) -> Result<()>
     token_manager.accounts.loan = false;
     token_manager.accounts.hire = false;
 
+    let hire_escrow_bump = ctx.bumps.get("hire_escrow").unwrap();
+
     settle_hire_escrow_balance(
         hire,
+        ctx.accounts.hire_escrow.to_account_info(),
         ctx.accounts.hire_borrower.to_account_info(),
         ctx.accounts.borrower.to_account_info(),
         unix_timestamp,
+        hire_escrow_bump.clone()
     )?;
 
     thaw_and_transfer_from_token_account(

@@ -26,7 +26,18 @@ pub struct ExtendHire<'info> {
         constraint = hire.state == HireState::Hired,
         constraint = hire.borrower.is_some() && hire.borrower.unwrap() == borrower.key(), 
     )]
-    pub hire: Box<Account<'info, Hire>>,   
+    pub hire: Box<Account<'info, Hire>>,
+    /// CHECK: constrained by seeds
+    #[account(
+        mut,
+        seeds = [
+            Hire::ESCROW_PREFIX,
+            mint.key().as_ref(),
+            lender.key().as_ref(),
+        ],
+        bump,
+    )]
+    pub hire_escrow: AccountInfo<'info>,   
     #[account(
         mut,
         seeds = [
@@ -55,10 +66,14 @@ pub fn handle_extend_hire<'info>(ctx: Context<'_, '_, '_, 'info, ExtendHire<'inf
     require!(hire.current_expiry.is_some(), DexloanError::InvalidState);
 
     if hire.escrow_balance > 0 {
+        let hire_escrow_bump = ctx.bumps.get("hire_escrow").unwrap();
+
         withdraw_from_hire_escrow(
             hire,
+            ctx.accounts.hire_escrow.to_account_info(),
             ctx.accounts.lender.to_account_info(),
             unix_timestamp,
+            hire_escrow_bump.clone()
         )?;
     }
 

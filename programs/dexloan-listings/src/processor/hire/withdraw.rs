@@ -24,6 +24,17 @@ pub struct WithdrawFromHireEscrow<'info> {
         constraint = hire.state != HireState::Hired,
     )]
     pub hire: Account<'info, Hire>,
+    /// CHECK: constrained by seeds
+    #[account(
+        mut,
+        seeds = [
+            Hire::ESCROW_PREFIX,
+            mint.key().as_ref(),
+            lender.key().as_ref(),
+        ],
+        bump,
+    )]
+    pub hire_escrow: AccountInfo<'info>,  
     pub mint: Box<Account<'info, Mint>>,
     /// CHECK: deserialized and checked
     pub metadata: UncheckedAccount<'info>,
@@ -36,11 +47,14 @@ pub struct WithdrawFromHireEscrow<'info> {
 
 pub fn handle_withdraw_from_hire_escrow(ctx: Context<WithdrawFromHireEscrow>) -> Result<()> {
     let hire = &mut ctx.accounts.hire;
+    let hire_escrow_bump = ctx.bumps.get("hire_escrow").unwrap();
 
     withdraw_from_hire_escrow(
         hire,
+        ctx.accounts.hire_escrow.to_account_info(),
         ctx.accounts.lender.to_account_info(),
-        ctx.accounts.clock.unix_timestamp
+        ctx.accounts.clock.unix_timestamp,
+        hire_escrow_bump.clone()
     )?;
 
     Ok(())

@@ -16,15 +16,28 @@ pub struct TakeHire <'info> {
     #[account(
         mut,
         seeds = [
-          Hire::PREFIX,
-          mint.key().as_ref(),
-          lender.key().as_ref(),
+            Hire::PREFIX,
+            mint.key().as_ref(),
+            lender.key().as_ref(),
         ],
         bump,
         has_one = mint,
         has_one = lender,
     )]
-    pub hire: Box<Account<'info, Hire>>,   
+    pub hire: Box<Account<'info, Hire>>,
+    /// CHECK: constrained by seeds
+    #[account(
+        init_if_needed,
+        seeds = [
+            Hire::ESCROW_PREFIX,
+            mint.key().as_ref(),
+            lender.key().as_ref(),
+        ],
+        payer = borrower,
+        space = 0,
+        bump,
+    )]
+    pub hire_escrow: AccountInfo<'info>,   
     #[account(
         mut,
         associated_token::mint = mint,
@@ -66,12 +79,15 @@ pub fn handle_take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>,
     let token_manager = &mut ctx.accounts.token_manager;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
-
     if hire.escrow_balance > 0 {
+        let hire_escrow_bump = ctx.bumps.get("hire_escrow").unwrap();
+
         withdraw_from_hire_escrow(
             hire,
+            ctx.accounts.hire_escrow.to_account_info(),
             ctx.accounts.lender.to_account_info(),
             unix_timestamp,
+            hire_escrow_bump.clone(),
         )?;
     }
 
@@ -91,6 +107,7 @@ pub fn handle_take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>,
     hire.current_start = Some(unix_timestamp);
     hire.current_expiry = Some(current_expiry);
     hire.state = HireState::Hired;
+    token_manager.accounts.hire = true;
 
     if hire.amount > 0 {
         process_payment_to_hire_escrow(
