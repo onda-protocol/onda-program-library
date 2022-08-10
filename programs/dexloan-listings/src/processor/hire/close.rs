@@ -55,7 +55,7 @@ pub struct CloseHire<'info> {
 pub fn handle_close_hire(ctx: Context<CloseHire>) -> Result<()> {
   let token_manager = &mut ctx.accounts.token_manager;
 
-  // Probably not necessary...
+  // Probably not necessary but...
   token_manager.accounts.hire = false;
 
   thaw_and_revoke_token_account(

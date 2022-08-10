@@ -1075,66 +1075,142 @@ describe("dexloan_listings", () => {
       let borrower: helpers.LoanBorrower;
       let lender: helpers.LoanLender;
 
-      let hireLender: helpers.HireLender;
-      let hireBorrower: helpers.HireBorrower;
-
-      it("Allows collateralized NFTs to be hired out", async () => {
+      it("Allows collateralized NFTs to be listed for hire", async () => {
         borrower = await helpers.initLoan(connection, {
           amount: anchor.web3.LAMPORTS_PER_SOL / 100,
           basisPoints: 500,
           duration: 20, // 20 seconds
         });
         lender = await helpers.giveLoan(connection, borrower);
-        const tokenAddress = (
-          await connection.getTokenLargestAccounts(borrower.mint)
-        ).value[0].address;
+
+        const amount = new anchor.BN(anchor.web3.LAMPORTS_PER_SOL / 10);
+        const expiry = new anchor.BN(Date.now() / 1000 + 86_400 * 3);
+
+        const hireAddress = await helpers.findHireAddress(
+          borrower.mint,
+          borrower.keypair.publicKey
+        );
+        const tokenManagerAddress = await helpers.findTokenManagerAddress(
+          borrower.mint,
+          borrower.keypair.publicKey
+        );
+
+        await borrower.program.methods
+          .initHire({ amount, expiry, borrower: null })
+          .accounts({
+            hire: hireAddress,
+            tokenManager: tokenManagerAddress,
+            lender: borrower.keypair.publicKey,
+            depositTokenAccount: borrower.depositTokenAccount,
+            mint: borrower.mint,
+            edition: borrower.edition,
+            metadataProgram: METADATA_PROGRAM_ID,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            tokenProgram: splToken.TOKEN_PROGRAM_ID,
+            clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+          })
+          .rpc();
+
+        const hire = await lender.program.account.hire.fetch(hireAddress);
+        const tokenManager = await lender.program.account.tokenManager.fetch(
+          tokenManagerAddress
+        );
+
+        assert.deepEqual(tokenManager.accounts, {
+          loan: true,
+          hire: false,
+          callOption: false,
+        });
+        assert.equal(hire.borrower, null);
+        assert.deepEqual(hire.state, { listed: {} });
+      });
+
+      it("Allows collateralized NFTs to be hired", async () => {
+        const thirdPartyKeypair = helpers.getThirdPartyKeypair();
+        const program = helpers.getProgram(
+          helpers.getProvider(connection, thirdPartyKeypair)
+        );
+
+        const hireAddress = await helpers.findHireAddress(
+          borrower.mint,
+          borrower.keypair.publicKey
+        );
+        const tokenManagerAddress = await helpers.findTokenManagerAddress(
+          borrower.mint,
+          borrower.keypair.publicKey
+        );
+        console.log("hireAddress: ", hireAddress.toBase58());
+        console.log("tokenManagerAddress: ", tokenManagerAddress.toBase58());
+        const hireTokenAccount =
+          await splToken.getOrCreateAssociatedTokenAccount(
+            connection,
+            thirdPartyKeypair,
+            borrower.mint,
+            thirdPartyKeypair.publicKey
+          );
+        const [metadataAddress] = await helpers.findMetadataAddress(
+          borrower.mint
+        );
+        console.log("======================> ", metadataAddress?.toBase58());
+        const metadata = await Metadata.fromAccountAddress(
+          connection,
+          metadataAddress
+        );
+
+        try {
+          await program.methods
+            .takeHire(2)
+            .accounts({
+              borrower: thirdPartyKeypair.publicKey,
+              lender: borrower.keypair.publicKey,
+              hire: hireAddress,
+              tokenManager: tokenManagerAddress,
+              depositTokenAccount: borrower.depositTokenAccount,
+              hireTokenAccount: hireTokenAccount.address,
+              mint: borrower.mint,
+              edition: borrower.edition,
+              metadata: metadataAddress,
+              metadataProgram: METADATA_PROGRAM_ID,
+              systemProgram: anchor.web3.SystemProgram.programId,
+              tokenProgram: splToken.TOKEN_PROGRAM_ID,
+              clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+            })
+            .remainingAccounts(
+              metadata.data.creators.map((creator) => ({
+                pubkey: creator.address,
+                isSigner: false,
+                isWritable: true,
+              }))
+            )
+            .rpc();
+        } catch (error) {
+          console.log(error.logs);
+          throw error;
+        }
+
+        const hire = await lender.program.account.hire.fetch(hireAddress);
+        const tokenManager = await lender.program.account.tokenManager.fetch(
+          tokenManagerAddress
+        );
         const tokenAccount = await splToken.getAccount(
           connection,
-          tokenAddress
+          hireTokenAccount.address
         );
-        console.log(tokenAddress.toBase58());
-        console.log(tokenAccount.delegate.toBase58());
-        console.log(tokenAccount.owner.toBase58());
-        console.log(tokenAccount.amount);
-        console.log(tokenAccount.delegatedAmount);
-
-        hireLender = await helpers.initHire(connection, {
-          amount: 10_000,
-          expiry: Date.now() / 1000 + 86_400 * 180,
-        });
-        hireBorrower = await helpers.takeHire(connection, hireLender, 2);
-
-        const hire = await lender.program.account.hire.fetch(
-          hireLender.hireAccount
-        );
-        const tokenManager = await lender.program.account.hire.fetch(
-          hireLender.tokenManager
-        );
-        // const tokenAddress = (
-        //   await connection.getTokenLargestAccounts(hireLender.mint)
-        // ).value[0].address;
-        // const tokenAccount = await splToken.getAccount(
-        //   connection,
-        //   tokenAddress
-        // );
 
         assert.deepEqual(tokenManager.accounts, {
           loan: true,
           hire: true,
           callOption: false,
         });
-        assert.ok(tokenAccount.isFrozen);
-        assert.ok(tokenAccount.delegate.equals(hireLender.hireAccount));
-        assert.equal(
-          hire.lender.toBase58(),
-          hireLender.keypair.publicKey.toBase58()
-        );
         assert.equal(
           hire.borrower.toBase58(),
-          hireBorrower.keypair.publicKey.toBase58()
+          thirdPartyKeypair.publicKey.toBase58()
         );
-        assert.equal(hire.borrower, null);
-        assert.deepEqual(hire.state, { hired: {} });
+        assert.deepEqual(hire.state, { hires: {} });
+        assert.equal(tokenAccount.amount, BigInt(1));
+        assert.ok(tokenAccount.isFrozen);
+        assert.ok(tokenAccount.delegate.equals(tokenManagerAddress));
+        assert.equal(tokenAccount.delegatedAmount, BigInt(1));
       });
     });
   });

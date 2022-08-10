@@ -89,11 +89,11 @@ pub fn handle_recover_hire(ctx: Context<RecoverHire>) -> Result<()> {
     thaw_and_transfer_from_token_account(
         token_manager,
         ctx.accounts.token_program.to_account_info(),
+        ctx.accounts.lender.to_account_info(),
         ctx.accounts.hire_token_account.to_account_info(),
         ctx.accounts.deposit_token_account.to_account_info(),
         ctx.accounts.mint.to_account_info(),
         ctx.accounts.edition.to_account_info(),
-        ctx.accounts.lender.to_account_info()
     )?;
 
 

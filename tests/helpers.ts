@@ -123,6 +123,28 @@ export function getBorrowerKeypair() {
   );
 }
 
+export function getLenderKeypair() {
+  return anchor.web3.Keypair.fromSecretKey(
+    new Uint8Array([
+      114, 81, 242, 139, 161, 245, 117, 122, 191, 227, 244, 80, 105, 25, 54,
+      130, 50, 10, 108, 40, 18, 31, 172, 3, 70, 36, 143, 141, 249, 8, 119, 33,
+      254, 50, 70, 83, 150, 213, 73, 182, 129, 95, 147, 188, 176, 50, 61, 176,
+      36, 62, 183, 123, 23, 105, 183, 6, 188, 94, 237, 150, 115, 108, 2, 187,
+    ])
+  );
+}
+
+export function getThirdPartyKeypair() {
+  return anchor.web3.Keypair.fromSecretKey(
+    new Uint8Array([
+      172, 52, 187, 213, 156, 166, 82, 226, 150, 59, 75, 132, 21, 42, 250, 2,
+      158, 157, 186, 190, 211, 49, 59, 27, 3, 86, 103, 28, 40, 101, 9, 116, 31,
+      40, 124, 145, 153, 59, 204, 5, 53, 8, 156, 208, 12, 27, 28, 187, 132, 148,
+      4, 42, 128, 61, 200, 133, 253, 113, 253, 109, 138, 65, 47, 247,
+    ])
+  );
+}
+
 export type LoanBorrower = Awaited<ReturnType<typeof initLoan>>;
 export type LoanLender = Awaited<ReturnType<typeof giveLoan>>;
 
@@ -201,17 +223,6 @@ export async function initLoan(
     edition: nft.edition.address,
     mint: nft.mint.address,
   };
-}
-
-export function getLenderKeypair() {
-  return anchor.web3.Keypair.fromSecretKey(
-    new Uint8Array([
-      114, 81, 242, 139, 161, 245, 117, 122, 191, 227, 244, 80, 105, 25, 54,
-      130, 50, 10, 108, 40, 18, 31, 172, 3, 70, 36, 143, 141, 249, 8, 119, 33,
-      254, 50, 70, 83, 150, 213, 73, 182, 129, 95, 147, 188, 176, 50, 61, 176,
-      36, 62, 183, 123, 23, 105, 183, 6, 188, 94, 237, 150, 115, 108, 2, 187,
-    ])
-  );
 }
 
 export async function giveLoan(

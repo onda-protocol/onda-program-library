@@ -103,7 +103,7 @@ pub fn handle_repossess_with_hire(ctx: Context<RepossessWithHire>) -> Result<()>
     thaw_and_transfer_from_token_account(
         token_manager,
         ctx.accounts.token_program.to_account_info(),
-        ctx.accounts.lender.to_account_info(),
+        ctx.accounts.borrower.to_account_info(),
         ctx.accounts.hire_token_account.to_account_info(),
         ctx.accounts.lender_token_account.to_account_info(),
         ctx.accounts.mint.to_account_info(),
