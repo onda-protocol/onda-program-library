@@ -103,7 +103,8 @@ pub fn handle_recover_hire(ctx: Context<RecoverHire>) -> Result<()> {
         ctx.accounts.deposit_token_account.to_account_info(),
         ctx.accounts.lender.to_account_info(),
         ctx.accounts.mint.to_account_info(),
-        ctx.accounts.edition.to_account_info()
+        ctx.accounts.edition.to_account_info(),
+        ctx.accounts.lender.to_account_info(),
     )?;
 
     Ok(())

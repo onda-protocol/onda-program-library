@@ -91,6 +91,7 @@ pub fn delegate_and_freeze_token_account<'info>(
     authority: AccountInfo<'info>,
     mint: AccountInfo<'info>,
     edition: AccountInfo<'info>,
+    issuer: AccountInfo<'info>,
 ) -> Result<()> {    
     anchor_spl::token::approve(
         CpiContext::new(
@@ -105,7 +106,7 @@ pub fn delegate_and_freeze_token_account<'info>(
     )?;
 
     let mint_pubkey = mint.key();
-    let issuer_pubkey = authority.key();
+    let issuer_pubkey = issuer.key();
     let signer_bump = &[token_manager.bump];
     let signer_seeds = &[&[
         TokenManager::PREFIX,

@@ -86,6 +86,7 @@ pub fn handle_init_call_option(
     ctx.accounts.seller.to_account_info(),
     ctx.accounts.mint.to_account_info(),
     ctx.accounts.edition.to_account_info(),
+    ctx.accounts.seller.to_account_info(),
   )?;
 
   Ok(())

@@ -108,6 +108,7 @@ pub fn handle_init_hire(
                 ctx.accounts.lender.to_account_info(),
                 ctx.accounts.edition.to_account_info(),
                 ctx.accounts.mint.to_account_info(),
+                ctx.accounts.lender.to_account_info(),
             )?;
         } else if deposit_token_account.delegate.unwrap() != token_manager.key() {
             return err!(DexloanError::InvalidDelegate);
@@ -120,6 +121,7 @@ pub fn handle_init_hire(
             ctx.accounts.lender.to_account_info(),
             ctx.accounts.edition.to_account_info(),
             ctx.accounts.mint.to_account_info(),
+            ctx.accounts.lender.to_account_info(),
         )?;
     }
 

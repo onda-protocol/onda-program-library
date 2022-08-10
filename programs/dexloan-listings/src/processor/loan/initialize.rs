@@ -78,7 +78,8 @@ pub fn handle_init_loan(
         ctx.accounts.deposit_token_account.to_account_info(),
         ctx.accounts.borrower.to_account_info(),
         ctx.accounts.mint.to_account_info(),
-        ctx.accounts.edition.to_account_info()
+        ctx.accounts.edition.to_account_info(),
+        ctx.accounts.borrower.to_account_info(),
     )?;
 
     Ok(())

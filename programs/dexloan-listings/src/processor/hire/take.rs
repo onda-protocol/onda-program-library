@@ -117,6 +117,7 @@ pub fn handle_take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>,
         ctx.accounts.borrower.to_account_info(),
         ctx.accounts.mint.to_account_info(),
         ctx.accounts.edition.to_account_info(),
+        ctx.accounts.lender.to_account_info()
     )?;
 
     Ok(())
