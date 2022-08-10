@@ -68,7 +68,7 @@ pub fn handle_take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>,
 
 
     if hire.escrow_balance > 0 {
-        withdraw_from_escrow_balance(
+        withdraw_from_hire_escrow(
             hire,
             ctx.accounts.lender.to_account_info(),
             unix_timestamp,
@@ -93,49 +93,11 @@ pub fn handle_take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>,
     hire.state = HireState::Hired;
 
     if hire.amount > 0 {
-        let amount = u64::from(days) * hire.amount;
-
-        let remaining_amount = pay_creator_fees(
-            &mut ctx.remaining_accounts.iter(),
-            amount,
-            &ctx.accounts.mint.to_account_info(),
-            &ctx.accounts.metadata.to_account_info(),
-            &ctx.accounts.borrower.to_account_info(),
+        process_payment_to_hire_escrow(
+            hire,
+            ctx.accounts.borrower.to_account_info(),
+            days
         )?;
-
-        // If call option or loan is active amount is withheld in escrow
-        if token_manager.accounts.call_option == true || token_manager.accounts.loan == true {
-            msg!("Transferring {} lamports to hire escrow", remaining_amount);
-
-            hire.escrow_balance = hire.escrow_balance + remaining_amount;
-
-            anchor_lang::solana_program::program::invoke(
-                &anchor_lang::solana_program::system_instruction::transfer(
-                    &hire.borrower.unwrap(),
-                    &hire.key(),
-                    remaining_amount,
-                ),
-                &[
-                    ctx.accounts.borrower.to_account_info(),
-                    hire.to_account_info(),
-                ]
-            )?;
-        } else {
-            msg!("Transferring {} lamports to lender", remaining_amount);
-        
-            anchor_lang::solana_program::program::invoke(
-                &anchor_lang::solana_program::system_instruction::transfer(
-                    &hire.borrower.unwrap(),
-                    &hire.lender,
-                    remaining_amount,
-                ),
-                &[
-                    ctx.accounts.borrower.to_account_info(),
-                    ctx.accounts.lender.to_account_info(),
-                ]
-            )?;
-        }
-
     }
 
     thaw_and_transfer_from_token_account(

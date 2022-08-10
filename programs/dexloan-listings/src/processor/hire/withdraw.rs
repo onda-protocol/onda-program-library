@@ -23,8 +23,10 @@ pub struct WithdrawFromHireEscrow<'info> {
         constraint = hire.borrower == None,
         constraint = hire.state != HireState::Hired,
     )]
-    pub hire: Box<Account<'info, Hire>>,
+    pub hire: Account<'info, Hire>,
     pub mint: Box<Account<'info, Mint>>,
+    /// CHECK: deserialized and checked
+    pub metadata: UncheckedAccount<'info>,
     /// Misc
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
@@ -33,13 +35,13 @@ pub struct WithdrawFromHireEscrow<'info> {
 
 
 pub fn handle_withdraw_from_hire_escrow(ctx: Context<WithdrawFromHireEscrow>) -> Result<()> {
-  let hire = &mut ctx.accounts.hire;
+    let hire = &mut ctx.accounts.hire;
 
-  withdraw_from_escrow_balance(
-    hire,
-    ctx.accounts.lender.to_account_info(),
-    ctx.accounts.clock.unix_timestamp,
-  )?;
+    withdraw_from_hire_escrow(
+        hire,
+        ctx.accounts.lender.to_account_info(),
+        ctx.accounts.clock.unix_timestamp
+    )?;
 
-  Ok(())
+    Ok(())
 }

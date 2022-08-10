@@ -55,14 +55,13 @@ pub fn handle_extend_hire<'info>(ctx: Context<'_, '_, '_, 'info, ExtendHire<'inf
     require!(hire.current_expiry.is_some(), DexloanError::InvalidState);
 
     if hire.escrow_balance > 0 {
-        withdraw_from_escrow_balance(
+        withdraw_from_hire_escrow(
             hire,
             ctx.accounts.lender.to_account_info(),
             unix_timestamp,
         )?;
     }
 
-    let amount = u64::from(days) * hire.amount;
     let duration = i64::from(days) * SECONDS_PER_DAY;
     let current_expiry = hire.current_expiry.unwrap();
     let new_current_expiry = if current_expiry > unix_timestamp {
@@ -74,24 +73,10 @@ pub fn handle_extend_hire<'info>(ctx: Context<'_, '_, '_, 'info, ExtendHire<'inf
     hire.current_expiry = Some(new_current_expiry);
     hire.current_start = Some(unix_timestamp);
 
-    let remaining_amount = pay_creator_fees(
-        &mut ctx.remaining_accounts.iter(),
-        amount,
-        &ctx.accounts.mint.to_account_info(),
-        &ctx.accounts.metadata.to_account_info(),
-        &ctx.accounts.borrower.to_account_info(),
-    )?;
-
-    anchor_lang::solana_program::program::invoke(
-        &anchor_lang::solana_program::system_instruction::transfer(
-            &hire.borrower.unwrap(),
-            &hire.lender,
-            remaining_amount,
-        ),
-        &[
-            ctx.accounts.borrower.to_account_info(),
-            ctx.accounts.lender.to_account_info(),
-        ]
+    process_payment_to_hire_escrow(
+        hire,
+        ctx.accounts.borrower.to_account_info(),
+        days
     )?;
 
     Ok(())

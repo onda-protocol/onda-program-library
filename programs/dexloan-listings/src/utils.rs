@@ -231,18 +231,26 @@ pub fn thaw_and_transfer_from_token_account<'info>(
     Ok(())
 }
 
-pub fn withdraw_from_escrow_balance<'info>(
+pub fn calculate_widthdawl_amount<'info>(hire: &mut Account<'info, Hire>, unix_timestamp: i64) -> Result<u64> {
+    let start = hire.current_start.unwrap();
+    let end = hire.current_expiry.unwrap();
+    let pro_rata_amount = (
+        (unix_timestamp - start) / (end - start)
+    ).checked_mul(hire.escrow_balance as i64).ok_or(DexloanError::NumericalOverflow).unwrap();
+
+    Ok(pro_rata_amount as u64)
+}
+
+// TODO pay creator fees on escrow withdrawls!
+pub fn withdraw_from_hire_escrow<'info>(
     hire: &mut Account<'info, Hire>,
     lender: AccountInfo<'info>,
     unix_timestamp: i64,
 ) -> Result<u64> {
     require_keys_eq!(lender.key(), hire.lender);
 
-    let start = hire.current_start.unwrap();
-    let end = hire.current_expiry.unwrap();
-    let pro_rata_amount = ((unix_timestamp - start) / (end - start)).checked_mul(hire.escrow_balance as i64).ok_or(DexloanError::NumericalOverflow).unwrap();
-
-    msg!("Withdrawing {} from escrow balance ", pro_rata_amount);
+    let amount = calculate_widthdawl_amount(hire, unix_timestamp)?;
+    msg!("Withdrawing {} lamports to lender from escrow balance ", amount);
 
     let signer_bump = &[hire.bump];
     let signer_seeds = &[&[
@@ -256,18 +264,19 @@ pub fn withdraw_from_escrow_balance<'info>(
         &anchor_lang::solana_program::system_instruction::transfer(
             &hire.key(),
             &hire.lender,
-            pro_rata_amount as u64,
+            amount,
         ),
         &[
             hire.to_account_info(),
-            lender,
+            lender.to_account_info(),
         ],
         signer_seeds
     )?;
 
-    let remaining_escrow_balance = hire.escrow_balance - pro_rata_amount as u64;
+    let remaining_amount = hire.escrow_balance - amount;
+    hire.escrow_balance = remaining_amount;
 
-    Ok(remaining_escrow_balance)
+    Ok(hire.escrow_balance)
 }
 
 // If a call option is exercised or a loan repossessed while a hire is active
@@ -280,13 +289,13 @@ pub fn settle_hire_escrow_balance<'info>(
 ) -> Result<()> {
     require_keys_eq!(borrower.key(), hire.borrower.unwrap());
 
-    let remaining_escrow_balance = withdraw_from_escrow_balance(
+    let remaining_escrow_balance = withdraw_from_hire_escrow(
         hire,
         lender,
         unix_timestamp,
     )?;
 
-    msg!("Returning {} to borrower from escrow balance", remaining_escrow_balance);
+    msg!("Returning {} lamports to borrower from escrow balance", remaining_escrow_balance);
 
     let signer_bump = &[hire.bump];
     let signer_seeds = &[&[
@@ -307,6 +316,34 @@ pub fn settle_hire_escrow_balance<'info>(
             borrower,
         ],
         signer_seeds
+    )?;
+
+    hire.escrow_balance = 0;
+
+    Ok(())
+}
+
+pub fn process_payment_to_hire_escrow<'info>(
+    hire: &mut Account<'info, Hire>,
+    borrower: AccountInfo<'info>,
+    days: u16,
+) -> Result<()> {
+    let amount = u64::from(days) * hire.amount;
+
+    msg!("Paying {} lamports to hire escrow", amount);
+
+    hire.escrow_balance = hire.escrow_balance + amount;
+
+    anchor_lang::solana_program::program::invoke(
+        &anchor_lang::solana_program::system_instruction::transfer(
+            &hire.borrower.unwrap(),
+            &hire.key(),
+            amount,
+        ),
+        &[
+            borrower.to_account_info(),
+            hire.to_account_info(),
+        ]
     )?;
 
     Ok(())

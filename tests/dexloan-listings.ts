@@ -1085,6 +1085,19 @@ describe("dexloan_listings", () => {
           duration: 20, // 20 seconds
         });
         lender = await helpers.giveLoan(connection, borrower);
+        const tokenAddress = (
+          await connection.getTokenLargestAccounts(borrower.mint)
+        ).value[0].address;
+        const tokenAccount = await splToken.getAccount(
+          connection,
+          tokenAddress
+        );
+        console.log(tokenAddress.toBase58());
+        console.log(tokenAccount.delegate.toBase58());
+        console.log(tokenAccount.owner.toBase58());
+        console.log(tokenAccount.amount);
+        console.log(tokenAccount.delegatedAmount);
+
         hireLender = await helpers.initHire(connection, {
           amount: 10_000,
           expiry: Date.now() / 1000 + 86_400 * 180,
@@ -1097,13 +1110,13 @@ describe("dexloan_listings", () => {
         const tokenManager = await lender.program.account.hire.fetch(
           hireLender.tokenManager
         );
-        const tokenAddress = (
-          await connection.getTokenLargestAccounts(hireLender.mint)
-        ).value[0].address;
-        const tokenAccount = await splToken.getAccount(
-          connection,
-          tokenAddress
-        );
+        // const tokenAddress = (
+        //   await connection.getTokenLargestAccounts(hireLender.mint)
+        // ).value[0].address;
+        // const tokenAccount = await splToken.getAccount(
+        //   connection,
+        //   tokenAddress
+        // );
 
         assert.deepEqual(tokenManager.accounts, {
           loan: true,

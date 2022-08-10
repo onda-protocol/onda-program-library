@@ -109,6 +109,8 @@ pub fn handle_init_hire(
                 ctx.accounts.edition.to_account_info(),
                 ctx.accounts.mint.to_account_info(),
             )?;
+        } else if deposit_token_account.delegate.unwrap() != token_manager.key() {
+            return err!(DexloanError::InvalidDelegate);
         }
     } else {
         delegate_and_freeze_token_account(

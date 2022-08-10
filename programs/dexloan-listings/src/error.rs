@@ -28,4 +28,6 @@ pub enum DexloanError {
     BorrowerNotSpecified,
     #[msg("Invalid escrow balance")]
     InvalidEscrowBalance,
+    #[msg("Invalid token account delegate")]
+    InvalidDelegate
 }
