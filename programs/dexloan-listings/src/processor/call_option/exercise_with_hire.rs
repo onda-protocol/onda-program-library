@@ -41,20 +41,24 @@ pub struct ExerciseCallOptionWithHire<'info> {
         has_one = mint,
         constraint = hire.lender == seller.key(),
         constraint = hire.state == HireState::Hired,
-        constraint = hire.borrower.is_some() && hire.borrower.unwrap() == borrower.key(), 
+        constraint = hire.borrower.is_some() && hire.borrower.unwrap() == hire_borrower.key(),
+        close = seller
     )]
     pub hire: Box<Account<'info, Hire>>,
+    /// CHECK: contrained on hire_account
+    #[account(mut)]
+    pub hire_borrower: AccountInfo<'info>,
     /// CHECK: constrained by seeds
     #[account(
         mut,
         seeds = [
             Hire::ESCROW_PREFIX,
             mint.key().as_ref(),
-            seller.key().as_ref(),
+            borrower.key().as_ref(),
         ],
         bump,
     )]
-    pub hire_escrow: AccountInfo<'info>,
+    pub hire_escrow: AccountInfo<'info>,  
     #[account(
         mut,
         associated_token::mint = mint,
@@ -99,7 +103,6 @@ pub fn handle_exercise_call_option_with_hire<'info>(ctx: Context<'_, '_, '_, 'in
     let hire = &mut ctx.accounts.hire;
     let token_manager = &mut ctx.accounts.token_manager;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
-    let hire_escrow_bump = ctx.bumps.get("hire_escrow").unwrap();
 
     msg!("Exercise with strike price: {} lamports", call_option.strike_price);
 
@@ -112,11 +115,10 @@ pub fn handle_exercise_call_option_with_hire<'info>(ctx: Context<'_, '_, '_, 'in
 
     settle_hire_escrow_balance(
         hire,
-        ctx.accounts.hire_escrow.to_account_info(),
-        ctx.accounts.borrower.to_account_info(),
-        ctx.accounts.seller.to_account_info(),
+        &mut ctx.remaining_accounts.iter(),
+        &ctx.accounts.hire_escrow.to_account_info(),
+        &ctx.accounts.seller.to_account_info(),
         unix_timestamp,
-        hire_escrow_bump.clone()
     )?;
 
     thaw_and_transfer_from_token_account(

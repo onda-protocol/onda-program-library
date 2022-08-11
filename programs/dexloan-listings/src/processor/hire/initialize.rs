@@ -82,6 +82,7 @@ pub fn handle_init_hire(
     token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
     //
     hire.amount = args.amount;
+    hire.escrow_balance = 0;
     hire.expiry = args.expiry;
     hire.state = HireState::Listed;
     //

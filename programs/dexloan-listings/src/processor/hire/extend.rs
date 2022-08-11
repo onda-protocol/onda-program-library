@@ -66,14 +66,11 @@ pub fn handle_extend_hire<'info>(ctx: Context<'_, '_, '_, 'info, ExtendHire<'inf
     require!(hire.current_expiry.is_some(), DexloanError::InvalidState);
 
     if hire.escrow_balance > 0 {
-        let hire_escrow_bump = ctx.bumps.get("hire_escrow").unwrap();
-
         withdraw_from_hire_escrow(
             hire,
-            ctx.accounts.hire_escrow.to_account_info(),
-            ctx.accounts.lender.to_account_info(),
+            &ctx.accounts.hire_escrow.to_account_info(),
+            &ctx.accounts.lender.to_account_info(),
             unix_timestamp,
-            hire_escrow_bump.clone()
         )?;
     }
 
@@ -90,6 +87,7 @@ pub fn handle_extend_hire<'info>(ctx: Context<'_, '_, '_, 'info, ExtendHire<'inf
 
     process_payment_to_hire_escrow(
         hire,
+        ctx.accounts.hire_escrow.to_account_info(),
         ctx.accounts.borrower.to_account_info(),
         days
     )?;

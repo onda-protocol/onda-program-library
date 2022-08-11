@@ -1,6 +1,6 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Token, TokenAccount, Mint};
-use crate::state::{Loan, LoanState, Hire, HireState, TokenManager};
+use crate::state::{Loan, LoanState, Hire, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
 
@@ -39,30 +39,26 @@ pub struct RepossessWithHire<'info> {
             borrower.key().as_ref(),
         ],
         bump,
-        constraint = hire.state == HireState::Hired,
-        constraint = hire.borrower.is_some() && hire.borrower.unwrap() == hire_borrower.key(), 
+        // constraint = hire.state == HireState::Hired,
+        // constraint = hire.borrower.is_some() && hire.borrower.unwrap() == hire_borrower.key(),
+        close = borrower
     )]
     pub hire: Box<Account<'info, Hire>>,
-    /// CHECK: contrained on hire_account
-    #[account(mut)]
-    pub hire_borrower: AccountInfo<'info>,
     /// CHECK: constrained by seeds
     #[account(
-        init_if_needed,
+        mut,
         seeds = [
             Hire::ESCROW_PREFIX,
             mint.key().as_ref(),
-            lender.key().as_ref(),
+            borrower.key().as_ref(),
         ],
-        payer = borrower,
-        space = 0,
         bump,
     )]
     pub hire_escrow: AccountInfo<'info>,  
     #[account(
         mut,
-        associated_token::mint = mint,
-        associated_token::authority = hire_borrower
+        // associated_token::mint = mint,
+        // associated_token::authority = hire_borrower
     )]
     pub hire_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
@@ -89,12 +85,12 @@ pub struct RepossessWithHire<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn handle_repossess_with_hire(ctx: Context<RepossessWithHire>) -> Result<()> {
+pub fn handle_repossess_with_hire<'info>(ctx: Context<'_, '_, '_, 'info, RepossessWithHire<'info>>) -> Result<()> {
     let loan = &mut ctx.accounts.loan;
     let hire = &mut ctx.accounts.hire;
     let token_manager = &mut ctx.accounts.token_manager;
-
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
+
     let start_date = loan.start_date;
     let duration = unix_timestamp - start_date;
 
@@ -106,15 +102,12 @@ pub fn handle_repossess_with_hire(ctx: Context<RepossessWithHire>) -> Result<()>
     token_manager.accounts.loan = false;
     token_manager.accounts.hire = false;
 
-    let hire_escrow_bump = ctx.bumps.get("hire_escrow").unwrap();
-
     settle_hire_escrow_balance(
         hire,
-        ctx.accounts.hire_escrow.to_account_info(),
-        ctx.accounts.hire_borrower.to_account_info(),
-        ctx.accounts.borrower.to_account_info(),
+        &mut ctx.remaining_accounts.iter(),
+        &ctx.accounts.hire_escrow.to_account_info(),
+        &ctx.accounts.borrower.to_account_info(),
         unix_timestamp,
-        hire_escrow_bump.clone()
     )?;
 
     thaw_and_transfer_from_token_account(

@@ -17,12 +17,12 @@ pub struct CloseCallOption<'info> {
             mint.key().as_ref(),
             seller.key().as_ref(),
         ],
-        bump = call_option_account.bump,
-        constraint = call_option_account.seller == seller.key(),
-        constraint = call_option_account.mint == mint.key(),
+        bump,
+        has_one = seller,
+        has_one = mint,
         close = seller
     )]
-    pub call_option_account: Account<'info, CallOption>,
+    pub call_option: Account<'info, CallOption>,
     #[account(
         mut,
         seeds = [
@@ -32,7 +32,7 @@ pub struct CloseCallOption<'info> {
         ],
         bump,
     )]   
-    pub token_manager_account: Account<'info, TokenManager>,
+    pub token_manager: Account<'info, TokenManager>,
     #[account(
         mut,
         // constraint = deposit_token_account.delegate == COption::Some(escrow_account.key()),
@@ -52,8 +52,8 @@ pub struct CloseCallOption<'info> {
 }
 
 pub fn handle_close_call_option(ctx: Context<CloseCallOption>) -> Result<()> {
-  let call_option = &ctx.accounts.call_option_account;
-  let token_manager = &mut ctx.accounts.token_manager_account;
+  let call_option = &ctx.accounts.call_option;
+  let token_manager = &mut ctx.accounts.token_manager;
   let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
   if call_option.state == CallOptionState::Active {
@@ -65,7 +65,7 @@ pub fn handle_close_call_option(ctx: Context<CloseCallOption>) -> Result<()> {
   token_manager.accounts.call_option = false;
 
   if ctx.accounts.deposit_token_account.is_frozen() {
-      let signer_bump = &[ctx.accounts.call_option_account.bump];
+      let signer_bump = &[ctx.accounts.call_option.bump];
       let signer_seeds = &[&[
           CallOption::PREFIX,
           call_option.mint.as_ref(),
@@ -75,7 +75,7 @@ pub fn handle_close_call_option(ctx: Context<CloseCallOption>) -> Result<()> {
   
       thaw(
           FreezeParams {
-              delegate: ctx.accounts.call_option_account.to_account_info(),
+              delegate: ctx.accounts.call_option.to_account_info(),
               token_account: ctx.accounts.deposit_token_account.to_account_info(),
               edition: ctx.accounts.edition.to_account_info(),
               mint: ctx.accounts.mint.to_account_info(),

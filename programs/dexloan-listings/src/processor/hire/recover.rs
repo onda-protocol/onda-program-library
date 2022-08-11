@@ -79,14 +79,11 @@ pub fn handle_recover_hire(ctx: Context<RecoverHire>) -> Result<()> {
     require!(hire.current_expiry.is_some(), DexloanError::InvalidState);
 
     if hire.escrow_balance > 0 {
-        let hire_escrow_bump = ctx.bumps.get("hire_escrow").unwrap();
-
         withdraw_from_hire_escrow(
             hire,
-            ctx.accounts.hire_escrow.to_account_info(),
-            ctx.accounts.lender.to_account_info(),
+            &ctx.accounts.hire_escrow.to_account_info(),
+            &ctx.accounts.lender.to_account_info(),
             unix_timestamp,
-            hire_escrow_bump.clone()
         )?;
     }
 

@@ -10,7 +10,8 @@ pub use error::*;
 pub use state::*;
 pub use constants::*;
 pub use utils::*;
-declare_id!("H6FCxCy2KCPJwCoUb9eQCSv41WZBKQaYfB6x5oFajzfj");
+
+declare_id!("8hSdpqHU7jz4C6C1kHUPQNMqBcC76n1BFXbHaTwd9X4c");
 
 #[program]
 pub mod dexloan_listings {
@@ -64,6 +65,10 @@ pub mod dexloan_listings {
         handle_exercise_call_option(ctx)
     }
 
+    pub fn exercise_call_option_with_hire<'info>(ctx: Context<'_, '_, '_, 'info, ExerciseCallOptionWithHire<'info>>) -> Result<()> {
+        handle_exercise_call_option_with_hire(ctx)
+    }
+
     pub fn close_call_option<'info>(ctx: Context<'_, '_, '_, 'info, CloseCallOption<'info>>) -> Result<()> {
         handle_close_call_option(ctx)
     }
@@ -94,14 +99,5 @@ pub mod dexloan_listings {
 
     pub fn close_hire<'info>(ctx: Context<'_, '_, '_, 'info, CloseHire<'info>>) -> Result<()> {
         handle_close_hire(ctx)
-    }
-
-    // Deprecated v1 Listings
-    pub fn close_listing<'info>(ctx: Context<'_, '_, '_, 'info, CloseListing<'info>>) -> Result<()> {
-        handle_close_listing(ctx)
-    }
-
-    pub fn cancel_listing<'info>(ctx: Context<'_, '_, '_, 'info, CancelListing<'info>>) -> Result<()> {
-        handle_cancel_listing(ctx)
     }
 }

@@ -33,9 +33,9 @@ pub struct TakeHire <'info> {
             mint.key().as_ref(),
             lender.key().as_ref(),
         ],
+        bump,
         payer = borrower,
         space = 0,
-        bump,
     )]
     pub hire_escrow: AccountInfo<'info>,   
     #[account(
@@ -79,15 +79,14 @@ pub fn handle_take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>,
     let token_manager = &mut ctx.accounts.token_manager;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
-    if hire.escrow_balance > 0 {
-        let hire_escrow_bump = ctx.bumps.get("hire_escrow").unwrap();
+    msg!("escrow balance is {}", hire.escrow_balance);
 
+    if hire.escrow_balance > 0 {
         withdraw_from_hire_escrow(
             hire,
-            ctx.accounts.hire_escrow.to_account_info(),
-            ctx.accounts.lender.to_account_info(),
+            &ctx.accounts.hire_escrow.to_account_info(),
+            &ctx.accounts.lender.to_account_info(),
             unix_timestamp,
-            hire_escrow_bump.clone(),
         )?;
     }
 
@@ -112,6 +111,7 @@ pub fn handle_take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>,
     if hire.amount > 0 {
         process_payment_to_hire_escrow(
             hire,
+            ctx.accounts.hire_escrow.to_account_info(),
             ctx.accounts.borrower.to_account_info(),
             days
         )?;

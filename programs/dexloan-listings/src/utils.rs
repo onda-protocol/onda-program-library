@@ -242,96 +242,86 @@ pub fn calculate_widthdawl_amount<'info>(hire: &mut Account<'info, Hire>, unix_t
     Ok(pro_rata_amount as u64)
 }
 
+fn transfer_from_escrow(
+    escrow: &mut AccountInfo, // we better own this account though
+    to: &mut AccountInfo,
+    amount: u64,
+) -> Result<()> {
+    **escrow.try_borrow_mut_lamports()? = escrow
+        .lamports()
+        .checked_sub(amount)
+        .ok_or(ProgramError::InvalidArgument)?;
+    **to.try_borrow_mut_lamports()? = to
+        .lamports()
+        .checked_add(amount)
+        .ok_or(ProgramError::InvalidArgument)?;
+    Ok(())
+}
+
 // TODO pay creator fees on escrow withdrawls!
-pub fn withdraw_from_hire_escrow<'info>(
-    hire: &mut Account<'info, Hire>,
-    hire_escrow: AccountInfo<'info>,
-    lender: AccountInfo<'info>,
+pub fn withdraw_from_hire_escrow<'a, 'b>(
+    hire: &mut Account<'a, Hire>,
+    hire_escrow: &AccountInfo<'b>,
+    lender: &AccountInfo<'b>,
     unix_timestamp: i64,
-    hire_escrow_bump: u8,
 ) -> Result<u64> {
     require_keys_eq!(lender.key(), hire.lender);
 
     let amount = calculate_widthdawl_amount(hire, unix_timestamp)?;
     msg!("Withdrawing {} lamports to lender from escrow balance ", amount);
 
-    let signer_bump = &[hire_escrow_bump];
-    let signer_seeds = &[&[
-        Hire::ESCROW_PREFIX,
-        hire.mint.as_ref(),
-        hire.lender.as_ref(),
-        signer_bump
-    ][..]];
-
-    anchor_lang::solana_program::program::invoke_signed(
-        &anchor_lang::solana_program::system_instruction::transfer(
-            &hire_escrow.key(),
-            &hire.lender,
-            amount,
-        ),
-        &[
-            hire_escrow.to_account_info(),
-            lender.to_account_info(),
-        ],
-        signer_seeds
+    transfer_from_escrow(
+        &mut hire_escrow.to_account_info(),
+        &mut lender.to_account_info(),
+        amount
     )?;
 
     let remaining_amount = hire.escrow_balance - amount;
     hire.escrow_balance = remaining_amount;
 
-    Ok(hire.escrow_balance)
+    Ok(remaining_amount)
 }
 
 // If a call option is exercised or a loan repossessed while a hire is active
 // Then any unearned balance must be paid back to the hire's borrower
-pub fn settle_hire_escrow_balance<'info>(
-    hire: &mut Account<'info, Hire>,
-    hire_escrow: AccountInfo<'info>,
-    borrower: AccountInfo<'info>,
-    lender: AccountInfo<'info>,
+pub fn settle_hire_escrow_balance<'a, 'b>(
+    hire: &mut Account<'a, Hire>,
+    remaining_accounts: &mut Iter<AccountInfo<'b>>,
+    hire_escrow: &AccountInfo<'b>,
+    lender: &AccountInfo<'b>,
     unix_timestamp: i64,
-    hire_escrow_bump: u8,
 ) -> Result<()> {
-    require_keys_eq!(borrower.key(), hire.borrower.unwrap());
-
     let remaining_escrow_balance = withdraw_from_hire_escrow(
         hire,
-        hire_escrow.clone(),
-        lender,
+        &hire_escrow,
+        &lender,
         unix_timestamp,
-        hire_escrow_bump,
     )?;
 
-    msg!("Returning {} lamports to borrower from escrow balance", remaining_escrow_balance);
+    if hire.borrower.is_some() {
+        let borrower = next_account_info(remaining_accounts)?;
 
-    let signer_bump = &[hire_escrow_bump];
-    let signer_seeds = &[&[
-        Hire::ESCROW_PREFIX,
-        hire.mint.as_ref(),
-        hire.lender.as_ref(),
-        signer_bump
-    ][..]];
+        require_keys_eq!(borrower.key(), hire.borrower.unwrap());
 
-    anchor_lang::solana_program::program::invoke_signed(
-        &anchor_lang::solana_program::system_instruction::transfer(
-            &hire_escrow.key,
-            &hire.borrower.unwrap(),
-            remaining_escrow_balance,
-        ),
-        &[
-            hire.to_account_info(),
-            borrower,
-        ],
-        signer_seeds
-    )?;
+        msg!("Returning {} lamports to borrower from escrow balance", remaining_escrow_balance);        
+
+        transfer_from_escrow(
+            &mut hire_escrow.to_account_info(),
+            &mut borrower.to_account_info(),
+            remaining_escrow_balance
+        )?;
+    }
 
     hire.escrow_balance = 0;
 
     Ok(())
 }
 
+
+
 pub fn process_payment_to_hire_escrow<'info>(
     hire: &mut Account<'info, Hire>,
+    hire_escrow: AccountInfo<'info>,
     borrower: AccountInfo<'info>,
     days: u16,
 ) -> Result<()> {
@@ -344,12 +334,12 @@ pub fn process_payment_to_hire_escrow<'info>(
     anchor_lang::solana_program::program::invoke(
         &anchor_lang::solana_program::system_instruction::transfer(
             &hire.borrower.unwrap(),
-            &hire.key(),
+            &hire_escrow.key(),
             amount,
         ),
         &[
             borrower.to_account_info(),
-            hire.to_account_info(),
+            hire_escrow.to_account_info(),
         ]
     )?;
 
