@@ -198,7 +198,7 @@ pub fn handle_init_call_option_with_hire(
     let token_manager = &mut ctx.accounts.token_manager;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
-    require_eq!(token_manager.accounts.hire, false, DexloanError::InvalidState);
+    require_eq!(token_manager.accounts.hire, true, DexloanError::InvalidState);
     require_eq!(token_manager.accounts.call_option, false, DexloanError::InvalidState);
 
     if unix_timestamp > expiry {

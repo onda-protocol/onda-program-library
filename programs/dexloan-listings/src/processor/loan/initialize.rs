@@ -191,7 +191,7 @@ pub fn handle_init_loan_with_hire(
       let loan = &mut ctx.accounts.loan;
       let token_manager = &mut ctx.accounts.token_manager;
 
-      require_eq!(token_manager.accounts.hire, false, DexloanError::InvalidState);
+      require_eq!(token_manager.accounts.hire, true, DexloanError::InvalidState);
       require_eq!(token_manager.accounts.call_option, false, DexloanError::InvalidState);
   
       // Init
