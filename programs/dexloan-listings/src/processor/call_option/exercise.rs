@@ -210,16 +210,6 @@ pub fn handle_exercise_call_option_with_hire<'info>(ctx: Context<'_, '_, '_, 'in
     token_manager.accounts.call_option = false;
     token_manager.accounts.hire = false;
 
-    if hire.borrower.is_some() {
-        settle_hire_escrow_balance(
-            hire,
-            &mut ctx.remaining_accounts.iter(),
-            &ctx.accounts.hire_escrow.to_account_info(),
-            &ctx.accounts.seller.to_account_info(),
-            unix_timestamp,
-        )?;
-    }
-
     thaw_and_transfer_from_token_account(
         token_manager,
         ctx.accounts.token_program.to_account_info(),
@@ -249,6 +239,16 @@ pub fn handle_exercise_call_option_with_hire<'info>(ctx: Context<'_, '_, '_, 'in
             ctx.accounts.seller.to_account_info(),
         ]
     )?;
+
+    if hire.borrower.is_some() {
+        settle_hire_escrow_balance(
+            hire,
+            &mut ctx.remaining_accounts.iter(),
+            &ctx.accounts.hire_escrow.to_account_info(),
+            &ctx.accounts.seller.to_account_info(),
+            unix_timestamp,
+        )?;
+    }
   
     Ok(())
 }
