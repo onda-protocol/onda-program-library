@@ -107,8 +107,8 @@ pub fn handle_init_hire(
                 ctx.accounts.token_program.to_account_info(),
                 deposit_token_account.to_account_info(),
                 ctx.accounts.lender.to_account_info(),
-                ctx.accounts.edition.to_account_info(),
                 ctx.accounts.mint.to_account_info(),
+                ctx.accounts.edition.to_account_info(),
                 ctx.accounts.lender.to_account_info(),
             )?;
         } else if deposit_token_account.delegate.unwrap() != token_manager.key() {
@@ -120,8 +120,8 @@ pub fn handle_init_hire(
             ctx.accounts.token_program.to_account_info(),
             deposit_token_account.to_account_info(),
             ctx.accounts.lender.to_account_info(),
-            ctx.accounts.edition.to_account_info(),
             ctx.accounts.mint.to_account_info(),
+            ctx.accounts.edition.to_account_info(),
             ctx.accounts.lender.to_account_info(),
         )?;
     }
