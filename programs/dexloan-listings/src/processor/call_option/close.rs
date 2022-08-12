@@ -62,9 +62,7 @@ pub fn handle_close_call_option(ctx: Context<CloseCallOption>) -> Result<()> {
         }
     }
 
-    token_manager.accounts.call_option = false;
-
-    if token_manager.accounts.hire == false {
+    if ctx.accounts.deposit_token_account.is_frozen() {
         thaw_and_revoke_token_account(
             token_manager,
             ctx.accounts.token_program.to_account_info(),
@@ -73,7 +71,19 @@ pub fn handle_close_call_option(ctx: Context<CloseCallOption>) -> Result<()> {
             ctx.accounts.mint.to_account_info(),
             ctx.accounts.edition.to_account_info()
         )?;
+    } else {
+        anchor_spl::token::revoke(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                anchor_spl::token::Revoke {
+                    source: ctx.accounts.deposit_token_account.to_account_info(),
+                    authority: ctx.accounts.seller.to_account_info(),
+                }
+            )
+        )?;
     }
+
+    token_manager.accounts.call_option = false;
 
     Ok(())
 }

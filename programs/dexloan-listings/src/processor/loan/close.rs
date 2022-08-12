@@ -69,6 +69,8 @@ pub fn handle_close_loan(ctx: Context<CloseLoan>) -> Result<()> {
         )?;
     }
 
+    token_manager.accounts.loan = false;
+
   
     Ok(())
 }
