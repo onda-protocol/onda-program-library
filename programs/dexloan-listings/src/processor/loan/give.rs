@@ -42,7 +42,6 @@ pub struct GiveLoan<'info> {
 
 pub fn handle_give_loan(ctx: Context<GiveLoan>) -> Result<()> {
     let loan = &mut ctx.accounts.loan;
-    let token_manager = &mut ctx.accounts.token_manager;
 
     loan.state = LoanState::Active;
     loan.lender = ctx.accounts.lender.key();

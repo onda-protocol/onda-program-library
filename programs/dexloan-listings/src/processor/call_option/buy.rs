@@ -47,7 +47,6 @@ pub struct BuyCallOption<'info> {
 
 pub fn handle_buy_call_option(ctx: Context<BuyCallOption>) -> Result<()> {
     let call_option = &mut ctx.accounts.call_option;
-    let token_manager = &mut ctx.accounts.token_manager;
 
     call_option.state = CallOptionState::Active;
     call_option.buyer = ctx.accounts.buyer.key();
