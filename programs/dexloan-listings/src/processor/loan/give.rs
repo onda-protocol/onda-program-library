@@ -24,15 +24,15 @@ pub struct GiveLoan<'info> {
     )]
     pub loan: Box<Account<'info, Loan>>,
     #[account(
-        init_if_needed,
-        payer = borrower,
+        mut,
         seeds = [
             TokenManager::PREFIX,
             mint.key().as_ref(),
             borrower.key().as_ref()
         ],
-        space = TokenManager::space(),
         bump,
+        constraint = token_manager.accounts.loan == false,
+        constraint = token_manager.accounts.call_option == false,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
     pub mint: Box<Account<'info, Mint>>,

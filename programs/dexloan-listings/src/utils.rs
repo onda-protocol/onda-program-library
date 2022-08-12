@@ -216,18 +216,21 @@ pub fn thaw_and_transfer_from_token_account<'info>(
         }
     )?;
 
-    anchor_spl::token::transfer(
-        CpiContext::new_with_signer(
-            token_program.to_account_info(),
-            anchor_spl::token::Transfer {
-                from: from_token_account,
-                to: to_token_account,
-                authority: token_manager.to_account_info(),
-            },
-            signer_seeds
-        ),
-        1
-    )?;
+    if from_token_account.key() != to_token_account.key() {
+        msg!("Transferring NFT to {:?}", to_token_account);
+        anchor_spl::token::transfer(
+            CpiContext::new_with_signer(
+                token_program.to_account_info(),
+                anchor_spl::token::Transfer {
+                    from: from_token_account,
+                    to: to_token_account,
+                    authority: token_manager.to_account_info(),
+                },
+                signer_seeds
+            ),
+            1
+        )?;
+    }
 
     Ok(())
 }

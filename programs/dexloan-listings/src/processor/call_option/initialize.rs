@@ -69,6 +69,9 @@ pub fn handle_init_call_option(
         return Err(DexloanError::InvalidExpiry.into())
     }
 
+    require_eq!(token_manager.accounts.hire, false, DexloanError::InvalidState);
+    require_eq!(token_manager.accounts.call_option, false, DexloanError::InvalidState);
+
     // Init
     call_option.seller = ctx.accounts.seller.key();
     call_option.mint = ctx.accounts.mint.key();
@@ -192,6 +195,9 @@ pub fn handle_init_call_option_with_hire(
     let call_option = &mut ctx.accounts.call_option;
     let token_manager = &mut ctx.accounts.token_manager;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
+
+    require_eq!(token_manager.accounts.hire, false, DexloanError::InvalidState);
+    require_eq!(token_manager.accounts.call_option, false, DexloanError::InvalidState);
 
     if unix_timestamp > expiry {
         return Err(DexloanError::InvalidExpiry.into())

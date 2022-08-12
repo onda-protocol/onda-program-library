@@ -63,6 +63,9 @@ pub fn handle_init_loan(
     let token_manager = &mut ctx.accounts.token_manager;
     let deposit_token_account = &ctx.accounts.deposit_token_account;
 
+    require_eq!(token_manager.accounts.hire, false, DexloanError::InvalidState);
+    require_eq!(token_manager.accounts.call_option, false, DexloanError::InvalidState);
+
     // Init
     loan.mint = ctx.accounts.mint.key();
     loan.borrower = ctx.accounts.borrower.key();
@@ -185,6 +188,9 @@ pub fn handle_init_loan_with_hire(
   ) -> Result<()> {
       let loan = &mut ctx.accounts.loan;
       let token_manager = &mut ctx.accounts.token_manager;
+
+      require_eq!(token_manager.accounts.hire, false, DexloanError::InvalidState);
+      require_eq!(token_manager.accounts.call_option, false, DexloanError::InvalidState);
   
       // Init
       loan.mint = ctx.accounts.mint.key();

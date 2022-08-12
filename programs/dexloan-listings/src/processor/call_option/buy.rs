@@ -1,5 +1,5 @@
 use anchor_lang::{prelude::*};
-use anchor_spl::token::{Mint, Token, TokenAccount};
+use anchor_spl::token::{Mint, Token};
 use crate::state::{CallOption, CallOptionState, TokenManager};
 
 #[derive(Accounts)]
@@ -32,14 +32,10 @@ pub struct BuyCallOption<'info> {
             seller.key().as_ref()
         ],
         bump,
+        constraint = token_manager.accounts.loan == false,
+        constraint = token_manager.accounts.call_option == false,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>, 
-    #[account(
-        mut,
-        associated_token::mint = mint,
-        associated_token::authority = seller,
-    )]
-    pub deposit_token_account: Box<Account<'info, TokenAccount>>,
     pub mint: Box<Account<'info, Mint>>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
