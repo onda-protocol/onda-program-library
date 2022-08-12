@@ -50,8 +50,6 @@ pub struct ExtendHire<'info> {
     pub token_manager: Box<Account<'info, TokenManager>>,
     #[account(constraint = mint.supply == 1)]
     pub mint: Box<Account<'info, Mint>>,
-    /// CHECK: deserialized and checked
-    pub metadata: UncheckedAccount<'info>,
     /// Misc
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
@@ -60,30 +58,15 @@ pub struct ExtendHire<'info> {
 
 pub fn handle_extend_hire<'info>(ctx: Context<'_, '_, '_, 'info, ExtendHire<'info>>, days: u16) -> Result<()> {
     let hire = &mut ctx.accounts.hire;
-    let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
     require!(hire.current_start.is_some(), DexloanError::InvalidState);
     require!(hire.current_expiry.is_some(), DexloanError::InvalidState);
 
-    if hire.escrow_balance > 0 {
-        withdraw_from_hire_escrow(
-            hire,
-            &ctx.accounts.hire_escrow.to_account_info(),
-            &ctx.accounts.lender.to_account_info(),
-            unix_timestamp,
-        )?;
-    }
-
     let duration = i64::from(days) * SECONDS_PER_DAY;
     let current_expiry = hire.current_expiry.unwrap();
-    let new_current_expiry = if current_expiry > unix_timestamp {
-        current_expiry + duration
-    } else {
-        unix_timestamp + duration
-    };
+    let new_current_expiry = current_expiry + duration;
     
     hire.current_expiry = Some(new_current_expiry);
-    hire.current_start = Some(unix_timestamp);
 
     process_payment_to_hire_escrow(
         hire,

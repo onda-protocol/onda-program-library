@@ -249,13 +249,13 @@ pub fn calculate_widthdawl_amount<'info>(hire: &mut Account<'info, Hire>, unix_t
     }
 
     let fraction = (now - start) / (end - start);
-    let withdrawl_amount = fraction * balance;
-    
-    Ok(withdrawl_amount.round() as u64)
+    let withdrawl_amount = balance * fraction;
+
+    Ok(withdrawl_amount.floor() as u64)
 }
 
 fn transfer_from_escrow(
-    escrow: &mut AccountInfo, // we better own this account though
+    escrow: &mut AccountInfo,
     to: &mut AccountInfo,
     amount: u64,
 ) -> Result<()> {
@@ -267,6 +267,7 @@ fn transfer_from_escrow(
         .lamports()
         .checked_add(amount)
         .ok_or(ProgramError::InvalidArgument)?;
+    
     Ok(())
 }
 
@@ -290,6 +291,7 @@ pub fn withdraw_from_hire_escrow<'a, 'b>(
 
     let remaining_amount = hire.escrow_balance - amount;
     hire.escrow_balance = remaining_amount;
+    hire.current_start = Some(unix_timestamp);
 
     Ok(remaining_amount)
 }
@@ -337,7 +339,7 @@ pub fn process_payment_to_hire_escrow<'info>(
     borrower: AccountInfo<'info>,
     days: u16,
 ) -> Result<()> {
-    let amount = u64::from(days) * hire.amount;
+    let amount = u64::from(days).checked_mul(hire.amount).ok_or(DexloanError::NumericalOverflow)?;
 
     msg!("Paying {} lamports to hire escrow", amount);
 
