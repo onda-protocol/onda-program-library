@@ -125,14 +125,6 @@ pub struct InitCallOptionWithHire<'info> {
     #[account(mut)]
     pub seller: Signer<'info>,
     #[account(
-        mut,
-        constraint = deposit_token_account.amount == 1,
-        constraint = deposit_token_account.owner == seller.key(),
-        associated_token::mint = mint,
-        associated_token::authority = seller,
-    )]
-    pub deposit_token_account: Box<Account<'info, TokenAccount>>,
-    #[account(
         init,
         payer = seller,
         seeds = [

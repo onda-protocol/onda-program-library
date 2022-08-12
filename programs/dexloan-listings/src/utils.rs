@@ -233,13 +233,22 @@ pub fn thaw_and_transfer_from_token_account<'info>(
 }
 
 pub fn calculate_widthdawl_amount<'info>(hire: &mut Account<'info, Hire>, unix_timestamp: i64) -> Result<u64> {
-    let start = hire.current_start.unwrap();
-    let end = hire.current_expiry.unwrap();
-    let pro_rata_amount = (
-        (unix_timestamp - start) / (end - start)
-    ).checked_mul(hire.escrow_balance as i64).ok_or(DexloanError::NumericalOverflow).unwrap();
+    require!(hire.current_start.is_some(), DexloanError::InvalidState);
+    require!(hire.current_expiry.is_some(), DexloanError::InvalidState);
 
-    Ok(pro_rata_amount as u64)
+    let start = hire.current_start.unwrap() as f64;
+    let end = hire.current_expiry.unwrap() as f64;
+    let now = unix_timestamp as f64;
+    let balance = hire.escrow_balance as f64;
+
+    if now > end {
+        return Ok(hire.escrow_balance)
+    }
+
+    let fraction = (now - start) / (end - start);
+    let withdrawl_amount = fraction * balance;
+    
+    Ok(withdrawl_amount.round() as u64)
 }
 
 fn transfer_from_escrow(
@@ -448,10 +457,12 @@ pub fn calculate_loan_repayment(
     duration: i64
 ) -> Result<u64> {
     let annual_fee = calculate_fee_from_basis_points(amount as u128, basis_points as u128)?;
-    msg!("annual interest fee {}", annual_fee);
     let fee_divisor = (31_536_000 as f64) / (duration as f64);
-    msg!("fee_divisor {}", fee_divisor);
     let pro_rata_fee = (annual_fee as f64 / fee_divisor).round() as u64;
+    
+    msg!("annual interest fee {}", annual_fee);
+    msg!("fee_divisor {}", fee_divisor);
     msg!("pro_rata_fee {}", pro_rata_fee);
+    
     Ok(amount + pro_rata_fee)
 }

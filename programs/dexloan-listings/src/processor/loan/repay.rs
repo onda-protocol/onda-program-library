@@ -80,14 +80,16 @@ pub fn handle_repay_loan(ctx: Context<RepayLoan>) -> Result<()> {
         ]
     )?;
 
-    thaw_and_revoke_token_account(
-        token_manager,
-        ctx.accounts.token_program.to_account_info(),
-        ctx.accounts.deposit_token_account.to_account_info(),
-        ctx.accounts.borrower.to_account_info(),
-        ctx.accounts.mint.to_account_info(),
-        ctx.accounts.edition.to_account_info()
-    )?;
+    if token_manager.accounts.hire == false {
+        thaw_and_revoke_token_account(
+            token_manager,
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.deposit_token_account.to_account_info(),
+            ctx.accounts.borrower.to_account_info(),
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.edition.to_account_info()
+        )?;
+    }
 
     Ok(())
 }
