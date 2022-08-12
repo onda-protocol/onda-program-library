@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{CallOption, CallOptionState, TokenManager};
 use crate::error::{DexloanError};
-use crate::utils::{thaw, FreezeParams};
+use crate::utils::*;
 
 #[derive(Accounts)]
 pub struct CloseCallOption<'info> {
@@ -52,47 +52,28 @@ pub struct CloseCallOption<'info> {
 }
 
 pub fn handle_close_call_option(ctx: Context<CloseCallOption>) -> Result<()> {
-  let call_option = &ctx.accounts.call_option;
-  let token_manager = &mut ctx.accounts.token_manager;
-  let unix_timestamp = ctx.accounts.clock.unix_timestamp;
+    let call_option = &ctx.accounts.call_option;
+    let token_manager = &mut ctx.accounts.token_manager;
+    let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
-  if call_option.state == CallOptionState::Active {
-      if call_option.expiry > unix_timestamp {
-          return Err(DexloanError::OptionNotExpired.into())
-      }
-  }
+    if call_option.state == CallOptionState::Active {
+        if call_option.expiry > unix_timestamp {
+            return Err(DexloanError::OptionNotExpired.into())
+        }
+    }
 
-  token_manager.accounts.call_option = false;
+    token_manager.accounts.call_option = false;
 
-  if ctx.accounts.deposit_token_account.is_frozen() {
-      let signer_bump = &[ctx.accounts.call_option.bump];
-      let signer_seeds = &[&[
-          CallOption::PREFIX,
-          call_option.mint.as_ref(),
-          call_option.seller.as_ref(),
-          signer_bump
-      ][..]];
-  
-      thaw(
-          FreezeParams {
-              delegate: ctx.accounts.call_option.to_account_info(),
-              token_account: ctx.accounts.deposit_token_account.to_account_info(),
-              edition: ctx.accounts.edition.to_account_info(),
-              mint: ctx.accounts.mint.to_account_info(),
-              signer_seeds: signer_seeds
-          }
-      )?;
-  }
+    if token_manager.accounts.hire == false {
+        thaw_and_revoke_token_account(
+            token_manager,
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.deposit_token_account.to_account_info(),
+            ctx.accounts.seller.to_account_info(),
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.edition.to_account_info()
+        )?;
+    }
 
-  anchor_spl::token::revoke(
-      CpiContext::new(
-          ctx.accounts.token_program.to_account_info(),
-          anchor_spl::token::Revoke {
-              source: ctx.accounts.deposit_token_account.to_account_info(),
-              authority: ctx.accounts.seller.to_account_info(),
-          }
-      )
-  )?;
-
-  Ok(())
+    Ok(())
 }

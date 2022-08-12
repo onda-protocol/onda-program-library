@@ -35,7 +35,6 @@ pub struct ExerciseCallOption<'info> {
         ],
         bump,
         constraint = token_manager.accounts.hire != true,
-        constraint = token_manager.accounts.call_option == true,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
     #[account(
@@ -209,6 +208,7 @@ pub fn handle_exercise_call_option_with_hire<'info>(ctx: Context<'_, '_, '_, 'in
 
     call_option.state = CallOptionState::Exercised;
     token_manager.accounts.call_option = false;
+    token_manager.accounts.hire = false;
 
     if hire.borrower.is_some() {
         settle_hire_escrow_balance(

@@ -31,8 +31,6 @@ pub struct GiveLoan<'info> {
             borrower.key().as_ref()
         ],
         bump,
-        constraint = token_manager.accounts.loan == false,
-        constraint = token_manager.accounts.call_option == false,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
     pub mint: Box<Account<'info, Mint>>,
@@ -49,8 +47,6 @@ pub fn handle_give_loan(ctx: Context<GiveLoan>) -> Result<()> {
     loan.state = LoanState::Active;
     loan.lender = ctx.accounts.lender.key();
     loan.start_date = ctx.accounts.clock.unix_timestamp;
-    //
-    token_manager.accounts.loan = true;
 
     // Transfer amount
     anchor_lang::solana_program::program::invoke(

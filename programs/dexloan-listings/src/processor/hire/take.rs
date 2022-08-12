@@ -106,7 +106,6 @@ pub fn handle_take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>,
     hire.current_start = Some(unix_timestamp);
     hire.current_expiry = Some(current_expiry);
     hire.state = HireState::Hired;
-    token_manager.accounts.hire = true;
 
     if hire.amount > 0 {
         process_payment_to_hire_escrow(

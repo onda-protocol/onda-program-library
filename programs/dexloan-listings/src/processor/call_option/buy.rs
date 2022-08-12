@@ -32,8 +32,6 @@ pub struct BuyCallOption<'info> {
             seller.key().as_ref()
         ],
         bump,
-        constraint = token_manager.accounts.loan == false,
-        constraint = token_manager.accounts.call_option == false,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>, 
     pub mint: Box<Account<'info, Mint>>,
@@ -53,8 +51,6 @@ pub fn handle_buy_call_option(ctx: Context<BuyCallOption>) -> Result<()> {
 
     call_option.state = CallOptionState::Active;
     call_option.buyer = ctx.accounts.buyer.key();
-    //
-    token_manager.accounts.call_option = true;
 
     // Transfer option cost
     anchor_lang::solana_program::program::invoke(

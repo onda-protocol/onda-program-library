@@ -70,12 +70,14 @@ pub fn handle_init_loan(
     loan.mint = ctx.accounts.mint.key();
     loan.borrower = ctx.accounts.borrower.key();
     loan.bump = *ctx.bumps.get("loan").unwrap();
-    token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
     //
     loan.amount = amount;
     loan.basis_points = basis_points;
     loan.duration = duration;
     loan.state = LoanState::Listed;
+    //
+    token_manager.accounts.loan = true;
+    token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
 
     if deposit_token_account.delegate.is_some() {
         if !deposit_token_account.is_frozen() && deposit_token_account.delegate.unwrap() != token_manager.key()  {
@@ -196,12 +198,14 @@ pub fn handle_init_loan_with_hire(
       loan.mint = ctx.accounts.mint.key();
       loan.borrower = ctx.accounts.borrower.key();
       loan.bump = *ctx.bumps.get("loan").unwrap();
-      token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
       //
       loan.amount = amount;
       loan.basis_points = basis_points;
       loan.duration = duration;
       loan.state = LoanState::Listed;
+      //
+      token_manager.accounts.loan = true;
+      token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
   
       Ok(())
   }

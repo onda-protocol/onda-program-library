@@ -76,12 +76,14 @@ pub fn handle_init_call_option(
     call_option.seller = ctx.accounts.seller.key();
     call_option.mint = ctx.accounts.mint.key();
     call_option.bump = *ctx.bumps.get("call_option").unwrap();
-    token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
     //
     call_option.amount = amount;
     call_option.expiry = expiry;
     call_option.strike_price = strike_price;
     call_option.state = CallOptionState::Listed;
+    //
+    token_manager.accounts.call_option = true;
+    token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
 
     if deposit_token_account.delegate.is_some() {
         if !deposit_token_account.is_frozen() && deposit_token_account.delegate.unwrap() != token_manager.key()  {
@@ -207,12 +209,14 @@ pub fn handle_init_call_option_with_hire(
     call_option.seller = ctx.accounts.seller.key();
     call_option.mint = ctx.accounts.mint.key();
     call_option.bump = *ctx.bumps.get("call_option").unwrap();
-    token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
     //
     call_option.amount = amount;
     call_option.expiry = expiry;
     call_option.strike_price = strike_price;
     call_option.state = CallOptionState::Listed;
+    //
+    token_manager.accounts.call_option = true;
+    token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
   
     Ok(())
 }

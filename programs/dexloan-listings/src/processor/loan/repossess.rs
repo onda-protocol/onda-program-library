@@ -46,7 +46,6 @@ pub struct Repossess<'info> {
         ],
         bump,
         constraint = token_manager.accounts.hire == false,
-        constraint = token_manager.accounts.loan == true,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
     /// CHECK: contrained on loan_account

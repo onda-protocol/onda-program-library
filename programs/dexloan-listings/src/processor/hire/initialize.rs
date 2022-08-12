@@ -79,16 +79,17 @@ pub fn handle_init_hire(
     hire.lender = ctx.accounts.lender.key();
     hire.mint = ctx.accounts.mint.key();
     hire.bump = *ctx.bumps.get("hire").unwrap();
-    token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
     //
     hire.amount = args.amount;
     hire.escrow_balance = 0;
     hire.expiry = args.expiry;
     hire.state = HireState::Listed;
-    //
     if args.borrower.is_some() {
         hire.borrower = args.borrower;
     }
+    //
+    token_manager.accounts.hire = true;
+    token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
 
     if deposit_token_account.delegate.is_some() {
         if !deposit_token_account.is_frozen() && deposit_token_account.delegate.unwrap() != token_manager.key()  {
