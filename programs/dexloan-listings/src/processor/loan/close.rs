@@ -48,6 +48,12 @@ pub struct CloseLoan<'info> {
 pub fn handle_close_loan(ctx: Context<CloseLoan>) -> Result<()> {
     let token_manager = &mut ctx.accounts.token_manager;
 
+    token_manager.accounts.loan = false;
+    // IMPORTANT CHECK!
+    if token_manager.accounts.hire == true {
+        return Ok(());
+    }
+
     if ctx.accounts.deposit_token_account.is_frozen() {
         thaw_and_revoke_token_account(
             token_manager,
@@ -68,9 +74,6 @@ pub fn handle_close_loan(ctx: Context<CloseLoan>) -> Result<()> {
             )
         )?;
     }
-
-    token_manager.accounts.loan = false;
-
   
     Ok(())
 }

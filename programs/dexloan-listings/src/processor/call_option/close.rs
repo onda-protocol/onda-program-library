@@ -62,6 +62,12 @@ pub fn handle_close_call_option(ctx: Context<CloseCallOption>) -> Result<()> {
         }
     }
 
+    token_manager.accounts.call_option = false;
+    // IMPORTANT CHECK!
+    if token_manager.accounts.hire == true {
+        return Ok(());
+    }
+
     if ctx.accounts.deposit_token_account.is_frozen() {
         thaw_and_revoke_token_account(
             token_manager,
@@ -82,8 +88,6 @@ pub fn handle_close_call_option(ctx: Context<CloseCallOption>) -> Result<()> {
             )
         )?;
     }
-
-    token_manager.accounts.call_option = false;
 
     Ok(())
 }
