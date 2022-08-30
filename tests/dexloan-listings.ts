@@ -913,7 +913,7 @@ describe("dexloan_listings", () => {
     });
   });
 
-  describe.only("Hires", () => {
+  describe("Hires", () => {
     describe("Specified borrower", async () => {
       let lender: helpers.HireLender;
       let borrowerTokenAccount: anchor.web3.PublicKey;
