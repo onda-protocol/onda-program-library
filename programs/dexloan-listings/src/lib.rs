@@ -27,15 +27,6 @@ pub mod dexloan_listings {
         handle_init_loan(ctx, amount, basis_points, duration)
     }
 
-    pub fn init_loan_with_hire<'info>(
-        ctx: Context<'_, '_, '_, 'info, InitLoanWithHire<'info>>,
-        amount: u64,
-        basis_points: u32,
-        duration: i64
-    ) -> Result<()> {
-        handle_init_loan_with_hire(ctx, amount, basis_points, duration)
-    }
-
     pub fn close_loan<'info>(ctx: Context<'_, '_, '_, 'info, CloseLoan<'info>>) -> Result<()> {
         handle_close_loan(ctx)
     }
@@ -64,15 +55,6 @@ pub mod dexloan_listings {
         expiry: i64
     ) -> Result<()> {
         handle_init_call_option(ctx, amount, strike_price, expiry)
-    }
-
-    pub fn init_call_option_with_hire(
-        ctx: Context<InitCallOptionWithHire>,
-        amount: u64,
-        strike_price: u64,
-        expiry: i64
-    ) -> Result<()> {
-        handle_init_call_option_with_hire(ctx, amount, strike_price, expiry)
     }
 
     pub fn buy_call_option<'info>(ctx: Context<'_, '_, '_, 'info, BuyCallOption<'info>>) -> Result<()> {
