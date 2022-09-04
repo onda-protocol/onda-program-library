@@ -175,7 +175,7 @@ pub fn handle_repossess_with_hire<'info>(ctx: Context<'_, '_, '_, 'info, Reposse
     let duration = unix_timestamp - start_date;
 
     if loan.duration > duration  {
-        return Err(DexloanError::NotOverdue.into())
+        return err!(DexloanError::NotOverdue);
     }
 
     loan.state = LoanState::Defaulted;

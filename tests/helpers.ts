@@ -258,7 +258,6 @@ export async function mintNFT(
       creators: [
         {
           address: creator,
-          verified: false,
           share: 100,
         },
       ],

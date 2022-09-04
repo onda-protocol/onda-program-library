@@ -1989,7 +1989,7 @@ describe("dexloan_listings", () => {
       });
     });
 
-    describe.only("List call option after active hire", () => {
+    describe("List call option after active hire", () => {
       let lender: helpers.HireLender;
       let borrower: helpers.HireBorrower;
 
