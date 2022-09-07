@@ -32,8 +32,9 @@ pub struct Loan {
     pub start_date: Option<i64>,
     /// The mint of the token being used for collateral
     pub mint: Pubkey,
-    /// Misc
-    pub padding: [u8; 32],
+    /// The mint of the spl-token mint
+    pub token_mint: Option<Pubkey>,
+    /// misc
     pub bump: u8,
 }
 
@@ -51,7 +52,7 @@ impl Loan {
         8 + // duration
         (1 + 8) + // start_date
         32 + // mint
-        32 + // padding
+        (1 + 32) + // padding
         1 // bump
     }
 

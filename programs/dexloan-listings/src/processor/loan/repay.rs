@@ -29,8 +29,8 @@ pub struct RepayLoan<'info> {
         ],
         bump,
         has_one = borrower,
-        has_one = lender,
         has_one = mint,
+        constraint = loan.lender.unwrap() == lender.key(), 
         constraint = loan.state == LoanState::Active,
         close = borrower
     )]
@@ -62,7 +62,7 @@ pub fn handle_repay_loan(ctx: Context<RepayLoan>) -> Result<()> {
     token_manager.accounts.loan = false;
 
     let amount_due = calculate_loan_repayment(
-        loan.amount,
+        loan.amount.unwrap(),
         loan.basis_points,
         loan.duration
     )?;
@@ -71,7 +71,7 @@ pub fn handle_repay_loan(ctx: Context<RepayLoan>) -> Result<()> {
     invoke(
         &anchor_lang::solana_program::system_instruction::transfer(
             &loan.borrower,
-            &loan.lender,
+            &loan.lender.unwrap(),
             amount_due,
         ),
         &[

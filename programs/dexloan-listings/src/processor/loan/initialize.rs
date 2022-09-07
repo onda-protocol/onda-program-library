@@ -69,7 +69,7 @@ pub fn handle_init_loan(
     loan.borrower = ctx.accounts.borrower.key();
     loan.bump = *ctx.bumps.get("loan").unwrap();
     //
-    loan.amount = amount;
+    loan.amount = Some(amount);
     loan.basis_points = basis_points;
     loan.duration = duration;
     loan.state = LoanState::Listed;
