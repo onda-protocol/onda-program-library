@@ -303,6 +303,33 @@ export async function giveLoan(
 export type CallOptionSeller = Awaited<ReturnType<typeof initCallOption>>;
 export type CallOptionBuyer = Awaited<ReturnType<typeof buyCallOption>>;
 
+export async function mintNFT(
+  connection: anchor.web3.Connection,
+  keypair: anchor.web3.Keypair
+) {
+  const creator = anchor.web3.Keypair.generate().publicKey;
+  await requestAirdrop(connection, creator);
+
+  const metaplex = Metaplex.make(connection).use(keypairIdentity(keypair));
+
+  const { nft } = await metaplex
+    .nfts()
+    .create({
+      uri: "https://arweave.net/123",
+      name: "My NFT",
+      sellerFeeBasisPoints: 500,
+      creators: [
+        {
+          address: creator,
+          share: 100,
+        },
+      ],
+    })
+    .run();
+
+  return nft;
+}
+
 export async function initCallOption(
   connection: anchor.web3.Connection,
   options: {

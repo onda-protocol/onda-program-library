@@ -2020,5 +2020,174 @@ describe("dexloan_listings", () => {
         });
       });
     });
+
+    describe("List call option after active hire", () => {
+      let lender: helpers.HireLender;
+      let borrower: helpers.HireBorrower;
+
+      let hireOptions = {
+        amount: anchor.web3.LAMPORTS_PER_SOL / 100,
+        expiry: Math.round(Date.now() / 1000 + 86_400 * 3),
+        borrower: null,
+      };
+
+      it("Lists a hire", async () => {
+        lender = await helpers.initHire(connection, hireOptions);
+
+        const hire = await lender.program.account.hire.fetch(lender.hire);
+        const tokenManager = await lender.program.account.tokenManager.fetch(
+          lender.tokenManager
+        );
+        const tokenAccount = await splToken.getAccount(
+          connection,
+          lender.depositTokenAccount
+        );
+
+        assert.deepEqual(tokenManager.accounts, {
+          hire: true,
+          callOption: false,
+          loan: false,
+        });
+        assert.equal(
+          tokenAccount.delegate.toBase58(),
+          lender.tokenManager.toBase58()
+        );
+        assert.equal(tokenAccount.amount, BigInt(1));
+        assert.equal(hire.borrower, null);
+        assert.equal(hire.expiry.toNumber(), hireOptions.expiry);
+        assert.deepEqual(hire.state, { listed: {} });
+      });
+
+      it("Allows listed NFTs to be hired", async () => {
+        borrower = await helpers.takeHire(connection, lender, 2);
+
+        const hire = await lender.program.account.hire.fetch(lender.hire);
+        const tokenManager = await lender.program.account.tokenManager.fetch(
+          lender.tokenManager
+        );
+        const tokenAccount = await splToken.getAccount(
+          connection,
+          borrower.hireTokenAccount
+        );
+
+        assert.deepEqual(tokenManager.accounts, {
+          loan: false,
+          hire: true,
+          callOption: false,
+        });
+        assert.equal(
+          hire.borrower.toBase58(),
+          borrower.keypair.publicKey.toBase58()
+        );
+        assert.deepEqual(hire.state, { hired: {} });
+        assert.equal(tokenAccount.amount, BigInt(1));
+        assert.ok(tokenAccount.isFrozen);
+        assert.ok(tokenAccount.delegate.equals(lender.tokenManager));
+        assert.equal(tokenAccount.delegatedAmount, BigInt(1));
+      });
+
+      it("Restricts call option creation to original lender", async () => {
+        const amount = new anchor.BN(1_000_000);
+        const strikePrice = new anchor.BN(anchor.web3.LAMPORTS_PER_SOL);
+        const expiry = new anchor.BN(
+          Math.round(Date.now() / 1000 + 30 * 24 * 60 * 2)
+        );
+        const callOptionAddress = await helpers.findCallOptionAddress(
+          lender.mint,
+          borrower.keypair.publicKey
+        );
+        const tokenManager = await helpers.findTokenManagerAddress(
+          lender.mint,
+          borrower.keypair.publicKey
+        );
+
+        try {
+          await borrower.program.methods
+            .initCallOption(amount, strikePrice, expiry)
+            .accounts({
+              tokenManager,
+              callOption: callOptionAddress,
+              depositTokenAccount: borrower.hireTokenAccount,
+              mint: lender.mint,
+              edition: lender.edition,
+              seller: borrower.keypair.publicKey,
+              metadataProgram: METADATA_PROGRAM_ID,
+              tokenProgram: splToken.TOKEN_PROGRAM_ID,
+              rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+              systemProgram: anchor.web3.SystemProgram.programId,
+              clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+            })
+            .rpc();
+          assert.fail("Expected to throw");
+        } catch (err) {
+          assert(err instanceof anchor.AnchorError);
+          assert.equal(err.error.errorCode.number, 6013);
+          assert.equal(err.error.errorCode.code, "InvalidDelegate");
+        }
+      });
+
+      it("Allows active hires to be listed as call options", async () => {
+        const callOptionAddress = await helpers.findCallOptionAddress(
+          lender.mint,
+          lender.keypair.publicKey
+        );
+        const tokenManager = await helpers.findTokenManagerAddress(
+          lender.mint,
+          lender.keypair.publicKey
+        );
+
+        const amount = new anchor.BN(1_000_000);
+        const strikePrice = new anchor.BN(anchor.web3.LAMPORTS_PER_SOL);
+        const expiry = new anchor.BN(
+          Math.round(Date.now() / 1000 + 30 * 24 * 60 * 2)
+        );
+
+        await lender.program.methods
+          .initCallOption(amount, strikePrice, expiry)
+          .accounts({
+            tokenManager,
+            callOption: callOptionAddress,
+            depositTokenAccount: borrower.hireTokenAccount,
+            mint: lender.mint,
+            edition: lender.edition,
+            seller: lender.keypair.publicKey,
+            metadataProgram: METADATA_PROGRAM_ID,
+            tokenProgram: splToken.TOKEN_PROGRAM_ID,
+            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+          })
+          .rpc();
+
+        const callOption = await lender.program.account.callOption.fetch(
+          callOptionAddress
+        );
+        const tokenManagerData =
+          await lender.program.account.tokenManager.fetch(lender.tokenManager);
+        const tokenAccount = await splToken.getAccount(
+          connection,
+          borrower.hireTokenAccount
+        );
+
+        assert.deepEqual(tokenManagerData.accounts, {
+          hire: true,
+          callOption: true,
+          loan: false,
+        });
+        assert.equal(
+          tokenAccount.delegate.toBase58(),
+          lender.tokenManager.toBase58()
+        );
+        assert.equal(
+          callOption.seller.toBase58(),
+          lender.keypair.publicKey.toBase58()
+        );
+        assert.equal(callOption.strikePrice.toNumber(), strikePrice.toNumber());
+        assert.equal(callOption.expiry.toNumber(), expiry.toNumber());
+        assert.equal(callOption.mint.toBase58(), lender.mint.toBase58());
+        assert.deepEqual(callOption.state, { listed: {} });
+        assert.equal(tokenAccount.amount, BigInt(1));
+      });
+    });
   });
 });

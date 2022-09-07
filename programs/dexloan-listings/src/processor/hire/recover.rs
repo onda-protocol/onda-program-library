@@ -78,25 +78,11 @@ pub fn handle_recover_hire(ctx: Context<RecoverHire>) -> Result<()> {
     require!(hire.current_start.is_some(), DexloanError::InvalidState);
     require!(hire.current_expiry.is_some(), DexloanError::InvalidState);
 
-    if hire.escrow_balance > 0 {
-        withdraw_from_hire_escrow(
-            hire,
-            &ctx.accounts.hire_escrow.to_account_info(),
-            &ctx.accounts.lender.to_account_info(),
-            unix_timestamp,
-        )?;
-    }
-
     let current_expiry = hire.current_expiry.unwrap();
 
     if current_expiry > unix_timestamp {
         return Err(DexloanError::NotExpired.into());
     }
-
-    hire.current_start = None;
-    hire.current_expiry = None;
-    hire.borrower = None;
-    hire.state = HireState::Listed;
 
     thaw_and_transfer_from_token_account(
         token_manager,
@@ -118,6 +104,20 @@ pub fn handle_recover_hire(ctx: Context<RecoverHire>) -> Result<()> {
         ctx.accounts.edition.to_account_info(),
         ctx.accounts.lender.to_account_info(),
     )?;
+
+    if hire.escrow_balance > 0 {
+        withdraw_from_hire_escrow(
+            hire,
+            &ctx.accounts.hire_escrow.to_account_info(),
+            &ctx.accounts.lender.to_account_info(),
+            unix_timestamp,
+        )?;
+    }
+
+    hire.current_start = None;
+    hire.current_expiry = None;
+    hire.borrower = None;
+    hire.state = HireState::Listed;
 
     Ok(())
 }
