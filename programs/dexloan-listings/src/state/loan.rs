@@ -18,8 +18,6 @@ pub struct Loan {
     pub amount: Option<u64>,
     /// The liquidation threshold
     pub threshold: Option<u32>,
-    /// The secondary sale price
-    pub sale_price: Option<u64>,
     /// The NFT holder
     pub borrower: Pubkey,
     /// The issuer of the loan

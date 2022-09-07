@@ -7,9 +7,9 @@ use {
     },
   },
   mpl_token_metadata::{
-    instruction::{freeze_delegated_account, thaw_delegated_account}
+    instruction::{freeze_delegated_account, thaw_delegated_account},
+    state::{Metadata}
   },
-  metaplex_token_metadata::state::{Metadata}
 };
 use crate::state::{Hire, TokenManager};
 use crate::error::*;
@@ -375,6 +375,29 @@ pub fn assert_metadata_valid<'a>(
       return err!(DexloanError::MetadataDoesntExist);
     }
   
+    Ok(())
+}
+
+pub fn assert_collection_valid<'a>(
+    metadata_info: &AccountInfo<'a>,
+    mint: &AccountInfo<'a>,
+    collection: &AccountInfo<'a>,
+) -> Result<()> {
+    let metadata = Metadata::deserialize(
+        &mut metadata_info.data.borrow_mut().as_ref()
+    )?;
+
+    if metadata.mint != mint.key() {
+        return  err!(DexloanError::InvalidMint);
+    }
+
+    if metadata.collection.unwrap().key == 
+
+    assert_metadata_valid(
+        &metadata_info,
+        &mint
+    )?;
+
     Ok(())
 }
   

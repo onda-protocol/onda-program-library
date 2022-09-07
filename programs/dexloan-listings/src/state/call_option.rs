@@ -16,7 +16,7 @@ pub struct CallOption {
     /// The issuer of the call option
     pub seller: Pubkey,
     /// The buyer of the call option
-    pub buyer: Pubkey,
+    pub buyer: Option<Pubkey>,
     /// Duration of the loan in seconds
     pub expiry: i64,
     /// The start date of the loan
@@ -34,7 +34,7 @@ impl CallOption {
         1 + // state
         8 + // amount
         32 + // seller
-        32 + // buyer
+        1 + 32 + // buyer
         8 + // expiry
         8 + // strike price
         32 + // mint

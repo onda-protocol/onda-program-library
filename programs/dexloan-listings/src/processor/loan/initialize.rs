@@ -1,6 +1,6 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{Loan, LoanState, TokenManager};
+use crate::state::{Loan, LoanState, Collection, TokenManager};
 use crate::utils::*;
 use crate::error::*;
 
@@ -39,8 +39,18 @@ pub struct InitLoan<'info> {
         bump,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
+    #[account(
+        seeds = [
+            Collection::PREFIX,
+            collection.mint.as_ref(),
+        ],
+        bump,
+    )]
+    pub collection: Box<Account<'info, Collection>>,
     #[account(constraint = mint.supply == 1)]
     pub mint: Box<Account<'info, Mint>>,
+    /// CHECK: deserialized and checked
+    pub metadata: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
     /// CHECK: validated in cpi

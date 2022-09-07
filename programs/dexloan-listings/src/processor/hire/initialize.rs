@@ -1,6 +1,6 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{Hire, HireState, TokenManager};
+use crate::state::{Hire, HireState, Collection, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
 
@@ -45,8 +45,18 @@ pub struct InitHire<'info> {
         bump,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
+    #[account(
+        seeds = [
+            Collection::PREFIX,
+            collection.mint.as_ref(),
+        ],
+        bump,
+    )]
+    pub collection: Box<Account<'info, Collection>>,
     #[account(constraint = mint.supply == 1)]
     pub mint: Box<Account<'info, Mint>>,
+    /// CHECK: deserialized and checked
+    pub metadata: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
