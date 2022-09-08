@@ -126,8 +126,10 @@ export async function mintNFT(
   connection: anchor.web3.Connection,
   keypair: anchor.web3.Keypair
 ) {
-  const creator = anchor.web3.Keypair.generate().publicKey;
-  await requestAirdrop(connection, creator);
+  const creator = anchor.web3.Keypair.generate();
+  const provider = getProvider(connection, creator);
+  const program = getProgram(provider);
+  await requestAirdrop(connection, creator.publicKey);
 
   const metaplex = Metaplex.make(connection).use(keypairIdentity(keypair));
 
@@ -139,7 +141,7 @@ export async function mintNFT(
       sellerFeeBasisPoints: 500,
       creators: [
         {
-          address: creator,
+          address: creator.publicKey,
           share: 100,
         },
       ],
@@ -147,6 +149,19 @@ export async function mintNFT(
       collectionIsSized: true,
     })
     .run();
+
+  const collectionAddress = await findCollectionAddress(
+    collection.mint.address
+  );
+
+  await program.methods
+    .initCollection()
+    .accounts({
+      authority: creator.publicKey,
+      collection: collectionAddress,
+      mint: collection.address,
+    })
+    .rpc();
 
   const { nft } = await metaplex
     .nfts()
@@ -156,7 +171,7 @@ export async function mintNFT(
       sellerFeeBasisPoints: 500,
       creators: [
         {
-          address: creator,
+          address: creator.publicKey,
           share: 100,
         },
       ],
@@ -179,12 +194,7 @@ export async function mintNFT(
   const latestBlockhash = await connection.getLatestBlockhash();
   await connection.confirmTransaction({ signature, ...latestBlockhash });
 
-  const metadata = await Metadata.fromAccountAddress(
-    connection,
-    nft.metadataAddress
-  );
-
-  return nft;
+  return { nft, collection };
 }
 export type LoanBorrower = Awaited<ReturnType<typeof initLoan>>;
 export type LoanLender = Awaited<ReturnType<typeof giveLoan>>;
@@ -202,22 +212,15 @@ export async function initLoan(
   const program = getProgram(provider);
   await requestAirdrop(connection, keypair.publicKey);
 
-  const metaplex = Metaplex.make(connection).use(keypairIdentity(keypair));
+  const { nft, collection } = await mintNFT(connection, keypair);
 
-  const { nft } = await metaplex
-    .nfts()
-    .create({
-      uri: "https://arweave.net/123",
-      name: "My NFT",
-      sellerFeeBasisPoints: 500,
-    })
-    .run();
-
-  const loanAccount = await findLoanAddress(
+  const loanAddress = await findLoanAddress(
     nft.mint.address,
     keypair.publicKey
   );
-
+  const collectionAddress = await findCollectionAddress(
+    collection.mint.address
+  );
   const tokenManager = await findTokenManagerAddress(
     nft.mint.address,
     keypair.publicKey
@@ -238,10 +241,12 @@ export async function initLoan(
       .accounts({
         tokenManager,
         depositTokenAccount,
-        loan: loanAccount,
+        loan: loanAddress,
+        collection: collectionAddress,
         mint: nft.mint.address,
         borrower: keypair.publicKey,
         edition: nft.edition.address,
+        metadata: nft.metadataAddress,
         metadataProgram: METADATA_PROGRAM_ID,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
@@ -257,9 +262,11 @@ export async function initLoan(
     keypair,
     provider,
     program,
-    loanAccount,
     tokenManager,
     depositTokenAccount,
+    loan: loanAddress,
+    collection: collectionAddress,
+    metadata: nft.metadataAddress,
     edition: nft.edition.address,
     mint: nft.mint.address,
   };
@@ -279,7 +286,7 @@ export async function giveLoan(
       .giveLoan()
       .accounts({
         tokenManager: borrower.tokenManager,
-        loan: borrower.loanAccount,
+        loan: borrower.loan,
         borrower: borrower.keypair.publicKey,
         lender: keypair.publicKey,
         mint: borrower.mint,
@@ -303,33 +310,6 @@ export async function giveLoan(
 export type CallOptionSeller = Awaited<ReturnType<typeof initCallOption>>;
 export type CallOptionBuyer = Awaited<ReturnType<typeof buyCallOption>>;
 
-export async function mintNFT(
-  connection: anchor.web3.Connection,
-  keypair: anchor.web3.Keypair
-) {
-  const creator = anchor.web3.Keypair.generate().publicKey;
-  await requestAirdrop(connection, creator);
-
-  const metaplex = Metaplex.make(connection).use(keypairIdentity(keypair));
-
-  const { nft } = await metaplex
-    .nfts()
-    .create({
-      uri: "https://arweave.net/123",
-      name: "My NFT",
-      sellerFeeBasisPoints: 500,
-      creators: [
-        {
-          address: creator,
-          share: 100,
-        },
-      ],
-    })
-    .run();
-
-  return nft;
-}
-
 export async function initCallOption(
   connection: anchor.web3.Connection,
   options: {
@@ -342,18 +322,20 @@ export async function initCallOption(
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
   await requestAirdrop(connection, keypair.publicKey);
-  const nft = await mintNFT(connection, keypair);
+  const { nft, collection } = await mintNFT(connection, keypair);
 
   const largestAccounts = await connection.getTokenLargestAccounts(
     nft.mint.address
   );
   const depositTokenAccount = largestAccounts.value[0].address;
 
-  const callOptionAccount = await findCallOptionAddress(
+  const callOptionAddress = await findCallOptionAddress(
     nft.mint.address,
     keypair.publicKey
   );
-
+  const collectionAddress = await findCollectionAddress(
+    collection.mint.address
+  );
   const tokenManager = await findTokenManagerAddress(
     nft.mint.address,
     keypair.publicKey
@@ -368,8 +350,10 @@ export async function initCallOption(
       .initCallOption(amount, strikePrice, expiry)
       .accounts({
         tokenManager,
-        callOption: callOptionAccount,
+        callOption: callOptionAddress,
+        collection: collectionAddress,
         mint: nft.mint.address,
+        metadata: nft.metadataAddress,
         edition: nft.edition.address,
         seller: keypair.publicKey,
         depositTokenAccount: depositTokenAccount,
@@ -390,9 +374,11 @@ export async function initCallOption(
     provider,
     program,
     tokenManager,
-    callOptionAccount,
+    callOption: callOptionAddress,
+    collection: collectionAddress,
     depositTokenAccount,
     mint: nft.mint.address,
+    metatdata: nft.metadataAddress,
     edition: nft.edition.address,
   };
 }
@@ -412,7 +398,7 @@ export async function buyCallOption(
       .accounts({
         seller: seller.keypair.publicKey,
         buyer: keypair.publicKey,
-        callOption: seller.callOptionAccount,
+        callOption: seller.callOption,
         tokenManager: seller.tokenManager,
         mint: seller.mint,
         edition: seller.edition,
@@ -456,16 +442,7 @@ export async function initHire(
   const program = getProgram(provider);
   await requestAirdrop(connection, keypair.publicKey);
 
-  const metaplex = Metaplex.make(connection).use(keypairIdentity(keypair));
-
-  const { nft } = await metaplex
-    .nfts()
-    .create({
-      uri: "https://arweave.net/123",
-      name: "My NFT",
-      sellerFeeBasisPoints: 500,
-    })
-    .run();
+  const { nft, collection } = await mintNFT(connection, keypair);
 
   const largestAccounts = await connection.getTokenLargestAccounts(
     nft.mint.address
@@ -476,6 +453,9 @@ export async function initHire(
   const hireEscrow = await findHireEscrowAddress(
     nft.mint.address,
     keypair.publicKey
+  );
+  const collectionAddress = await findCollectionAddress(
+    collection.mint.address
   );
   const tokenManager = await findTokenManagerAddress(
     nft.mint.address,
@@ -492,8 +472,10 @@ export async function initHire(
       .accounts({
         hire,
         tokenManager,
+        collection: collectionAddress,
         lender: keypair.publicKey,
         depositTokenAccount: depositTokenAccount,
+        metadata: nft.metadataAddress,
         mint: nft.mint.address,
         edition: nft.edition.address,
         metadataProgram: METADATA_PROGRAM_ID,
@@ -514,6 +496,7 @@ export async function initHire(
     tokenManager,
     hire,
     hireEscrow,
+    collection: collectionAddress,
     depositTokenAccount,
     mint: nft.mint.address,
     edition: nft.edition.address,

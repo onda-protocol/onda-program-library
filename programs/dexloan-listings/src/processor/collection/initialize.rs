@@ -29,11 +29,10 @@ pub fn handle_init_collection(
     ctx: Context<InitCollection>
 ) -> Result<()> {
     let collection = &mut ctx.accounts.collection;
-
+    
     let admin_pubkey = pubkey!("AH7F2EPHXWhfF5yc7xnv1zPbwz3YqD6CtAqbCyE9dy7r");
-
     require_keys_eq!(ctx.accounts.authority.key(), admin_pubkey);
-
+    
     collection.authority = ctx.accounts.authority.key();
     collection.mint = ctx.accounts.mint.key();
     collection.bump = *ctx.bumps.get("collection").unwrap();

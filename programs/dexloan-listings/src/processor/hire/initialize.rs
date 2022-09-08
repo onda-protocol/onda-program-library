@@ -81,7 +81,6 @@ pub fn handle_init_hire(
         &ctx.accounts.metadata,
         ctx.accounts.mint.key(),
         ctx.accounts.collection.key(),
-        ctx.accounts.collection.bump,
         ctx.program_id.clone(),
     )?;
 

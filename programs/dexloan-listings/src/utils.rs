@@ -250,7 +250,7 @@ pub fn calculate_widthdawl_amount<'info>(hire: &mut Account<'info, Hire>, unix_t
     let fraction = (now - start) / (end - start);
     let withdrawl_amount = balance * fraction;
 
-    Ok(withdrawl_amount.floor() as u64)
+    Ok(withdrawl_amount.round() as u64)
 }
 
 fn transfer_from_escrow(
@@ -382,7 +382,6 @@ pub fn assert_collection_valid<'a>(
     metadata: &AccountInfo<'a>,
     mint: Pubkey,
     collection_pda: Pubkey,
-    collection_bump: u8,
     program_id: Pubkey,
 ) -> Result<()> {
     let metadata = Metadata::deserialize(
@@ -393,11 +392,9 @@ pub fn assert_collection_valid<'a>(
 
     match metadata.collection {
         Some(collection) => {
-            let bump = &[collection_bump];
             let seeds = &[
                 Collection::PREFIX,
                 collection.key.as_ref(),
-                bump,
             ];
             let (address, _) = Pubkey::find_program_address(
                 seeds, 

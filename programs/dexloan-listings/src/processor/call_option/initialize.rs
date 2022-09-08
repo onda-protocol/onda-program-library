@@ -77,7 +77,6 @@ pub fn handle_init_call_option(
         &ctx.accounts.metadata,
         ctx.accounts.mint.key(),
         ctx.accounts.collection.key(),
-        ctx.accounts.collection.bump,
         ctx.program_id.clone(),
     )?;
 
