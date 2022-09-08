@@ -16,6 +16,8 @@ pub enum DexloanError {
     OptionExpired,
     #[msg("Invalid mint")]
     InvalidMint,
+    #[msg("Invalid collection")]
+    InvalidCollection,
     #[msg("Metadata doesnt exist")]
     MetadataDoesntExist,
     #[msg("Derived key invalid")]

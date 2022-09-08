@@ -77,6 +77,14 @@ pub fn handle_init_hire(
     let deposit_token_account = &mut ctx.accounts.deposit_token_account;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
+    assert_collection_valid(
+        &ctx.accounts.metadata,
+        ctx.accounts.mint.key(),
+        ctx.accounts.collection.key(),
+        ctx.accounts.collection.bump,
+        ctx.program_id.clone(),
+    )?;
+
     if unix_timestamp > args.expiry {
         return err!(DexloanError::InvalidExpiry)
     }

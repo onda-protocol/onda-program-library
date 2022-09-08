@@ -71,7 +71,14 @@ pub fn handle_init_loan(
     let token_manager = &mut ctx.accounts.token_manager;
     let deposit_token_account = &ctx.accounts.deposit_token_account;
 
-    // require_eq!(token_manager.accounts.hire, false, DexloanError::InvalidState);
+    assert_collection_valid(
+        &ctx.accounts.metadata,
+        ctx.accounts.mint.key(),
+        ctx.accounts.collection.key(),
+        ctx.accounts.collection.bump,
+        ctx.program_id.clone(),
+    )?;
+
     require_eq!(token_manager.accounts.call_option, false, DexloanError::InvalidState);
 
     // Init

@@ -11,7 +11,7 @@ use {
     state::{Metadata}
   },
 };
-use crate::state::{Hire, TokenManager};
+use crate::state::{Hire, Collection, TokenManager};
 use crate::error::*;
 
 pub struct FreezeParams<'a, 'b> {
@@ -379,24 +379,37 @@ pub fn assert_metadata_valid<'a>(
 }
 
 pub fn assert_collection_valid<'a>(
-    metadata_info: &AccountInfo<'a>,
-    mint: &AccountInfo<'a>,
-    collection: &AccountInfo<'a>,
+    metadata: &AccountInfo<'a>,
+    mint: Pubkey,
+    collection_pda: Pubkey,
+    collection_bump: u8,
+    program_id: Pubkey,
 ) -> Result<()> {
     let metadata = Metadata::deserialize(
-        &mut metadata_info.data.borrow_mut().as_ref()
+        &mut metadata.data.borrow_mut().as_ref()
     )?;
 
-    if metadata.mint != mint.key() {
-        return  err!(DexloanError::InvalidMint);
+    require_keys_eq!(metadata.mint, mint.key(), DexloanError::InvalidMint);
+
+    match metadata.collection {
+        Some(collection) => {
+            let bump = &[collection_bump];
+            let seeds = &[
+                Collection::PREFIX,
+                collection.key.as_ref(),
+                bump,
+            ];
+            let (address, _) = Pubkey::find_program_address(
+                seeds, 
+                &program_id
+            );
+
+            require_keys_eq!(address, collection_pda, DexloanError::InvalidCollection);
+        }
+        None => {
+            return err!(DexloanError::InvalidCollection);
+        }
     }
-
-    if metadata.collection.unwrap().key == 
-
-    assert_metadata_valid(
-        &metadata_info,
-        &mint
-    )?;
 
     Ok(())
 }
@@ -420,7 +433,9 @@ pub fn pay_creator_fees<'a>(
     metadata_info: &AccountInfo<'a>,
     fee_payer: &AccountInfo<'a>,
 ) -> Result<u64> {
-    let metadata = Metadata::from_account_info(metadata_info)?;
+    let metadata = Metadata::deserialize(
+        &mut metadata_info.data.borrow_mut().as_ref()
+    )?;
 
     if metadata.mint != mint.key() {
         return  err!(DexloanError::InvalidMint);

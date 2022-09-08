@@ -4,7 +4,6 @@ use anchor_lang::prelude::*;
 pub struct Collection {
     pub authority: Pubkey,
     pub mint: Pubkey,
-    pub padding: [u8; 96],
     pub bump: u8,
 }
 
@@ -13,8 +12,7 @@ impl Collection {
         8 +
         32 + // authority
         32 + // collection
-        96 + // padding
-        1 + // bump
+        1 // bump
     }
 
     pub const PREFIX: &'static [u8] = b"collection";

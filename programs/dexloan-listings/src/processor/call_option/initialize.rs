@@ -73,11 +73,18 @@ pub fn handle_init_call_option(
     let deposit_token_account = &mut ctx.accounts.deposit_token_account;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
+    assert_collection_valid(
+        &ctx.accounts.metadata,
+        ctx.accounts.mint.key(),
+        ctx.accounts.collection.key(),
+        ctx.accounts.collection.bump,
+        ctx.program_id.clone(),
+    )?;
+
     if unix_timestamp > expiry {
         return Err(DexloanError::InvalidExpiry.into())
     }
 
-    // require_eq!(token_manager.accounts.hire, false, DexloanError::InvalidState);
     require_eq!(token_manager.accounts.loan, false, DexloanError::InvalidState);
 
     // Init
