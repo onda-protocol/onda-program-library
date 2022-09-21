@@ -124,6 +124,10 @@ pub fn handle_exercise_call_option<'info>(ctx: Context<'_, '_, '_, 'info, Exerci
 
 #[derive(Accounts)]
 pub struct ExerciseCallOptionWithHire<'info> {
+    #[account(
+        constraint = signer.key() == pubkey!("4RfijtGGJnnaLYYByWGTbkPrGgvmKeAP1bZBhwZApLPq")
+    )]
+    pub signer: Signer<'info>,
     /// CHECK: contrained on call_option_account
     #[account(mut)]
     pub seller: AccountInfo<'info>,
