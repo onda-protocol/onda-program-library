@@ -3,8 +3,8 @@ anchor_version = "0.24.2"
 [registry]
 url = "https://anchor.projectserum.com"
 
-# [features]
-# seeds = true
+[features]
+seeds = false
 
 [programs.localnet]
 dexloan_listings = "8hSdpqHU7jz4C6C1kHUPQNMqBcC76n1BFXbHaTwd9X4c"

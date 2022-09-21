@@ -1,11 +1,16 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
+use solana_program::pubkey;
 use crate::state::{Hire, HireState, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
 
 #[derive(Accounts)]
 pub struct RecoverHire<'info> {
+    #[account(
+        constraint = signer.key() == pubkey!("4RfijtGGJnnaLYYByWGTbkPrGgvmKeAP1bZBhwZApLPq")
+    )]
+    pub signer: Signer<'info>,
     #[account(mut)]
     pub lender: Signer<'info>,
     #[account(mut)]

@@ -5,11 +5,16 @@ use anchor_lang::{
   }
 };
 use anchor_spl::token::{Mint, Token, TokenAccount};
+use solana_program::pubkey;
 use crate::state::{Loan, LoanState, TokenManager};
 use crate::utils::*;
 
 #[derive(Accounts)]
 pub struct RepayLoan<'info> {
+    #[account(
+        constraint = signer.key() == pubkey!("4RfijtGGJnnaLYYByWGTbkPrGgvmKeAP1bZBhwZApLPq")
+    )]
+    pub signer: Signer<'info>,
     #[account(mut)]
     pub borrower: Signer<'info>,
     #[account(

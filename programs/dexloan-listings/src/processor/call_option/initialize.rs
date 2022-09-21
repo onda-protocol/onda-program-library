@@ -1,5 +1,6 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
+use solana_program::pubkey;
 use crate::state::{CallOption, CallOptionState, Collection, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
@@ -7,6 +8,10 @@ use crate::utils::*;
 #[derive(Accounts)]
 #[instruction(amount: u64, strike_price: u64, expiry: i64)]
 pub struct InitCallOption<'info> {
+    #[account(
+        constraint = signer.key() == pubkey!("4RfijtGGJnnaLYYByWGTbkPrGgvmKeAP1bZBhwZApLPq")
+    )]
+    pub signer: Signer<'info>,
     #[account(mut)]
     pub seller: Signer<'info>,
     #[account(

@@ -1,5 +1,6 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token};
+use solana_program::pubkey;
 use crate::state::{Hire, HireState, TokenManager};
 use crate::constants::*;
 use crate::error::*;
@@ -8,6 +9,10 @@ use crate::utils::*;
 #[derive(Accounts)]
 #[instruction(days: u16)]
 pub struct ExtendHire<'info> {
+    #[account(
+        constraint = signer.key() == pubkey!("4RfijtGGJnnaLYYByWGTbkPrGgvmKeAP1bZBhwZApLPq")
+    )]
+    pub signer: Signer<'info>,
     #[account(mut)]
     /// CHECK: validated seeds constraints
     pub lender: AccountInfo<'info>,

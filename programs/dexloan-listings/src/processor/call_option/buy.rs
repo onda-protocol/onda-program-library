@@ -1,9 +1,14 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token};
+use solana_program::pubkey;
 use crate::state::{CallOption, CallOptionState, TokenManager};
 
 #[derive(Accounts)]
 pub struct BuyCallOption<'info> {
+    #[account(
+        constraint = signer.key() == pubkey!("4RfijtGGJnnaLYYByWGTbkPrGgvmKeAP1bZBhwZApLPq")
+    )]
+    pub signer: Signer<'info>,
     /// CHECK: contrained on listing_account
     #[account(mut)]
     pub seller: AccountInfo<'info>,

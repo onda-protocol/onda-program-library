@@ -1,11 +1,16 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Token, TokenAccount, Mint};
+use solana_program::pubkey;
 use crate::state::{Loan, LoanState, Hire, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
 
 #[derive(Accounts)]
 pub struct Repossess<'info> {
+    #[account(
+        constraint = signer.key() == pubkey!("4RfijtGGJnnaLYYByWGTbkPrGgvmKeAP1bZBhwZApLPq")
+    )]
+    pub signer: Signer<'info>,
     #[account(mut)]
     pub lender: Signer<'info>,
     /// CHECK: contrained on loan_account

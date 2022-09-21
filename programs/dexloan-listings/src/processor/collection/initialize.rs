@@ -1,12 +1,16 @@
 use anchor_lang::{
     prelude::*,
 };
-use solana_program::pubkey;
 use anchor_spl::token::{Mint};
+use solana_program::pubkey;
 use crate::state::{Collection};
 
 #[derive(Accounts)]
 pub struct InitCollection<'info> {
+    #[account(
+        constraint = signer.key() == pubkey!("4RfijtGGJnnaLYYByWGTbkPrGgvmKeAP1bZBhwZApLPq")
+    )]
+    pub signer: Signer<'info>,
     #[account(mut)]
     pub authority: Signer<'info>,
     #[account(
