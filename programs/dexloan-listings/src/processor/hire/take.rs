@@ -4,7 +4,6 @@ use crate::state::{Hire, HireState, TokenManager};
 use crate::error::{DexloanError};
 use crate::constants::*;
 use crate::utils::*;
-use crate::constants::*;
 
 #[derive(Accounts)]
 #[instruction(days: u16)]

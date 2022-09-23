@@ -8,6 +8,12 @@ pub enum LoanState {
     Defaulted,
 }
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq)]
+pub enum InterestType {
+    Fixed,
+    Variable,
+}
+
 #[account]
 pub struct Loan {
     /// Whether the loan is active
@@ -24,13 +30,17 @@ pub struct Loan {
     pub lender: Option<Pubkey>,
     /// Annualized return
     pub basis_points: u32,
+    /// Interest rate type
+    pub interest_rate_type: InterestType,
+    /// Early repayment fee in basis points
+    pub early_repayment_fee: u32,
     /// Duration of the loan in seconds
     pub duration: i64,
     /// The start date of the loan
     pub start_date: Option<i64>,
     /// The mint of the token being used for collateral
     pub mint: Pubkey,
-    /// The mint of the spl-token mint
+    /// (Optional) The mint of the spl-token mint
     pub token_mint: Option<Pubkey>,
     /// misc
     pub bump: u8,
