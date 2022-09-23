@@ -1,14 +1,14 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Token, TokenAccount, Mint};
-use solana_program::pubkey;
 use crate::state::{Loan, LoanState, Hire, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
+use crate::constants::*;
 
 #[derive(Accounts)]
 pub struct Repossess<'info> {
     #[account(
-        constraint = signer.key() == pubkey!("4RfijtGGJnnaLYYByWGTbkPrGgvmKeAP1bZBhwZApLPq")
+        constraint = signer.key() == SIGNER_PUBKEY
     )]
     pub signer: Signer<'info>,
     #[account(mut)]
@@ -96,7 +96,7 @@ pub fn handle_repossess(ctx: Context<Repossess>) -> Result<()> {
 #[derive(Accounts)]
 pub struct RepossessWithHire<'info> {
     #[account(
-        constraint = signer.key() == pubkey!("4RfijtGGJnnaLYYByWGTbkPrGgvmKeAP1bZBhwZApLPq")
+        constraint = signer.key() == SIGNER_PUBKEY
     )]
     pub signer: Signer<'info>,
     #[account(mut)]

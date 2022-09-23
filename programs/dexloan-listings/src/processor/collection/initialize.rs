@@ -2,13 +2,13 @@ use anchor_lang::{
     prelude::*,
 };
 use anchor_spl::token::{Mint};
-use solana_program::pubkey;
 use crate::state::{Collection};
+use crate::constants::*;
 
 #[derive(Accounts)]
 pub struct InitCollection<'info> {
     #[account(
-        constraint = signer.key() == pubkey!("4RfijtGGJnnaLYYByWGTbkPrGgvmKeAP1bZBhwZApLPq")
+        constraint = signer.key() == SIGNER_PUBKEY
     )]
     pub signer: Signer<'info>,
     #[account(mut)]
@@ -34,8 +34,7 @@ pub fn handle_init_collection(
 ) -> Result<()> {
     let collection = &mut ctx.accounts.collection;
     
-    let admin_pubkey = pubkey!("AH7F2EPHXWhfF5yc7xnv1zPbwz3YqD6CtAqbCyE9dy7r");
-    require_keys_eq!(ctx.accounts.authority.key(), admin_pubkey);
+    require_keys_eq!(ctx.accounts.authority.key(), ADMIN_PUBKEY);
     
     collection.authority = ctx.accounts.authority.key();
     collection.mint = ctx.accounts.mint.key();

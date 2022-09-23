@@ -1,12 +1,12 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token};
-use solana_program::pubkey;
 use crate::state::{Loan, LoanState, TokenManager};
+use crate::constants::*;
 
 #[derive(Accounts)]
 pub struct GiveLoan<'info> {
     #[account(
-        constraint = signer.key() == pubkey!("4RfijtGGJnnaLYYByWGTbkPrGgvmKeAP1bZBhwZApLPq")
+        constraint = signer.key() == SIGNER_PUBKEY
     )]
     pub signer: Signer<'info>,
     /// CHECK: contrained on loan_account

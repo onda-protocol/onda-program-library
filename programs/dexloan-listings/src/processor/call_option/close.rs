@@ -1,14 +1,14 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use solana_program::pubkey;
 use crate::state::{CallOption, CallOptionState, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
+use crate::constants::*;
 
 #[derive(Accounts)]
 pub struct CloseCallOption<'info> {
     #[account(
-        constraint = signer.key() == pubkey!("4RfijtGGJnnaLYYByWGTbkPrGgvmKeAP1bZBhwZApLPq")
+        constraint = signer.key() == SIGNER_PUBKEY
     )]
     pub signer: Signer<'info>,
     /// CHECK: contrained on listing_account

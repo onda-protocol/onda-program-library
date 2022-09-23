@@ -1,13 +1,13 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use solana_program::pubkey;
 use crate::state::{Hire, HireState, TokenManager};
 use crate::utils::*;
+use crate::constants::*;
 
 #[derive(Accounts)]
 pub struct CloseHire<'info> {
     #[account(
-        constraint = signer.key() == pubkey!("4RfijtGGJnnaLYYByWGTbkPrGgvmKeAP1bZBhwZApLPq")
+        constraint = signer.key() == SIGNER_PUBKEY
     )]
     pub signer: Signer<'info>,
     /// CHECK: contrained on listing_account
