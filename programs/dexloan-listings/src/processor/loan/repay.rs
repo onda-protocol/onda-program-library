@@ -5,9 +5,10 @@ use anchor_lang::{
   }
 };
 use anchor_spl::token::{Mint, Token, TokenAccount};
+use crate::constants::*;
+use crate::error::*;
 use crate::state::{Loan, LoanState, TokenManager};
 use crate::utils::*;
-use crate::constants::*;
 
 #[derive(Accounts)]
 pub struct RepayLoan<'info> {
@@ -66,10 +67,14 @@ pub fn handle_repay_loan(ctx: Context<RepayLoan>) -> Result<()> {
 
     token_manager.accounts.loan = false;
 
+    let duration = ctx.accounts.clock.unix_timestamp.checked_sub(
+        loan.start_date.unwrap()
+    ).ok_or(DexloanError::NumericalOverflow)?;
+    
     let amount_due = calculate_loan_repayment(
         loan.amount.unwrap(),
         loan.basis_points,
-        loan.duration
+        duration
     )?;
 
     // Transfer payment

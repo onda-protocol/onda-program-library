@@ -91,6 +91,8 @@ pub fn handle_init_loan(
     loan.bump = *ctx.bumps.get("loan").unwrap();
     //
     loan.amount = Some(amount);
+    loan.outstanding = amount;
+    loan.installments = 1;
     loan.basis_points = basis_points;
     loan.duration = duration;
     loan.state = LoanState::Listed;

@@ -11,6 +11,7 @@ use {
     state::{Metadata}
   },
 };
+use crate::constants::*;
 use crate::state::{Hire, Collection, TokenManager};
 use crate::error::*;
 
@@ -496,12 +497,14 @@ pub fn calculate_loan_repayment(
     duration: i64
 ) -> Result<u64> {
     let annual_fee = calculate_fee_from_basis_points(amount as u128, basis_points as u128)?;
-    let fee_divisor = (31_536_000 as f64) / (duration as f64);
-    let pro_rata_fee = (annual_fee as f64 / fee_divisor).round() as u64;
+
+    let interest_due = annual_fee.checked_mul(duration as u64)
+        .ok_or(DexloanError::NumericalOverflow)?
+        .checked_div(SECONDS_PER_YEAR as u64)
+        .ok_or(DexloanError::NumericalOverflow)?;
     
     msg!("annual interest fee {}", annual_fee);
-    msg!("fee_divisor {}", fee_divisor);
-    msg!("pro_rata_fee {}", pro_rata_fee);
+    msg!("interest_due {}", interest_due);
     
-    Ok(amount + pro_rata_fee)
+    Ok(amount + interest_due)
 }

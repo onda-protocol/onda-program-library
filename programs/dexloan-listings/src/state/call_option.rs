@@ -11,7 +11,7 @@ pub enum CallOptionState {
 pub struct CallOption {
     /// Whether the option is active
     pub state: CallOptionState,
-    /// The amount of the loan
+    /// The cost of the call option
     pub amount: u64,
     /// The issuer of the call option
     pub seller: Pubkey,
@@ -23,8 +23,9 @@ pub struct CallOption {
     pub strike_price: u64,
     /// The mint of the token being used for collateral
     pub mint: Pubkey,
+    /// (Optional) The mint of the spl-token mint
+    pub token_mint: Option<Pubkey>,
     /// Misc
-    pub padding: [u8; 64],
     pub bump: u8,
 }
 
@@ -38,7 +39,7 @@ impl CallOption {
         8 + // expiry
         8 + // strike price
         32 + // mint
-        64 + // padding
+        32 + // token mint
         1 // bump
     }
 
