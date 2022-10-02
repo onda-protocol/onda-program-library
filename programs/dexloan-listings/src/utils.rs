@@ -466,7 +466,10 @@ pub fn pay_creator_fees<'a>(
                         .ok_or(DexloanError::NumericalOverflow)?;
 
                 let current_creator_info = next_account_info(remaining_accounts)?;
+
                 msg!("current creator {}", current_creator_info.key());
+                require_keys_eq!(current_creator_info.key(), creator.address);
+
                 if creator_fee > 0 {
                     invoke(
                         &anchor_lang::solana_program::system_instruction::transfer(
