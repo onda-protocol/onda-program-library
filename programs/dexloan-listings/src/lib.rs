@@ -11,7 +11,7 @@ pub use state::*;
 pub use constants::*;
 pub use utils::*;
 
-declare_id!("8hSdpqHU7jz4C6C1kHUPQNMqBcC76n1BFXbHaTwd9X4c");
+declare_id!("3prAEjvoQffKGbTLzFHx8oq1NZfhpLwHm9nfcdczrzVe");
 
 #[program]
 pub mod dexloan_listings {

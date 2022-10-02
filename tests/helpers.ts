@@ -8,7 +8,7 @@ import {
 import { IDL, DexloanListings } from "../target/types/dexloan_listings";
 
 const PROGRAM_ID = new anchor.web3.PublicKey(
-  "8hSdpqHU7jz4C6C1kHUPQNMqBcC76n1BFXbHaTwd9X4c"
+  "3prAEjvoQffKGbTLzFHx8oq1NZfhpLwHm9nfcdczrzVe"
 );
 
 export function getProgram(

@@ -70,11 +70,15 @@ pub fn handle_repay_loan(ctx: Context<RepayLoan>) -> Result<()> {
     let duration = ctx.accounts.clock.unix_timestamp.checked_sub(
         loan.start_date.unwrap()
     ).ok_or(DexloanError::NumericalOverflow)?;
+
+    let expiry = loan.start_date.unwrap().checked_add(loan.duration).ok_or(DexloanError::NumericalOverflow)?;
+    let is_overdue = ctx.accounts.clock.unix_timestamp > expiry;
     
     let amount_due = calculate_loan_repayment(
         loan.amount.unwrap(),
         loan.basis_points,
-        duration
+        duration,
+        is_overdue
     )?;
 
     // Transfer payment
