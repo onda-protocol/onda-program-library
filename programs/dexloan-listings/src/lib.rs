@@ -105,4 +105,8 @@ pub mod dexloan_listings {
     pub fn init_collection(ctx: Context<InitCollection>) -> Result<()> {
         handle_init_collection(ctx)
     }
+
+    pub fn close_collection(ctx: Context<CloseCollection>) -> Result<()> {
+        handle_close_collection(ctx)
+    }
 }

@@ -4,6 +4,7 @@ use anchor_lang::prelude::*;
 pub struct Collection {
     pub authority: Pubkey,
     pub mint: Pubkey,
+    pub reserved: [u8; 128],
     pub bump: u8,
 }
 
@@ -12,6 +13,7 @@ impl Collection {
         8 +
         32 + // authority
         32 + // collection
+        128 + // reserved
         1 // bump
     }
 
