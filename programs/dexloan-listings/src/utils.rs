@@ -314,10 +314,9 @@ pub fn settle_hire_escrow_balance<'a, 'b>(
 
     if hire.borrower.is_some() {
         let borrower = next_account_info(remaining_accounts)?;
-        msg!("settlement! {}", borrower.key());
         require_keys_eq!(borrower.key(), hire.borrower.unwrap());
 
-        msg!("Returning {} lamports to borrower from escrow balance", remaining_escrow_balance);        
+        msg!("Returning {} lamports to borrower {} from escrow balance", remaining_escrow_balance, borrower.key());        
 
         transfer_from_escrow(
             &mut hire_escrow.to_account_info(),
