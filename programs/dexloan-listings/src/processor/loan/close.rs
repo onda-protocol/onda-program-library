@@ -2,9 +2,14 @@ use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{Loan, LoanState, TokenManager};
 use crate::utils::*;
+use crate::constants::*;
 
 #[derive(Accounts)]
 pub struct CloseLoan<'info> {
+    #[account(
+        constraint = signer.key() == SIGNER_PUBKEY
+    )]
+    pub signer: Signer<'info>,
     pub borrower: Signer<'info>,
     #[account(
         mut,

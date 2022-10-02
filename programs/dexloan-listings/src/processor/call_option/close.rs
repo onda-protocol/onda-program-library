@@ -3,9 +3,14 @@ use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{CallOption, CallOptionState, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
+use crate::constants::*;
 
 #[derive(Accounts)]
 pub struct CloseCallOption<'info> {
+    #[account(
+        constraint = signer.key() == SIGNER_PUBKEY
+    )]
+    pub signer: Signer<'info>,
     /// CHECK: contrained on listing_account
     #[account(mut)]
     pub seller: Signer<'info>,

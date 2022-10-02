@@ -2,9 +2,14 @@ use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token};
 use crate::state::{Hire};
 use crate::utils::*;
+use crate::constants::*;
 
 #[derive(Accounts)]
 pub struct WithdrawFromHireEscrow<'info> {
+    #[account(
+        constraint = signer.key() == SIGNER_PUBKEY
+    )]
+    pub signer: Signer<'info>,
     /// CHECK: contrained on listing_account
     #[account(mut)]
     pub lender: Signer<'info>,

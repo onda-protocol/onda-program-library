@@ -3,9 +3,14 @@ use anchor_spl::token::{Token, TokenAccount, Mint};
 use crate::state::{Loan, LoanState, Hire, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
+use crate::constants::*;
 
 #[derive(Accounts)]
 pub struct Repossess<'info> {
+    #[account(
+        constraint = signer.key() == SIGNER_PUBKEY
+    )]
+    pub signer: Signer<'info>,
     #[account(mut)]
     pub lender: Signer<'info>,
     /// CHECK: contrained on loan_account
@@ -32,8 +37,8 @@ pub struct Repossess<'info> {
         ],
         bump,
         has_one = borrower,
-        has_one = lender,
         has_one = mint,
+        constraint = loan.lender.unwrap() == lender.key(), 
         constraint = loan.state == LoanState::Active,
     )]
     pub loan: Box<Account<'info, Loan>>,
@@ -65,7 +70,7 @@ pub fn handle_repossess(ctx: Context<Repossess>) -> Result<()> {
   let token_manager = &mut ctx.accounts.token_manager;
   
   let unix_timestamp = ctx.accounts.clock.unix_timestamp;
-  let start_date = loan.start_date;
+  let start_date = loan.start_date.unwrap();
   let duration = unix_timestamp - start_date;
 
   if loan.duration > duration  {
@@ -90,6 +95,10 @@ pub fn handle_repossess(ctx: Context<Repossess>) -> Result<()> {
 
 #[derive(Accounts)]
 pub struct RepossessWithHire<'info> {
+    #[account(
+        constraint = signer.key() == SIGNER_PUBKEY
+    )]
+    pub signer: Signer<'info>,
     #[account(mut)]
     pub lender: Signer<'info>,
     /// CHECK: contrained on loan_account
@@ -110,8 +119,8 @@ pub struct RepossessWithHire<'info> {
         ],
         bump,
         has_one = borrower,
-        has_one = lender,
         has_one = mint,
+        constraint = loan.lender.unwrap() == lender.key(),
         constraint = loan.state == LoanState::Active,
     )]
     pub loan: Box<Account<'info, Loan>>,
@@ -171,7 +180,7 @@ pub fn handle_repossess_with_hire<'info>(ctx: Context<'_, '_, '_, 'info, Reposse
     let remaining_accounts = &mut ctx.remaining_accounts.iter();
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
-    let start_date = loan.start_date;
+    let start_date = loan.start_date.unwrap();
     let duration = unix_timestamp - start_date;
 
     if loan.duration > duration  {

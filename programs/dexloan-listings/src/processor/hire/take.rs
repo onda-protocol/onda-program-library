@@ -8,6 +8,10 @@ use crate::utils::*;
 #[derive(Accounts)]
 #[instruction(days: u16)]
 pub struct TakeHire <'info> {
+    #[account(
+        constraint = signer.key() == SIGNER_PUBKEY
+    )]
+    pub signer: Signer<'info>,
     #[account(mut)]
     /// CHECK: validated seeds constraints
     pub lender: AccountInfo<'info>,

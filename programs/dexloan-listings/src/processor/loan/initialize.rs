@@ -1,12 +1,17 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{Loan, LoanState, TokenManager};
+use crate::state::{Loan, LoanState, Collection, TokenManager};
 use crate::utils::*;
 use crate::error::*;
+use crate::constants::*;
 
 #[derive(Accounts)]
 #[instruction(amount: u64, basis_points: u32, duration: u64)]
 pub struct InitLoan<'info> {
+    #[account(
+        constraint = signer.key() == SIGNER_PUBKEY
+    )]
+    pub signer: Signer<'info>,
     #[account(mut)]
     pub borrower: Signer<'info>,
     #[account(
@@ -39,8 +44,18 @@ pub struct InitLoan<'info> {
         bump,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
+    #[account(
+        seeds = [
+            Collection::PREFIX,
+            collection.mint.as_ref(),
+        ],
+        bump,
+    )]
+    pub collection: Box<Account<'info, Collection>>,
     #[account(constraint = mint.supply == 1)]
     pub mint: Box<Account<'info, Mint>>,
+    /// CHECK: deserialized and checked
+    pub metadata: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
@@ -61,7 +76,13 @@ pub fn handle_init_loan(
     let token_manager = &mut ctx.accounts.token_manager;
     let deposit_token_account = &ctx.accounts.deposit_token_account;
 
-    // require_eq!(token_manager.accounts.hire, false, DexloanError::InvalidState);
+    assert_collection_valid(
+        &ctx.accounts.metadata,
+        ctx.accounts.mint.key(),
+        ctx.accounts.collection.key(),
+        ctx.program_id.clone(),
+    )?;
+
     require_eq!(token_manager.accounts.call_option, false, DexloanError::InvalidState);
 
     // Init
@@ -69,7 +90,10 @@ pub fn handle_init_loan(
     loan.borrower = ctx.accounts.borrower.key();
     loan.bump = *ctx.bumps.get("loan").unwrap();
     //
-    loan.amount = amount;
+    loan.amount = Some(amount);
+    loan.outstanding = amount;
+    loan.threshold = None;
+    loan.installments = 1;
     loan.basis_points = basis_points;
     loan.duration = duration;
     loan.state = LoanState::Listed;

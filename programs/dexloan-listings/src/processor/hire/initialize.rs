@@ -1,8 +1,9 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{Hire, HireState, TokenManager};
+use crate::state::{Hire, HireState, Collection, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
+use crate::constants::*;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct HireArgs {
@@ -13,6 +14,10 @@ pub struct HireArgs {
 
 #[derive(Accounts)]
 pub struct InitHire<'info> {
+    #[account(
+        constraint = signer.key() == SIGNER_PUBKEY
+    )]
+    pub signer: Signer<'info>,
     #[account(mut)]
     pub lender: Signer<'info>,
     #[account(
@@ -45,8 +50,18 @@ pub struct InitHire<'info> {
         bump,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
+    #[account(
+        seeds = [
+            Collection::PREFIX,
+            collection.mint.as_ref(),
+        ],
+        bump,
+    )]
+    pub collection: Box<Account<'info, Collection>>,
     #[account(constraint = mint.supply == 1)]
     pub mint: Box<Account<'info, Mint>>,
+    /// CHECK: deserialized and checked
+    pub metadata: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
@@ -66,6 +81,13 @@ pub fn handle_init_hire(
     let token_manager = &mut ctx.accounts.token_manager;
     let deposit_token_account = &mut ctx.accounts.deposit_token_account;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
+
+    assert_collection_valid(
+        &ctx.accounts.metadata,
+        ctx.accounts.mint.key(),
+        ctx.accounts.collection.key(),
+        ctx.program_id.clone(),
+    )?;
 
     if unix_timestamp > args.expiry {
         return err!(DexloanError::InvalidExpiry)

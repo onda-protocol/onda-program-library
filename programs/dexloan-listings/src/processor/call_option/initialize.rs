@@ -1,12 +1,17 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{CallOption, CallOptionState, TokenManager};
+use crate::state::{CallOption, CallOptionState, Collection, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
+use crate::constants::*;
 
 #[derive(Accounts)]
 #[instruction(amount: u64, strike_price: u64, expiry: i64)]
 pub struct InitCallOption<'info> {
+    #[account(
+        constraint = signer.key() == SIGNER_PUBKEY
+    )]
+    pub signer: Signer<'info>,
     #[account(mut)]
     pub seller: Signer<'info>,
     #[account(
@@ -39,8 +44,18 @@ pub struct InitCallOption<'info> {
         bump,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
+    #[account(
+        seeds = [
+            Collection::PREFIX,
+            collection.mint.as_ref(),
+        ],
+        bump,
+    )]
+    pub collection: Box<Account<'info, Collection>>,
     #[account(constraint = mint.supply == 1)]
     pub mint: Box<Account<'info, Mint>>,
+    /// CHECK: deserialized and checked
+    pub metadata: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
@@ -63,11 +78,17 @@ pub fn handle_init_call_option(
     let deposit_token_account = &mut ctx.accounts.deposit_token_account;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
+    assert_collection_valid(
+        &ctx.accounts.metadata,
+        ctx.accounts.mint.key(),
+        ctx.accounts.collection.key(),
+        ctx.program_id.clone(),
+    )?;
+
     if unix_timestamp > expiry {
         return Err(DexloanError::InvalidExpiry.into())
     }
 
-    // require_eq!(token_manager.accounts.hire, false, DexloanError::InvalidState);
     require_eq!(token_manager.accounts.loan, false, DexloanError::InvalidState);
 
     // Init

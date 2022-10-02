@@ -1,9 +1,14 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token};
 use crate::state::{CallOption, CallOptionState, TokenManager};
+use crate::constants::*;
 
 #[derive(Accounts)]
 pub struct BuyCallOption<'info> {
+    #[account(
+        constraint = signer.key() == SIGNER_PUBKEY
+    )]
+    pub signer: Signer<'info>,
     /// CHECK: contrained on listing_account
     #[account(mut)]
     pub seller: AccountInfo<'info>,
@@ -49,12 +54,12 @@ pub fn handle_buy_call_option(ctx: Context<BuyCallOption>) -> Result<()> {
     let call_option = &mut ctx.accounts.call_option;
 
     call_option.state = CallOptionState::Active;
-    call_option.buyer = ctx.accounts.buyer.key();
+    call_option.buyer = Some(ctx.accounts.buyer.key());
 
     // Transfer option cost
     anchor_lang::solana_program::program::invoke(
         &anchor_lang::solana_program::system_instruction::transfer(
-            &call_option.buyer,
+            &ctx.accounts.buyer.key(),
             &call_option.seller,
             call_option.amount,
         ),

@@ -5,11 +5,17 @@ use anchor_lang::{
   }
 };
 use anchor_spl::token::{Mint, Token, TokenAccount};
+use crate::constants::*;
+use crate::error::*;
 use crate::state::{Loan, LoanState, TokenManager};
 use crate::utils::*;
 
 #[derive(Accounts)]
 pub struct RepayLoan<'info> {
+    #[account(
+        constraint = signer.key() == SIGNER_PUBKEY
+    )]
+    pub signer: Signer<'info>,
     #[account(mut)]
     pub borrower: Signer<'info>,
     #[account(
@@ -29,8 +35,8 @@ pub struct RepayLoan<'info> {
         ],
         bump,
         has_one = borrower,
-        has_one = lender,
         has_one = mint,
+        constraint = loan.lender.unwrap() == lender.key(), 
         constraint = loan.state == LoanState::Active,
         close = borrower
     )]
@@ -61,17 +67,25 @@ pub fn handle_repay_loan(ctx: Context<RepayLoan>) -> Result<()> {
 
     token_manager.accounts.loan = false;
 
+    let duration = ctx.accounts.clock.unix_timestamp.checked_sub(
+        loan.start_date.unwrap()
+    ).ok_or(DexloanError::NumericalOverflow)?;
+
+    let expiry = loan.start_date.unwrap().checked_add(loan.duration).ok_or(DexloanError::NumericalOverflow)?;
+    let is_overdue = ctx.accounts.clock.unix_timestamp > expiry;
+    
     let amount_due = calculate_loan_repayment(
-        loan.amount,
+        loan.amount.unwrap(),
         loan.basis_points,
-        loan.duration
+        duration,
+        is_overdue
     )?;
 
     // Transfer payment
     invoke(
         &anchor_lang::solana_program::system_instruction::transfer(
             &loan.borrower,
-            &loan.lender,
+            &loan.lender.unwrap(),
             amount_due,
         ),
         &[

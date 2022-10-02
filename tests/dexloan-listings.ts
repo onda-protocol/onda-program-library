@@ -6,6 +6,7 @@ import {
 import * as anchor from "@project-serum/anchor";
 import * as splToken from "@solana/spl-token";
 import * as helpers from "./helpers";
+import { AnchorError } from "@project-serum/anchor";
 
 describe("dexloan_listings", () => {
   // Configure the client to use the local cluster.
@@ -13,6 +14,37 @@ describe("dexloan_listings", () => {
     "http://127.0.0.1:8899",
     anchor.AnchorProvider.defaultOptions().preflightCommitment
   );
+
+  describe("Collections", () => {
+    const keypair = anchor.web3.Keypair.fromSecretKey(
+      new Uint8Array([
+        124, 208, 255, 155, 233, 90, 118, 131, 46, 39, 251, 139, 128, 39, 102,
+        95, 152, 29, 11, 251, 94, 142, 210, 207, 43, 45, 190, 97, 177, 241, 91,
+        213, 133, 38, 232, 90, 89, 239, 206, 32, 37, 195, 180, 213, 193, 236,
+        43, 164, 196, 151, 160, 8, 134, 116, 139, 146, 73, 139, 186, 20, 80,
+        144, 207, 225,
+      ])
+    );
+    const provider = helpers.getProvider(connection, keypair);
+    const program = helpers.getProgram(provider);
+
+    it("Initializes a collection", async () => {
+      await helpers.requestAirdrop(connection, keypair.publicKey);
+      const { collection } = await helpers.mintNFT(connection, keypair);
+
+      const collectionAddress = await helpers.findCollectionAddress(
+        collection.address
+      );
+      const collectonData = await program.account.collection.fetch(
+        collectionAddress
+      );
+
+      assert.equal(
+        collectonData.mint.toBase58(),
+        collection.mint.address.toBase58()
+      );
+    });
+  });
 
   describe("Loans", () => {
     describe("Loan repossessions", () => {
@@ -33,9 +65,7 @@ describe("dexloan_listings", () => {
           connection,
           borrower.depositTokenAccount
         );
-        const loan = await borrower.program.account.loan.fetch(
-          borrower.loanAccount
-        );
+        const loan = await borrower.program.account.loan.fetch(borrower.loan);
         const tokenManager = await borrower.program.account.tokenManager.fetch(
           borrower.tokenManager
         );
@@ -92,9 +122,7 @@ describe("dexloan_listings", () => {
         );
 
         lender = await helpers.giveLoan(connection, borrower);
-        const loan = await borrower.program.account.loan.fetch(
-          borrower.loanAccount
-        );
+        const loan = await borrower.program.account.loan.fetch(borrower.loan);
         const tokenManager = await borrower.program.account.tokenManager.fetch(
           borrower.tokenManager
         );
@@ -149,7 +177,7 @@ describe("dexloan_listings", () => {
               depositTokenAccount: borrower.depositTokenAccount,
               lender: lender.keypair.publicKey,
               lenderTokenAccount: tokenAccount.address,
-              loan: borrower.loanAccount,
+              loan: borrower.loan,
               tokenManager: borrower.tokenManager,
               mint: borrower.mint,
               edition: borrower.edition,
@@ -170,9 +198,7 @@ describe("dexloan_listings", () => {
       });
 
       it("Allows an overdue loan to be repossessed by the lender", async () => {
-        const loan = await borrower.program.account.loan.fetch(
-          borrower.loanAccount
-        );
+        const loan = await borrower.program.account.loan.fetch(borrower.loan);
         const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
           connection,
           lender.keypair,
@@ -188,7 +214,7 @@ describe("dexloan_listings", () => {
               depositTokenAccount: borrower.depositTokenAccount,
               lender: lender.keypair.publicKey,
               lenderTokenAccount: tokenAccount.address,
-              loan: borrower.loanAccount,
+              loan: borrower.loan,
               tokenManager: borrower.tokenManager,
               mint: loan.mint,
               edition: borrower.edition,
@@ -212,7 +238,7 @@ describe("dexloan_listings", () => {
           borrower.tokenManager
         );
         const defaultedListing = await borrower.program.account.loan.fetch(
-          borrower.loanAccount
+          borrower.loan
         );
 
         assert.deepEqual(tokenManager.accounts, {
@@ -231,7 +257,7 @@ describe("dexloan_listings", () => {
             .accounts({
               borrower: borrower.keypair.publicKey,
               depositTokenAccount: borrower.depositTokenAccount,
-              loan: borrower.loanAccount,
+              loan: borrower.loan,
               tokenManager: borrower.tokenManager,
               mint: borrower.mint,
               edition: borrower.edition,
@@ -246,11 +272,11 @@ describe("dexloan_listings", () => {
         }
 
         try {
-          await borrower.program.account.loan.fetch(borrower.loanAccount);
+          await borrower.program.account.loan.fetch(borrower.loan);
         } catch (err) {
           assert.equal(
             err.message,
-            `Account does not exist ${borrower.loanAccount.toBase58()}`
+            `Account does not exist ${borrower.loan.toBase58()}`
           );
         }
       });
@@ -273,9 +299,7 @@ describe("dexloan_listings", () => {
           connection,
           borrower.depositTokenAccount
         );
-        const loan = await borrower.program.account.loan.fetch(
-          borrower.loanAccount
-        );
+        const loan = await borrower.program.account.loan.fetch(borrower.loan);
         const tokenManager = await borrower.program.account.tokenManager.fetch(
           borrower.tokenManager
         );
@@ -300,12 +324,44 @@ describe("dexloan_listings", () => {
         assert.deepEqual(loan.state, { listed: {} });
       });
 
+      it("Prevents reinitialization", async () => {
+        const amount = anchor.web3.LAMPORTS_PER_SOL;
+        const basisPoints = 500;
+
+        try {
+          await borrower.program.methods
+            .initLoan(
+              new anchor.BN(amount),
+              new anchor.BN(basisPoints),
+              new anchor.BN(1)
+            )
+            .accounts({
+              loan: borrower.loan,
+              collection: borrower.collection,
+              tokenManager: borrower.tokenManager,
+              depositTokenAccount: borrower.depositTokenAccount,
+              mint: borrower.mint,
+              metadata: borrower.metadata,
+              borrower: borrower.keypair.publicKey,
+              edition: borrower.edition,
+              metadataProgram: METADATA_PROGRAM_ID,
+              tokenProgram: splToken.TOKEN_PROGRAM_ID,
+              rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+              systemProgram: anchor.web3.SystemProgram.programId,
+            })
+            .rpc();
+          assert.fail();
+        } catch (error) {
+          assert.ok(error.toString().includes("custom program error: 0x0"));
+        }
+      });
+
       it("Allows unactive loans to be closed", async () => {
         try {
           await borrower.program.methods
             .closeLoan()
             .accounts({
-              loan: borrower.loanAccount,
+              loan: borrower.loan,
               tokenManager: borrower.tokenManager,
               borrower: borrower.keypair.publicKey,
               depositTokenAccount: borrower.depositTokenAccount,
@@ -337,9 +393,11 @@ describe("dexloan_listings", () => {
         await borrower.program.methods
           .initLoan(amount, basisPoints, duration)
           .accounts({
-            loan: borrower.loanAccount,
+            loan: borrower.loan,
+            collection: borrower.collection,
             tokenManager: borrower.tokenManager,
             depositTokenAccount: borrower.depositTokenAccount,
+            metadata: borrower.metadata,
             mint: borrower.mint,
             borrower: borrower.keypair.publicKey,
             edition: borrower.edition,
@@ -350,9 +408,7 @@ describe("dexloan_listings", () => {
           })
           .rpc();
 
-        const loan = await borrower.program.account.loan.fetch(
-          borrower.loanAccount
-        );
+        const loan = await borrower.program.account.loan.fetch(borrower.loan);
         const borrowerTokenAccount = await splToken.getAccount(
           connection,
           borrower.depositTokenAccount
@@ -376,9 +432,7 @@ describe("dexloan_listings", () => {
         );
 
         lender = await helpers.giveLoan(connection, borrower);
-        const loan = await borrower.program.account.loan.fetch(
-          borrower.loanAccount
-        );
+        const loan = await borrower.program.account.loan.fetch(borrower.loan);
         const borrowerPostLoanBalance = await connection.getBalance(
           borrower.keypair.publicKey
         );
@@ -427,7 +481,7 @@ describe("dexloan_listings", () => {
               depositTokenAccount: borrower.depositTokenAccount,
               lender: lender.keypair.publicKey,
               lenderTokenAccount: tokenAccount.address,
-              loan: borrower.loanAccount,
+              loan: borrower.loan,
               tokenManager: borrower.tokenManager,
               mint: borrower.mint,
               edition: borrower.edition,
@@ -455,7 +509,7 @@ describe("dexloan_listings", () => {
         await borrower.program.methods
           .repayLoan()
           .accounts({
-            loan: borrower.loanAccount,
+            loan: borrower.loan,
             tokenManager: borrower.tokenManager,
             borrower: borrower.keypair.publicKey,
             depositTokenAccount: borrower.depositTokenAccount,
@@ -489,44 +543,6 @@ describe("dexloan_listings", () => {
         assert.equal(borrowerTokenAccount.delegate, null);
         assert(lenderPostRepaymentBalance > lenderPreRepaymentBalance);
       });
-
-      it("Prevents reinitialization", async () => {
-        const amount = anchor.web3.LAMPORTS_PER_SOL;
-        const basisPoints = 500;
-        const duration = 60;
-
-        const borrower = await helpers.initLoan(connection, {
-          amount,
-          basisPoints,
-          duration,
-        });
-        await helpers.giveLoan(connection, borrower);
-
-        try {
-          await borrower.program.methods
-            .initLoan(
-              new anchor.BN(amount),
-              new anchor.BN(basisPoints),
-              new anchor.BN(1)
-            )
-            .accounts({
-              loan: borrower.loanAccount,
-              tokenManager: borrower.tokenManager,
-              depositTokenAccount: borrower.depositTokenAccount,
-              mint: borrower.mint,
-              borrower: borrower.keypair.publicKey,
-              edition: borrower.edition,
-              metadataProgram: METADATA_PROGRAM_ID,
-              tokenProgram: splToken.TOKEN_PROGRAM_ID,
-              rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-              systemProgram: anchor.web3.SystemProgram.programId,
-            })
-            .rpc();
-          assert.fail();
-        } catch (error) {
-          assert.ok(error.toString().includes("custom program error: 0x0"));
-        }
-      });
     });
   });
 
@@ -545,7 +561,7 @@ describe("dexloan_listings", () => {
         seller = await helpers.initCallOption(connection, options);
 
         const callOption = await seller.program.account.callOption.fetch(
-          seller.callOptionAccount
+          seller.callOption
         );
         const tokenManager = await seller.program.account.tokenManager.fetch(
           seller.tokenManager
@@ -605,7 +621,7 @@ describe("dexloan_listings", () => {
         buyer = await helpers.buyCallOption(connection, seller);
 
         const callOption = await seller.program.account.callOption.fetch(
-          seller.callOptionAccount
+          seller.callOption
         );
 
         assert.equal(
@@ -620,7 +636,7 @@ describe("dexloan_listings", () => {
           await seller.program.methods
             .closeCallOption()
             .accounts({
-              callOption: seller.callOptionAccount,
+              callOption: seller.callOption,
               tokenManager: seller.tokenManager,
               seller: seller.keypair.publicKey,
               depositTokenAccount: seller.depositTokenAccount,
@@ -635,7 +651,7 @@ describe("dexloan_listings", () => {
           assert.fail("Active call option was closed!");
         } catch (err) {
           assert(err instanceof anchor.AnchorError);
-          assert.equal(err.error.errorCode.number, 6009);
+          assert.equal(err.error.errorCode.number, 6010);
           assert.equal(err.error.errorCode.code, "OptionNotExpired");
         }
       });
@@ -671,7 +687,7 @@ describe("dexloan_listings", () => {
             .accounts({
               seller: seller.keypair.publicKey,
               buyer: buyer.keypair.publicKey,
-              callOption: seller.callOptionAccount,
+              callOption: seller.callOption,
               tokenManager: seller.tokenManager,
               buyerTokenAccount: tokenAccount.address,
               depositTokenAccount: seller.depositTokenAccount,
@@ -713,7 +729,7 @@ describe("dexloan_listings", () => {
           seller.keypair.publicKey
         );
         const callOption = await seller.program.account.callOption.fetch(
-          seller.callOptionAccount
+          seller.callOption
         );
         const buyerTokenAccount = await splToken.getAccount(
           connection,
@@ -745,7 +761,7 @@ describe("dexloan_listings", () => {
           .closeCallOption()
           .accounts({
             seller: seller.keypair.publicKey,
-            callOption: seller.callOptionAccount,
+            callOption: seller.callOption,
             tokenManager: seller.tokenManager,
             depositTokenAccount: seller.depositTokenAccount,
             mint: seller.mint,
@@ -758,9 +774,7 @@ describe("dexloan_listings", () => {
           .rpc();
 
         try {
-          await seller.program.account.callOption.fetch(
-            seller.callOptionAccount
-          );
+          await seller.program.account.callOption.fetch(seller.callOption);
           assert.fail();
         } catch (error) {
           assert.ok(error.message.includes("Account does not exist"));
@@ -789,7 +803,7 @@ describe("dexloan_listings", () => {
         seller = await helpers.initCallOption(connection, options);
 
         const callOption = await seller.program.account.callOption.fetch(
-          seller.callOptionAccount
+          seller.callOption
         );
         const sellerTokenAccount = await splToken.getAccount(
           connection,
@@ -819,7 +833,7 @@ describe("dexloan_listings", () => {
         buyer = await helpers.buyCallOption(connection, seller);
 
         const callOption = await seller.program.account.callOption.fetch(
-          seller.callOptionAccount
+          seller.callOption
         );
         const sellerAfterBalance = await connection.getBalance(
           seller.keypair.publicKey
@@ -839,7 +853,7 @@ describe("dexloan_listings", () => {
 
       it("Cannot be exercised if expired", async () => {
         const callOption = await seller.program.account.callOption.fetch(
-          seller.callOptionAccount
+          seller.callOption
         );
         const now = Date.now() / 1000;
         const timeUntilExpiry = Math.ceil(callOption.expiry.toNumber() - now);
@@ -859,7 +873,7 @@ describe("dexloan_listings", () => {
               seller: seller.keypair.publicKey,
               buyer: buyer.keypair.publicKey,
               buyerTokenAccount: tokenAccount.address,
-              callOption: seller.callOptionAccount,
+              callOption: seller.callOption,
               tokenManager: seller.tokenManager,
               mint: seller.mint,
               edition: seller.edition,
@@ -882,7 +896,7 @@ describe("dexloan_listings", () => {
           .closeCallOption()
           .accounts({
             seller: seller.keypair.publicKey,
-            callOption: seller.callOptionAccount,
+            callOption: seller.callOption,
             tokenManager: seller.tokenManager,
             depositTokenAccount: seller.depositTokenAccount,
             mint: seller.mint,
@@ -895,9 +909,7 @@ describe("dexloan_listings", () => {
           .rpc();
 
         try {
-          await seller.program.account.callOption.fetch(
-            seller.callOptionAccount
-          );
+          await seller.program.account.callOption.fetch(seller.callOption);
           assert.fail();
         } catch (error) {
           assert.ok(error.message.includes("Account does not exist"));
@@ -1217,9 +1229,11 @@ describe("dexloan_listings", () => {
           .initHire({ amount, expiry, borrower: null })
           .accounts({
             hire: hireAddress,
+            collection: borrower.collection,
             tokenManager: tokenManagerAddress,
             lender: borrower.keypair.publicKey,
             depositTokenAccount: borrower.depositTokenAccount,
+            metadata: borrower.metadata,
             mint: borrower.mint,
             edition: borrower.edition,
             metadataProgram: METADATA_PROGRAM_ID,
@@ -1330,7 +1344,7 @@ describe("dexloan_listings", () => {
         await borrower.program.methods
           .repayLoan()
           .accounts({
-            loan: borrower.loanAccount,
+            loan: borrower.loan,
             tokenManager: borrower.tokenManager,
             borrower: borrower.keypair.publicKey,
             depositTokenAccount: borrower.depositTokenAccount,
@@ -1400,9 +1414,11 @@ describe("dexloan_listings", () => {
           .initHire({ amount, expiry, borrower: null })
           .accounts({
             hire: hireAddress,
+            collection: borrower.collection,
             tokenManager: tokenManagerAddress,
             lender: borrower.keypair.publicKey,
             depositTokenAccount: borrower.depositTokenAccount,
+            metadata: borrower.metadata,
             mint: borrower.mint,
             edition: borrower.edition,
             metadataProgram: METADATA_PROGRAM_ID,
@@ -1539,7 +1555,7 @@ describe("dexloan_listings", () => {
               lender: lender.keypair.publicKey,
               lenderTokenAccount: lenderTokenAccount.address,
               tokenAccount: hireTokenAccount.address,
-              loan: borrower.loanAccount,
+              loan: borrower.loan,
               tokenManager: borrower.tokenManager,
               mint: borrower.mint,
               edition: borrower.edition,
@@ -1574,7 +1590,7 @@ describe("dexloan_listings", () => {
           borrower.tokenManager
         );
         const defaultedLoan = await borrower.program.account.loan.fetch(
-          borrower.loanAccount
+          borrower.loan
         );
 
         assert.deepEqual(tokenManager.accounts, {
@@ -1615,10 +1631,12 @@ describe("dexloan_listings", () => {
           .initHire({ amount, expiry, borrower: null })
           .accounts({
             hire: hireAddress,
+            collection: borrower.collection,
             tokenManager: tokenManagerAddress,
             lender: borrower.keypair.publicKey,
             depositTokenAccount: borrower.depositTokenAccount,
             mint: borrower.mint,
+            metadata: borrower.metadata,
             edition: borrower.edition,
             metadataProgram: METADATA_PROGRAM_ID,
             systemProgram: anchor.web3.SystemProgram.programId,
@@ -1668,7 +1686,7 @@ describe("dexloan_listings", () => {
               lender: lender.keypair.publicKey,
               lenderTokenAccount: lenderTokenAccount.address,
               tokenAccount: borrower.depositTokenAccount,
-              loan: borrower.loanAccount,
+              loan: borrower.loan,
               tokenManager: borrower.tokenManager,
               mint: borrower.mint,
               edition: borrower.edition,
@@ -1696,7 +1714,7 @@ describe("dexloan_listings", () => {
           borrower.tokenManager
         );
         const defaultedLoan = await borrower.program.account.loan.fetch(
-          borrower.loanAccount
+          borrower.loan
         );
 
         assert.deepEqual(tokenManager.accounts, {
@@ -1738,10 +1756,12 @@ describe("dexloan_listings", () => {
           .initHire(hireOptions)
           .accounts({
             hire: hireAddress,
+            collection: seller.collection,
             tokenManager: seller.tokenManager,
             lender: seller.keypair.publicKey,
             depositTokenAccount: seller.depositTokenAccount,
             mint: seller.mint,
+            metadata: seller.metatdata,
             edition: seller.edition,
             metadataProgram: METADATA_PROGRAM_ID,
             systemProgram: anchor.web3.SystemProgram.programId,
@@ -1751,7 +1771,7 @@ describe("dexloan_listings", () => {
           .rpc();
 
         const callOption = await seller.program.account.callOption.fetch(
-          seller.callOptionAccount
+          seller.callOption
         );
         const hire = await seller.program.account.hire.fetch(hireAddress);
         const tokenManager = await seller.program.account.tokenManager.fetch(
@@ -1915,7 +1935,7 @@ describe("dexloan_listings", () => {
             .accounts({
               seller: seller.keypair.publicKey,
               buyer: buyer.keypair.publicKey,
-              callOption: seller.callOptionAccount,
+              callOption: seller.callOption,
               hire: hireAddress,
               hireEscrow: hireEscrowAddress,
               tokenManager: seller.tokenManager,
@@ -1954,7 +1974,7 @@ describe("dexloan_listings", () => {
           seller.keypair.publicKey
         );
         const callOption = await seller.program.account.callOption.fetch(
-          seller.callOptionAccount
+          seller.callOption
         );
         const hireAccount = await connection.getAccountInfo(hireAddress);
         const tokenManager = await seller.program.account.tokenManager.fetch(
@@ -2075,8 +2095,10 @@ describe("dexloan_listings", () => {
             .accounts({
               tokenManager,
               callOption: callOptionAddress,
+              collection: lender.collection,
               depositTokenAccount: borrower.hireTokenAccount,
               mint: lender.mint,
+              metadata: lender.metadata,
               edition: lender.edition,
               seller: borrower.keypair.publicKey,
               metadataProgram: METADATA_PROGRAM_ID,
@@ -2089,7 +2111,7 @@ describe("dexloan_listings", () => {
           assert.fail("Expected to throw");
         } catch (err) {
           assert(err instanceof anchor.AnchorError);
-          assert.equal(err.error.errorCode.number, 6013);
+          assert.equal(err.error.errorCode.number, 6014);
           assert.equal(err.error.errorCode.code, "InvalidDelegate");
         }
       });
@@ -2115,8 +2137,10 @@ describe("dexloan_listings", () => {
           .accounts({
             tokenManager,
             callOption: callOptionAddress,
+            collection: lender.collection,
             depositTokenAccount: borrower.hireTokenAccount,
             mint: lender.mint,
+            metadata: lender.metadata,
             edition: lender.edition,
             seller: lender.keypair.publicKey,
             metadataProgram: METADATA_PROGRAM_ID,

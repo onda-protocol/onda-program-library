@@ -5,9 +5,14 @@ use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{CallOption, CallOptionState, Hire, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
+use crate::constants::*;
 
 #[derive(Accounts)]
 pub struct ExerciseCallOption<'info> {
+    #[account(
+        constraint = signer.key() == SIGNER_PUBKEY
+    )]
+    pub signer: Signer<'info>,
     /// CHECK: contrained on listing_account
     #[account(mut)]
     pub seller: AccountInfo<'info>,
@@ -23,7 +28,7 @@ pub struct ExerciseCallOption<'info> {
         bump,
         has_one = mint,
         has_one = seller,
-        has_one = buyer,
+        constraint = call_option.buyer.unwrap() == buyer.key(),
         constraint = call_option.state == CallOptionState::Active,
     )]
     pub call_option: Box<Account<'info, CallOption>>,
@@ -104,7 +109,7 @@ pub fn handle_exercise_call_option<'info>(ctx: Context<'_, '_, '_, 'info, Exerci
 
     anchor_lang::solana_program::program::invoke(
         &anchor_lang::solana_program::system_instruction::transfer(
-            &call_option.buyer,
+            &call_option.buyer.unwrap(),
             &call_option.seller,
             remaining_amount,
         ),
@@ -119,6 +124,10 @@ pub fn handle_exercise_call_option<'info>(ctx: Context<'_, '_, '_, 'info, Exerci
 
 #[derive(Accounts)]
 pub struct ExerciseCallOptionWithHire<'info> {
+    #[account(
+        constraint = signer.key() == SIGNER_PUBKEY
+    )]
+    pub signer: Signer<'info>,
     /// CHECK: contrained on call_option_account
     #[account(mut)]
     pub seller: AccountInfo<'info>,
@@ -132,8 +141,8 @@ pub struct ExerciseCallOptionWithHire<'info> {
             seller.key().as_ref(),
         ],
         has_one = mint,
-        has_one = buyer,
         has_one = seller,
+        constraint = call_option.buyer.unwrap() == buyer.key(),
         constraint = call_option.state == CallOptionState::Active,
         bump,
     )]
@@ -236,7 +245,7 @@ pub fn handle_exercise_call_option_with_hire<'info>(ctx: Context<'_, '_, '_, 'in
 
     anchor_lang::solana_program::program::invoke(
         &anchor_lang::solana_program::system_instruction::transfer(
-            &call_option.buyer,
+            &call_option.buyer.unwrap(),
             &call_option.seller,
             remaining_amount,
         ),

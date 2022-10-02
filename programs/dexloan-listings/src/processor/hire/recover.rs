@@ -3,9 +3,14 @@ use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{Hire, HireState, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
+use crate::constants::*;
 
 #[derive(Accounts)]
 pub struct RecoverHire<'info> {
+    #[account(
+        constraint = signer.key() == SIGNER_PUBKEY
+    )]
+    pub signer: Signer<'info>,
     #[account(mut)]
     pub lender: Signer<'info>,
     #[account(mut)]

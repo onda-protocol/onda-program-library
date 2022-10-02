@@ -7,11 +7,12 @@ use {
     },
   },
   mpl_token_metadata::{
-    instruction::{freeze_delegated_account, thaw_delegated_account}
+    instruction::{freeze_delegated_account, thaw_delegated_account},
+    state::{Metadata}
   },
-  metaplex_token_metadata::state::{Metadata}
 };
-use crate::state::{Hire, TokenManager};
+use crate::constants::*;
+use crate::state::{Hire, Collection, TokenManager};
 use crate::error::*;
 
 pub struct FreezeParams<'a, 'b> {
@@ -250,7 +251,7 @@ pub fn calculate_widthdawl_amount<'info>(hire: &mut Account<'info, Hire>, unix_t
     let fraction = (now - start) / (end - start);
     let withdrawl_amount = balance * fraction;
 
-    Ok(withdrawl_amount.floor() as u64)
+    Ok(withdrawl_amount.round() as u64)
 }
 
 fn transfer_from_escrow(
@@ -313,10 +314,9 @@ pub fn settle_hire_escrow_balance<'a, 'b>(
 
     if hire.borrower.is_some() {
         let borrower = next_account_info(remaining_accounts)?;
-        msg!("settlement! {}", borrower.key());
         require_keys_eq!(borrower.key(), hire.borrower.unwrap());
 
-        msg!("Returning {} lamports to borrower from escrow balance", remaining_escrow_balance);        
+        msg!("Returning {} lamports to borrower {} from escrow balance", remaining_escrow_balance, borrower.key());        
 
         transfer_from_escrow(
             &mut hire_escrow.to_account_info(),
@@ -377,6 +377,39 @@ pub fn assert_metadata_valid<'a>(
   
     Ok(())
 }
+
+pub fn assert_collection_valid<'a>(
+    metadata: &AccountInfo<'a>,
+    mint: Pubkey,
+    collection_pda: Pubkey,
+    program_id: Pubkey,
+) -> Result<()> {
+    let metadata = Metadata::deserialize(
+        &mut metadata.data.borrow_mut().as_ref()
+    )?;
+
+    require_keys_eq!(metadata.mint, mint.key(), DexloanError::InvalidMint);
+
+    match metadata.collection {
+        Some(collection) => {
+            let seeds = &[
+                Collection::PREFIX,
+                collection.key.as_ref(),
+            ];
+            let (address, _) = Pubkey::find_program_address(
+                seeds, 
+                &program_id
+            );
+
+            require_keys_eq!(address, collection_pda, DexloanError::InvalidCollection);
+        }
+        None => {
+            return err!(DexloanError::InvalidCollection);
+        }
+    }
+
+    Ok(())
+}
   
 pub fn calculate_fee_from_basis_points(
     amount: u128,
@@ -397,7 +430,9 @@ pub fn pay_creator_fees<'a>(
     metadata_info: &AccountInfo<'a>,
     fee_payer: &AccountInfo<'a>,
 ) -> Result<u64> {
-    let metadata = Metadata::from_account_info(metadata_info)?;
+    let metadata = Metadata::deserialize(
+        &mut metadata_info.data.borrow_mut().as_ref()
+    )?;
 
     if metadata.mint != mint.key() {
         return  err!(DexloanError::InvalidMint);
@@ -430,7 +465,10 @@ pub fn pay_creator_fees<'a>(
                         .ok_or(DexloanError::NumericalOverflow)?;
 
                 let current_creator_info = next_account_info(remaining_accounts)?;
+
                 msg!("current creator {}", current_creator_info.key());
+                require_keys_eq!(current_creator_info.key(), creator.address);
+
                 if creator_fee > 0 {
                     invoke(
                         &anchor_lang::solana_program::system_instruction::transfer(
@@ -458,15 +496,25 @@ pub fn pay_creator_fees<'a>(
 pub fn calculate_loan_repayment(
     amount: u64,
     basis_points: u32,
-    duration: i64
+    duration: i64,
+    is_overdue: bool,
 ) -> Result<u64> {
     let annual_fee = calculate_fee_from_basis_points(amount as u128, basis_points as u128)?;
-    let fee_divisor = (31_536_000 as f64) / (duration as f64);
-    let pro_rata_fee = (annual_fee as f64 / fee_divisor).round() as u64;
+
+    let interest_due = annual_fee.checked_mul(duration as u64)
+        .ok_or(DexloanError::NumericalOverflow)?
+        .checked_div(SECONDS_PER_YEAR as u64)
+        .ok_or(DexloanError::NumericalOverflow)?;
+
+    let mut amount_due = amount.checked_add(interest_due).ok_or(DexloanError::NumericalOverflow)?;
+    msg!("interest_due {}", interest_due);
+
+    if is_overdue {
+        let late_repayment_fee = calculate_fee_from_basis_points(amount as u128, LATE_REPAYMENT_FEE_BASIS_POINTS)?;
+        msg!("late_repayment_fee {}", late_repayment_fee);
+        amount_due = amount_due.checked_add(late_repayment_fee).ok_or(DexloanError::NumericalOverflow)?;
+    }
     
-    msg!("annual interest fee {}", annual_fee);
-    msg!("fee_divisor {}", fee_divisor);
-    msg!("pro_rata_fee {}", pro_rata_fee);
     
-    Ok(amount + pro_rata_fee)
+    Ok(amount_due)
 }

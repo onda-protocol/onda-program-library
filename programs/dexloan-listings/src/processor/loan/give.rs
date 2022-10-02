@@ -1,9 +1,14 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token};
 use crate::state::{Loan, LoanState, TokenManager};
+use crate::constants::*;
 
 #[derive(Accounts)]
 pub struct GiveLoan<'info> {
+    #[account(
+        constraint = signer.key() == SIGNER_PUBKEY
+    )]
+    pub signer: Signer<'info>,
     /// CHECK: contrained on loan_account
     #[account(mut)]
     pub borrower: AccountInfo<'info>,
@@ -44,15 +49,15 @@ pub fn handle_give_loan(ctx: Context<GiveLoan>) -> Result<()> {
     let loan = &mut ctx.accounts.loan;
 
     loan.state = LoanState::Active;
-    loan.lender = ctx.accounts.lender.key();
-    loan.start_date = ctx.accounts.clock.unix_timestamp;
+    loan.lender = Some(ctx.accounts.lender.key());
+    loan.start_date = Some(ctx.accounts.clock.unix_timestamp);
 
     // Transfer amount
     anchor_lang::solana_program::program::invoke(
         &anchor_lang::solana_program::system_instruction::transfer(
-            &loan.lender,
+            &loan.lender.unwrap(),
             &loan.borrower,
-            loan.amount,
+            loan.amount.unwrap(),
         ),
         &[
             ctx.accounts.lender.to_account_info(),
