@@ -9,7 +9,6 @@ pub struct AccountState {
 
 #[account]
 pub struct TokenManager {
-    /// Represents
     pub accounts: AccountState,
     /// Misc
     pub bump: u8,
@@ -20,10 +19,7 @@ impl TokenManager {
 
     pub fn space() -> usize {
       8 + // key
-      32 + // issuer
-      32 + // mint
       (1 * 3) + // account state
-      (1 + 8 + 32 + 32) + // escrow balance
       1 // bump
   }
 }
