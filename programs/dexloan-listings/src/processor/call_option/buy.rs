@@ -59,7 +59,7 @@ pub fn handle_buy_call_option(ctx: Context<BuyCallOption>) -> Result<()> {
     // Transfer option cost
     anchor_lang::solana_program::program::invoke(
         &anchor_lang::solana_program::system_instruction::transfer(
-            &ctx.accounts.buyer.key(),
+            &call_option.buyer.unwrap(),
             &call_option.seller,
             call_option.amount,
         ),
