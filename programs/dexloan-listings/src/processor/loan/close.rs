@@ -23,9 +23,9 @@ pub struct CloseLoan<'info> {
             mint.key().as_ref(),
             borrower.key().as_ref(),
         ],
-        bump = loan.bump,
-        constraint = loan.borrower == *borrower.key,
-        constraint = loan.mint == mint.key(),
+        bump,
+        has_one = mint,
+        has_one = borrower,
         constraint = loan.state == LoanState::Listed || loan.state == LoanState::Defaulted,
         close = borrower
     )]

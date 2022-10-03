@@ -20,7 +20,8 @@ pub struct RepayLoan<'info> {
     pub borrower: Signer<'info>,
     #[account(
         mut,
-        constraint = deposit_token_account.owner == borrower.key(),
+        associated_token::mint = mint,
+        associated_token::authority = borrower
     )]
     pub deposit_token_account: Box<Account<'info, TokenAccount>>,
     /// CHECK: contrained on loan_account

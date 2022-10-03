@@ -21,7 +21,7 @@ pub struct GiveLoan<'info> {
             mint.key().as_ref(),
             borrower.key().as_ref(),
         ],
-        bump = loan.bump,
+        bump,
         has_one = mint,
         has_one = borrower,
         constraint = loan.borrower != lender.key(),
