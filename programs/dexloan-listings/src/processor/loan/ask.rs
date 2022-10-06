@@ -7,7 +7,7 @@ use crate::constants::*;
 
 #[derive(Accounts)]
 #[instruction(amount: u64, basis_points: u32, duration: u64)]
-pub struct InitLoan<'info> {
+pub struct AskLoan<'info> {
     #[account(
         constraint = signer.key() == SIGNER_PUBKEY
     )]
@@ -66,8 +66,8 @@ pub struct InitLoan<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn handle_init_loan(
-  ctx: Context<InitLoan>,
+pub fn handle_ask_loan(
+  ctx: Context<AskLoan>,
   amount: u64,
   basis_points: u32,
   duration: i64

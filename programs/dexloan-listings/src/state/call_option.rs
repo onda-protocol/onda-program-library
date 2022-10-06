@@ -45,3 +45,27 @@ impl CallOption {
 
     pub const PREFIX: &'static [u8] = b"call_option";
 }
+
+#[account]
+pub struct CallOptionOffer {
+    /// Duration of the loan in seconds
+    pub expiry: i64,
+    /// The start date of the loan
+    pub strike_price: u64,
+    /// The cost of the call option
+    pub amount: u64,
+    /// misc
+    pub bump: u8,
+}
+
+impl CallOptionOffer {
+    pub fn space() -> usize {
+        8 + // key
+        8 + // expiry
+        8 + // strike_price
+        8 + // amount
+        1 // bump
+    }
+
+    pub const PREFIX: &'static [u8] = b"call_option";
+}

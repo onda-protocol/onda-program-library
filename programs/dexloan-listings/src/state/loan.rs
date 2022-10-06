@@ -64,3 +64,40 @@ impl Loan {
 
     pub const PREFIX: &'static [u8] = b"loan";
 }
+
+
+#[account]
+pub struct LoanOffer {
+    /// id of the offer
+    pub id: u8, 
+    /// The amount of the loan
+    pub amount: Option<u64>,
+    /// Annual percentage yield
+    pub basis_points: u32,
+    /// Duration of the loan in seconds
+    pub duration: i64,
+    /// The collection
+    pub collection: Pubkey,
+    /// The loan to floor-value of the offer
+    pub ltv: Option<u32>,
+    /// The liquidation threshold in basis points
+    pub threshold: Option<u32>,
+    /// misc
+    pub bump: u8,
+}
+
+impl LoanOffer {
+    pub fn space() -> usize {
+        8 + // key
+        4 + // id
+        (1 + 8) + // amount
+        4 + // basis_points
+        8 + // duration
+        (1 + 4) + // ltv
+        (1 + 4) + // threshold
+        1 // bump
+    }
+
+    pub const PREFIX: &'static [u8] = b"loan_offer";
+    pub const VAULT_PREFIX: &'static [u8] = b"loan_offer_vault";
+}

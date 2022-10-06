@@ -18,13 +18,23 @@ pub mod dexloan_listings {
     use super::*;
 
     // Loans
-    pub fn init_loan<'info>(
-        ctx: Context<'_, '_, '_, 'info, InitLoan<'info>>,
+    pub fn ask_loan<'info>(
+        ctx: Context<'_, '_, '_, 'info, AskLoan<'info>>,
         amount: u64,
         basis_points: u32,
         duration: i64
     ) -> Result<()> {
-        handle_init_loan(ctx, amount, basis_points, duration)
+        handle_ask_loan(ctx, amount, basis_points, duration)
+    }
+
+    pub fn offer_loan<'info>(
+        ctx: Context<'_, '_, '_, 'info, OfferLoan<'info>>,
+        amount: u64,
+        basis_points: u32,
+        duration: i64,
+        id: u8
+    ) -> Result<()> {
+        handle_offer_loan(ctx, amount, basis_points, duration, id)
     }
 
     pub fn close_loan<'info>(ctx: Context<'_, '_, '_, 'info, CloseLoan<'info>>) -> Result<()> {
