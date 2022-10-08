@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use crate::error::*;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq)]
 pub enum LoanState {
@@ -43,6 +44,28 @@ pub struct Loan {
 }
 
 impl Loan {
+    pub fn init_state(
+        mut self,
+        amount: u64,
+        basis_points: u32,
+        duration: i64
+    ) {
+        self.amount = Some(amount);
+        self.outstanding = amount;
+        self.threshold = None;
+        self.installments = 1;
+        self.basis_points = basis_points;
+        self.duration = duration;
+        self.state = LoanState::Listed;
+    }   
+
+    pub fn set_active(mut self) {
+        require!(self.amount.is_some(), DexloanError::InvalidState);
+        require!(self.outstanding, DexloanError::InvalidState);
+
+        self.state = LoanState::Active;
+    }
+
     pub fn space() -> usize {
         8 + // key
         1 + // state
@@ -84,15 +107,17 @@ pub struct LoanOffer {
     pub threshold: Option<u32>,
     /// misc
     pub bump: u8,
+    pub escrow_bump: u8,
 }
 
 impl LoanOffer {
     pub fn space() -> usize {
         8 + // key
-        4 + // id
+        1 + // id
         (1 + 8) + // amount
         4 + // basis_points
         8 + // duration
+        32 + // collection
         (1 + 4) + // ltv
         (1 + 4) + // threshold
         1 // bump

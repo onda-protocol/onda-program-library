@@ -48,9 +48,9 @@ pub struct GiveLoan<'info> {
 pub fn handle_give_loan(ctx: Context<GiveLoan>) -> Result<()> {
     let loan = &mut ctx.accounts.loan;
 
-    loan.state = LoanState::Active;
     loan.lender = Some(ctx.accounts.lender.key());
     loan.start_date = Some(ctx.accounts.clock.unix_timestamp);
+    loan.set_active();
 
     // Transfer amount
     anchor_lang::solana_program::program::invoke(

@@ -1,6 +1,6 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{Loan, LoanState, Collection, TokenManager};
+use crate::state::{Loan, Collection, TokenManager};
 use crate::utils::*;
 use crate::error::*;
 use crate::constants::*;
@@ -74,7 +74,7 @@ pub fn handle_ask_loan(
 ) -> Result<()> {
     let loan = &mut ctx.accounts.loan;
     let token_manager = &mut ctx.accounts.token_manager;
-    let deposit_token_account = &ctx.accounts.deposit_token_account;
+    let deposit_token_account = *ctx.accounts.deposit_token_account;
 
     assert_collection_valid(
         &ctx.accounts.metadata,
@@ -90,52 +90,20 @@ pub fn handle_ask_loan(
     loan.borrower = ctx.accounts.borrower.key();
     loan.bump = *ctx.bumps.get("loan").unwrap();
     //
-    loan.amount = Some(amount);
-    loan.outstanding = amount;
-    loan.threshold = None;
-    loan.installments = 1;
-    loan.basis_points = basis_points;
-    loan.duration = duration;
-    loan.state = LoanState::Listed;
+    loan.init_state(amount, basis_points, duration);
     //
     token_manager.accounts.loan = true;
     token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
 
-    if deposit_token_account.delegate.is_some() {
-        if !deposit_token_account.is_frozen() && deposit_token_account.delegate.unwrap() != token_manager.key()  {
-            anchor_spl::token::revoke(
-                CpiContext::new(
-                    ctx.accounts.token_program.to_account_info(),
-                    anchor_spl::token::Revoke {
-                        source: deposit_token_account.to_account_info(),
-                        authority: ctx.accounts.borrower.to_account_info(),
-                    }
-                )
-            )?;
-
-            delegate_and_freeze_token_account(
-                token_manager,
-                ctx.accounts.token_program.to_account_info(),
-                deposit_token_account.to_account_info(),
-                ctx.accounts.borrower.to_account_info(),
-                ctx.accounts.mint.to_account_info(),
-                ctx.accounts.edition.to_account_info(),
-                ctx.accounts.borrower.to_account_info(),
-            )?;
-        } else if deposit_token_account.delegate.unwrap() != token_manager.key() || deposit_token_account.delegated_amount != 1 {
-            return err!(DexloanError::InvalidDelegate);
-        }
-    } else {
-        delegate_and_freeze_token_account(
-            token_manager,
-            ctx.accounts.token_program.to_account_info(),
-            deposit_token_account.to_account_info(),
-            ctx.accounts.borrower.to_account_info(),
-            ctx.accounts.mint.to_account_info(),
-            ctx.accounts.edition.to_account_info(),
-            ctx.accounts.borrower.to_account_info(),
-        )?;
-    }
+    maybe_delegate_and_freeze_token_account(
+        token_manager,
+        deposit_token_account,
+        ctx.accounts.borrower.to_account_info(),
+        ctx.accounts.mint.to_account_info(),
+        ctx.accounts.edition.to_account_info(),
+        ctx.accounts.borrower.to_account_info(),
+        ctx.accounts.token_program.to_account_info(),
+    )?;
 
     Ok(())
 }

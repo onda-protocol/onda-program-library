@@ -47,25 +47,32 @@ impl CallOption {
 }
 
 #[account]
-pub struct CallOptionOffer {
+pub struct CallOptionBid {
+    pub id: u8,
     /// Duration of the loan in seconds
     pub expiry: i64,
     /// The start date of the loan
     pub strike_price: u64,
     /// The cost of the call option
     pub amount: u64,
+    /// The collection
+    pub collection: Pubkey,
     /// misc
     pub bump: u8,
+    pub escrow_bump: u8,
 }
 
-impl CallOptionOffer {
+impl CallOptionBid {
     pub fn space() -> usize {
         8 + // key
+        1 + // id
         8 + // expiry
         8 + // strike_price
         8 + // amount
+        32 + // collection
         1 // bump
     }
 
-    pub const PREFIX: &'static [u8] = b"call_option";
+    pub const PREFIX: &'static [u8] = b"call_option_bid";
+    pub const VAULT_PREFIX: &'static [u8] = b"call_option_bid_vault";
 }

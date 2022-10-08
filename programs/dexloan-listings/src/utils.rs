@@ -1,15 +1,16 @@
 use {
-  std::{slice::Iter},
-  anchor_lang::{
+    std::{slice::Iter},
+    anchor_lang::{
     prelude::*,
     solana_program::{
         program::{invoke, invoke_signed},
     },
-  },
-  mpl_token_metadata::{
+    },
+    anchor_spl::token::{Token, TokenAccount},
+    mpl_token_metadata::{
     instruction::{freeze_delegated_account, thaw_delegated_account},
     state::{Metadata}
-  },
+    },
 };
 use crate::constants::*;
 use crate::state::{Hire, Collection, TokenManager};
@@ -125,6 +126,54 @@ pub fn delegate_and_freeze_token_account<'info>(
             signer_seeds: signer_seeds
         }
     )?;
+
+    Ok(())
+}
+
+pub fn maybe_delegate_and_freeze_token_account<'info>(
+    token_manager: &mut Account<'info, TokenManager>,
+    token_account: Account<'info, TokenAccount>,
+    authority: AccountInfo<'info>,
+    mint: AccountInfo<'info>,
+    edition: AccountInfo<'info>,
+    issuer: AccountInfo<'info>,
+    token_program: AccountInfo<'info>,
+) -> Result<()> {
+    if token_account.delegate.is_some() {
+        if !token_account.is_frozen() && token_account.delegate.unwrap() != token_manager.key()  {
+            anchor_spl::token::revoke(
+                CpiContext::new(
+                    token_program.clone(),
+                    anchor_spl::token::Revoke {
+                        source: token_account.to_account_info(),
+                        authority: authority.clone(),
+                    }
+                )
+            )?;
+
+            delegate_and_freeze_token_account(
+                token_manager,
+                token_program,
+                token_account.to_account_info(),
+                authority,
+                mint,
+                edition,
+                issuer,
+            )?;
+        } else if token_account.delegate.unwrap() != token_manager.key() || token_account.delegated_amount != 1 {
+            return err!(DexloanError::InvalidDelegate);
+        }
+    } else {
+        delegate_and_freeze_token_account(
+            token_manager,
+            token_program,
+            token_account.to_account_info(),
+            authority,
+            mint,
+            edition,
+            issuer,
+        )?;
+    }
 
     Ok(())
 }

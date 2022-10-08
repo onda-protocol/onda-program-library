@@ -7,7 +7,7 @@ use crate::constants::*;
 
 #[derive(Accounts)]
 #[instruction(amount: u64, strike_price: u64, expiry: i64)]
-pub struct InitCallOption<'info> {
+pub struct AskCallOption<'info> {
     #[account(
         constraint = signer.key() == SIGNER_PUBKEY
     )]
@@ -67,15 +67,15 @@ pub struct InitCallOption<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn handle_init_call_option(
-  ctx: Context<InitCallOption>,
+pub fn handle_ask_call_option(
+  ctx: Context<AskCallOption>,
   amount: u64,
   strike_price: u64,
   expiry: i64
 ) -> Result<()> {
     let call_option = &mut ctx.accounts.call_option;
     let token_manager = &mut ctx.accounts.token_manager;
-    let deposit_token_account = &mut ctx.accounts.deposit_token_account;
+    let deposit_token_account = *ctx.accounts.deposit_token_account;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
     assert_collection_valid(
@@ -104,43 +104,17 @@ pub fn handle_init_call_option(
     token_manager.accounts.call_option = true;
     token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
 
-    if deposit_token_account.delegate.is_some() {
-        if !deposit_token_account.is_frozen() && deposit_token_account.delegate.unwrap() != token_manager.key()  {
-            anchor_spl::token::revoke(
-                CpiContext::new(
-                    ctx.accounts.token_program.to_account_info(),
-                    anchor_spl::token::Revoke {
-                        source: deposit_token_account.to_account_info(),
-                        authority: ctx.accounts.seller.to_account_info(),
-                    }
-                )
-            )?;
+    maybe_delegate_and_freeze_token_account(
+        token_manager,
+        deposit_token_account,
+        ctx.accounts.seller.to_account_info(),
+        ctx.accounts.mint.to_account_info(),
+        ctx.accounts.edition.to_account_info(),
+        ctx.accounts.seller.to_account_info(),
+        ctx.accounts.token_program.to_account_info(),
+    )?;
 
-            delegate_and_freeze_token_account(
-                token_manager,
-                ctx.accounts.token_program.to_account_info(),
-                deposit_token_account.to_account_info(),
-                ctx.accounts.seller.to_account_info(),
-                ctx.accounts.mint.to_account_info(),
-                ctx.accounts.edition.to_account_info(),
-                ctx.accounts.seller.to_account_info(),
-            )?;
-        } else if deposit_token_account.delegate.unwrap() != token_manager.key() {
-            return err!(DexloanError::InvalidDelegate);
-        }
-    } else {
-        delegate_and_freeze_token_account(
-            token_manager,
-            ctx.accounts.token_program.to_account_info(),
-            deposit_token_account.to_account_info(),
-            ctx.accounts.seller.to_account_info(),
-            ctx.accounts.mint.to_account_info(),
-            ctx.accounts.edition.to_account_info(),
-            ctx.accounts.seller.to_account_info(),
-        )?;
-    }
-
-  Ok(())
+    Ok(())
 }
 
   
