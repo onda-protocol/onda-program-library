@@ -87,6 +87,7 @@ pub struct TakeLoanOffer<'info> {
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub rent: Sysvar<'info, Rent>,
+    pub clock: Sysvar<'info, Clock>,
 }
 
 pub fn handle_take_loan_offer(
@@ -114,7 +115,7 @@ pub fn handle_take_loan_offer(
     loan.bump = *ctx.bumps.get("loan").unwrap();
     //
     loan.init_state(offer.amount.unwrap(), offer.basis_points, offer.duration);
-    loan.set_active();
+    loan.set_active(ctx.accounts.clock.unix_timestamp);
     //
     token_manager.accounts.loan = true;
     token_manager.bump = *ctx.bumps.get("token_manager").unwrap();

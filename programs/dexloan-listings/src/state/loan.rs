@@ -59,11 +59,17 @@ impl Loan {
         self.state = LoanState::Listed;
     }   
 
-    pub fn set_active(mut self) {
-        require!(self.amount.is_some(), DexloanError::InvalidState);
-        require!(self.outstanding, DexloanError::InvalidState);
-
+    pub fn set_active(mut self, unix_timestamp: i64) {
         self.state = LoanState::Active;
+        self.start_date = Some(unix_timestamp);
+
+        require!(self.amount.is_some(), DexloanError::InvalidState);
+        require!(self.start_date.is_some(), DexloanError::InvalidState);
+        require!(self.lender.is_some(), DexloanError::InvalidState);
+        require!(self.outstanding == self.amount.unwrap(), DexloanError::InvalidState);
+        require!(self.installments > 0, DexloanError::InvalidState);
+        require!(self.basis_points >= 0, DexloanError::InvalidState);
+        require!(self.duration > 0, DexloanError::InvalidState);
     }
 
     pub fn space() -> usize {
