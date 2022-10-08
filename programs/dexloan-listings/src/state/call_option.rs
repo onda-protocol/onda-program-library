@@ -1,4 +1,6 @@
 use anchor_lang::prelude::*;
+use crate::constants::*;
+use crate::error::*;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq)]
 pub enum CallOptionState {
@@ -30,6 +32,24 @@ pub struct CallOption {
 }
 
 impl CallOption {
+    pub fn init_state(mut self, amount: u64, strike_price: u64, expiry: i64) {
+        self.state = CallOptionState::Listed;
+        self.amount = amount;
+        self.strike_price = strike_price;
+        self.expiry = expiry;
+    }
+
+    pub fn set_active(mut self, unix_timestamp: i64) {
+        require_eq!(self.state, CallOptionState::Listed, DexloanError::InvalidState);
+        require!(self.seller != SYSTEM_ACCOUNT, DexloanError::InvalidState);
+        require!(self.expiry > unix_timestamp, DexloanError::InvalidExpiry);
+        require!(self.buyer.is_some(), DexloanError::InvalidState);
+        require!(self.amount > 0, DexloanError::InvalidState);
+        require!(self.strike_price > 0, DexloanError::InvalidState);
+
+        self.state = CallOptionState::Active;
+    } 
+
     pub fn space() -> usize {
         8 + // key
         1 + // state
@@ -49,6 +69,8 @@ impl CallOption {
 #[account]
 pub struct CallOptionBid {
     pub id: u8,
+    /// The buyer making the offer
+    pub buyer: Pubkey,
     /// Duration of the loan in seconds
     pub expiry: i64,
     /// The start date of the loan
@@ -66,6 +88,7 @@ impl CallOptionBid {
     pub fn space() -> usize {
         8 + // key
         1 + // id
+        32 + // buyer
         8 + // expiry
         8 + // strike_price
         8 + // amount

@@ -1,6 +1,6 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{CallOption, CallOptionBid, CallOptionState, Collection, TokenManager};
+use crate::state::{CallOption, CallOptionBid, Collection, TokenManager};
 use crate::utils::*;
 use crate::error::*;
 use crate::constants::*;
@@ -87,6 +87,7 @@ pub struct SellCallOption<'info> {
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub rent: Sysvar<'info, Rent>,
+    pub clock: Sysvar<'info, Clock>,
 }
 
 pub fn handle_sell_call_option(
@@ -111,13 +112,12 @@ pub fn handle_sell_call_option(
 
     // Init
     call_option.seller = ctx.accounts.seller.key();
+    call_option.buyer = Some(ctx.accounts.buyer.key());
     call_option.mint = ctx.accounts.mint.key();
     call_option.bump = *ctx.bumps.get("call_option").unwrap();
     //
-    call_option.amount = bid.amount;
-    call_option.expiry = bid.expiry;
-    call_option.strike_price = bid.strike_price;
-    call_option.state = CallOptionState::Active;
+    call_option.init_state(bid.amount, bid.strike_price, bid.expiry);
+    call_option.set_active(ctx.accounts.clock.unix_timestamp);
     //
     token_manager.accounts.call_option = true;
     token_manager.bump = *ctx.bumps.get("token_manager").unwrap();

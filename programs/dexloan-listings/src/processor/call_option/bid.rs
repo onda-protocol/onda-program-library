@@ -71,6 +71,7 @@ pub fn handle_bid_call_option(
     bid.escrow_bump = *ctx.bumps.get("escrow_payment_account").unwrap();
     //
     bid.id = offer_id;
+    bid.buyer = ctx.accounts.buyer.key();
     bid.amount = amount;
     bid.strike_price = strike_price;
     bid.expiry = expiry;

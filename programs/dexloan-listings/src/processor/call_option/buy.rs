@@ -53,8 +53,8 @@ pub struct BuyCallOption<'info> {
 pub fn handle_buy_call_option(ctx: Context<BuyCallOption>) -> Result<()> {
     let call_option = &mut ctx.accounts.call_option;
 
-    call_option.state = CallOptionState::Active;
     call_option.buyer = Some(ctx.accounts.buyer.key());
+    call_option.set_active(ctx.accounts.clock.unix_timestamp);
 
     // Transfer option cost
     anchor_lang::solana_program::program::invoke(

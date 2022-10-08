@@ -71,6 +71,7 @@ pub fn handle_offer_loan(
     offer.escrow_bump = *ctx.bumps.get("escrow_payment_account").unwrap();
     //
     offer.id = offer_id;
+    offer.lender = ctx.accounts.lender.key();
     offer.amount = Some(amount);
     offer.basis_points = basis_points;
     offer.duration = duration;

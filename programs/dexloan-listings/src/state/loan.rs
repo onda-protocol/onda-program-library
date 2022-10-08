@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use crate::constants::*;
 use crate::error::*;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq)]
@@ -60,16 +61,19 @@ impl Loan {
     }   
 
     pub fn set_active(mut self, unix_timestamp: i64) {
-        self.state = LoanState::Active;
-        self.start_date = Some(unix_timestamp);
-
+        require_eq!(self.state, LoanState::Listed, DexloanError::InvalidExpiry);
         require!(self.amount.is_some(), DexloanError::InvalidState);
-        require!(self.start_date.is_some(), DexloanError::InvalidState);
         require!(self.lender.is_some(), DexloanError::InvalidState);
+        require!(self.borrower != SYSTEM_ACCOUNT, DexloanError::InvalidState);
         require!(self.outstanding == self.amount.unwrap(), DexloanError::InvalidState);
         require!(self.installments > 0, DexloanError::InvalidState);
         require!(self.basis_points >= 0, DexloanError::InvalidState);
         require!(self.duration > 0, DexloanError::InvalidState);
+
+        self.state = LoanState::Active;
+        self.start_date = Some(unix_timestamp);
+
+        require!(self.start_date.is_some(), DexloanError::InvalidState);
     }
 
     pub fn space() -> usize {
@@ -99,6 +103,8 @@ impl Loan {
 pub struct LoanOffer {
     /// id of the offer
     pub id: u8, 
+    /// The lender making the offer
+    pub lender: Pubkey,
     /// The amount of the loan
     pub amount: Option<u64>,
     /// Annual percentage yield
@@ -120,6 +126,7 @@ impl LoanOffer {
     pub fn space() -> usize {
         8 + // key
         1 + // id
+        32 + // lender
         (1 + 8) + // amount
         4 + // basis_points
         8 + // duration
