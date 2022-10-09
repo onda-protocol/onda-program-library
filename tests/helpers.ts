@@ -13,13 +13,22 @@ const PROGRAM_ID = new anchor.web3.PublicKey(
   "GDNxgyEcP6b2FtTtCGrGhmoy5AQEiwuv26hV1CLmL1yu"
 );
 
-export async function getSigner() {
+async function fromMnemomic(mnemomic: string) {
   const path = "m/44'/501'/0'/0'";
-  const mnemomic = process.env.SIGNER_SEED_PHRASE as string;
   const seed = await bip39.mnemonicToSeed(mnemomic);
   const derivedSeed = derivePath(path, seed.toString("hex")).key;
   const keypair = anchor.web3.Keypair.fromSeed(derivedSeed);
   return keypair;
+}
+
+export async function getSigner() {
+  const mnemomic = process.env.SIGNER_SEED_PHRASE as string;
+  return fromMnemomic(mnemomic);
+}
+
+export async function getAuthority() {
+  const mnemomic = process.env.AUTHORITY_SEED_PHRASE as string;
+  return fromMnemomic(mnemomic);
 }
 
 export function getProgram(
@@ -137,10 +146,11 @@ export async function mintNFT(
   connection: anchor.web3.Connection,
   keypair: anchor.web3.Keypair
 ) {
-  const creator = anchor.web3.Keypair.generate();
-  const provider = getProvider(connection, creator);
+  const authority = await getAuthority();
+  const signer = await getSigner();
+  const provider = getProvider(connection, authority);
   const program = getProgram(provider);
-  await requestAirdrop(connection, creator.publicKey);
+  await requestAirdrop(connection, authority.publicKey);
 
   const metaplex = Metaplex.make(connection).use(keypairIdentity(keypair));
 
@@ -152,7 +162,7 @@ export async function mintNFT(
       sellerFeeBasisPoints: 500,
       creators: [
         {
-          address: creator.publicKey,
+          address: authority.publicKey,
           share: 100,
         },
       ],
@@ -168,10 +178,12 @@ export async function mintNFT(
   await program.methods
     .initCollection()
     .accounts({
-      authority: creator.publicKey,
+      signer: signer.publicKey,
+      authority: authority.publicKey,
       collection: collectionAddress,
       mint: collection.address,
     })
+    .signers([signer])
     .rpc();
 
   const { nft } = await metaplex
@@ -182,7 +194,7 @@ export async function mintNFT(
       sellerFeeBasisPoints: 500,
       creators: [
         {
-          address: creator.publicKey,
+          address: authority.publicKey,
           share: 100,
         },
       ],
@@ -207,10 +219,10 @@ export async function mintNFT(
 
   return { nft, collection };
 }
-export type LoanBorrower = Awaited<ReturnType<typeof initLoan>>;
+export type LoanBorrower = Awaited<ReturnType<typeof askLoan>>;
 export type LoanLender = Awaited<ReturnType<typeof giveLoan>>;
 
-export async function initLoan(
+export async function askLoan(
   connection: anchor.web3.Connection,
   options: {
     amount: number;
@@ -251,6 +263,7 @@ export async function initLoan(
     await program.methods
       .askLoan(amount, basisPoints, duration)
       .accounts({
+        signer: signer.publicKey,
         tokenManager,
         depositTokenAccount,
         loan: loanAddress,
@@ -287,9 +300,10 @@ export async function initLoan(
 
 export async function giveLoan(
   connection: anchor.web3.Connection,
-  borrower: Awaited<ReturnType<typeof initLoan>>
+  borrower: Awaited<ReturnType<typeof askLoan>>
 ) {
   const keypair = anchor.web3.Keypair.generate();
+  const signer = await getSigner();
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
   await requestAirdrop(connection, keypair.publicKey);
@@ -298,6 +312,7 @@ export async function giveLoan(
     await program.methods
       .giveLoan()
       .accounts({
+        signer: signer.publicKey,
         tokenManager: borrower.tokenManager,
         loan: borrower.loan,
         borrower: borrower.keypair.publicKey,
@@ -307,6 +322,7 @@ export async function giveLoan(
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
       })
+      .signers([signer])
       .rpc();
   } catch (error) {
     console.log(error.logs);
@@ -332,6 +348,7 @@ export async function initCallOption(
   }
 ) {
   const keypair = anchor.web3.Keypair.generate();
+  const signer = await getSigner();
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
   await requestAirdrop(connection, keypair.publicKey);
@@ -360,9 +377,10 @@ export async function initCallOption(
 
   try {
     await program.methods
-      .initCallOption(amount, strikePrice, expiry)
+      .askCallOption(amount, strikePrice, expiry)
       .accounts({
         tokenManager,
+        signer: signer.publicKey,
         callOption: callOptionAddress,
         collection: collectionAddress,
         mint: nft.mint.address,
@@ -376,6 +394,7 @@ export async function initCallOption(
         systemProgram: anchor.web3.SystemProgram.programId,
         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
       })
+      .signers([signer])
       .rpc();
   } catch (error) {
     console.log(error.logs);
@@ -401,6 +420,7 @@ export async function buyCallOption(
   seller: Awaited<ReturnType<typeof initCallOption>>
 ) {
   const keypair = anchor.web3.Keypair.generate();
+  const signer = await getSigner();
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
   await requestAirdrop(connection, keypair.publicKey);
@@ -409,6 +429,7 @@ export async function buyCallOption(
     const signature = await program.methods
       .buyCallOption()
       .accounts({
+        signer: signer.publicKey,
         seller: seller.keypair.publicKey,
         buyer: keypair.publicKey,
         callOption: seller.callOption,
@@ -420,6 +441,7 @@ export async function buyCallOption(
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
       })
+      .signers([signer])
       .rpc();
 
     const latestBlockhash = await connection.getLatestBlockhash();
@@ -451,6 +473,7 @@ export async function initHire(
   }
 ) {
   const keypair = anchor.web3.Keypair.generate();
+  const signer = await getSigner();
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
   await requestAirdrop(connection, keypair.publicKey);
@@ -485,6 +508,7 @@ export async function initHire(
       .accounts({
         hire,
         tokenManager,
+        signer: signer.publicKey,
         collection: collectionAddress,
         lender: keypair.publicKey,
         depositTokenAccount: depositTokenAccount,
@@ -496,6 +520,7 @@ export async function initHire(
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
       })
+      .signers([signer])
       .rpc();
   } catch (error) {
     console.log(error.logs);
@@ -523,6 +548,7 @@ export async function takeHire(
   days: number
 ) {
   const keypair = anchor.web3.Keypair.generate();
+  const signer = await getSigner();
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
   await requestAirdrop(connection, keypair.publicKey);
@@ -541,6 +567,7 @@ export async function takeHire(
     await program.methods
       .takeHire(days)
       .accounts({
+        signer: signer.publicKey,
         borrower: keypair.publicKey,
         lender: lender.keypair.publicKey,
         hire: lender.hire,
@@ -563,6 +590,7 @@ export async function takeHire(
           isWritable: true,
         }))
       )
+      .signers([signer])
       .rpc();
   } catch (err) {
     console.log(err.logs);
@@ -578,10 +606,13 @@ export async function takeHire(
 }
 
 export async function recoverHire(lender: HireLender, borrower: HireBorrower) {
+  const signer = await getSigner();
+
   try {
     await lender.program.methods
       .recoverHire()
       .accounts({
+        signer: signer.publicKey,
         borrower: borrower.keypair.publicKey,
         lender: lender.keypair.publicKey,
         hire: lender.hire,
@@ -596,6 +627,7 @@ export async function recoverHire(lender: HireLender, borrower: HireBorrower) {
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
       })
+      .signers([signer])
       .rpc();
   } catch (err) {
     console.log(err.logs);
