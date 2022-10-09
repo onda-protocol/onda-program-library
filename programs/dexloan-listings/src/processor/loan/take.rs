@@ -15,6 +15,7 @@ pub struct TakeLoanOffer<'info> {
     #[account(mut)]
     pub borrower: Signer<'info>,
     #[account(mut)]
+    /// CHECK: seeds
     pub lender: AccountInfo<'info>,
     #[account(
         mut,
@@ -54,6 +55,7 @@ pub struct TakeLoanOffer<'info> {
         ],
         bump,
     )]
+    /// CHECK: seeds
     pub escrow_payment_account: UncheckedAccount<'info>,
     #[account(
         init_if_needed,

@@ -26,7 +26,7 @@ pub struct OfferLoan<'info> {
     )]
     pub loan_offer: Box<Account<'info, LoanOffer>>,
     #[account(
-        init,
+        init_if_needed,
         seeds=[
             LoanOffer::VAULT_PREFIX,
             loan_offer.key().as_ref()
@@ -35,7 +35,8 @@ pub struct OfferLoan<'info> {
         space = 0,
         bump,
     )]
-    pub loan_offer_sol_vault: UncheckedAccount<'info>,
+    /// CHECK: seeds
+    pub escrow_payment_account: UncheckedAccount<'info>,
     #[account(
         seeds = [
             Collection::PREFIX,
@@ -82,12 +83,12 @@ pub fn handle_offer_loan(
     anchor_lang::solana_program::program::invoke(
         &anchor_lang::solana_program::system_instruction::transfer(
             &ctx.accounts.lender.key(),
-            &ctx.accounts.loan_offer_sol_vault.key(),
+            &ctx.accounts.escrow_payment_account.key(),
             offer.amount.unwrap(),
         ),
         &[
             ctx.accounts.lender.to_account_info(),
-            ctx.accounts.loan_offer_sol_vault.to_account_info(),
+            ctx.accounts.escrow_payment_account.to_account_info(),
         ]
     )?;
 

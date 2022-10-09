@@ -35,6 +35,7 @@ pub struct BidCallOption<'info> {
         space = 0,
         bump,
     )]
+    /// CHECK: seeds
     pub escrow_payment_account: UncheckedAccount<'info>,
     #[account(
         seeds = [

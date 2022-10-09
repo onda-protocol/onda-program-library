@@ -15,6 +15,7 @@ pub struct SellCallOption<'info> {
     #[account(mut)]
     pub seller: Signer<'info>,
     #[account(mut)]
+    /// CHECK: seeds
     pub buyer: AccountInfo<'info>,
     #[account(
         mut,
@@ -54,6 +55,7 @@ pub struct SellCallOption<'info> {
         ],
         bump,
     )]
+    /// CHECK: seeds
     pub escrow_payment_account: UncheckedAccount<'info>,
     #[account(
         init_if_needed,
