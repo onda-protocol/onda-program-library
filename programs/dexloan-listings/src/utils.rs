@@ -6,7 +6,7 @@ use {
         program::{invoke, invoke_signed},
     },
     },
-    anchor_spl::token::{Token, TokenAccount},
+    anchor_spl::token::{TokenAccount},
     mpl_token_metadata::{
     instruction::{freeze_delegated_account, thaw_delegated_account},
     state::{Metadata}
@@ -132,7 +132,7 @@ pub fn delegate_and_freeze_token_account<'info>(
 
 pub fn maybe_delegate_and_freeze_token_account<'info>(
     token_manager: &mut Account<'info, TokenManager>,
-    token_account: Account<'info, TokenAccount>,
+    token_account: &mut Account<'info, TokenAccount>,
     authority: AccountInfo<'info>,
     mint: AccountInfo<'info>,
     edition: AccountInfo<'info>,

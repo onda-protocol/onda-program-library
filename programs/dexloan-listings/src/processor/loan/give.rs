@@ -49,7 +49,7 @@ pub fn handle_give_loan(ctx: Context<GiveLoan>) -> Result<()> {
     let loan = &mut ctx.accounts.loan;
 
     loan.lender = Some(ctx.accounts.lender.key());
-    loan.set_active(ctx.accounts.clock.unix_timestamp);
+    Loan::set_active(loan, ctx.accounts.clock.unix_timestamp)?;
 
     // Transfer amount
     anchor_lang::solana_program::program::invoke(

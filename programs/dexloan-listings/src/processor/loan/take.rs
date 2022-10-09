@@ -94,10 +94,10 @@ pub fn handle_take_loan_offer(
   ctx: Context<TakeLoanOffer>,
 ) -> Result<()> {
     let loan = &mut ctx.accounts.loan;
-    let offer = ctx.accounts.loan_offer;
-    let escrow_payment_account = ctx.accounts.escrow_payment_account;
+    let offer = &mut ctx.accounts.loan_offer;
+    let escrow_payment_account = &mut ctx.accounts.escrow_payment_account;
     let token_manager = &mut ctx.accounts.token_manager;
-    let deposit_token_account = *ctx.accounts.deposit_token_account;
+    let deposit_token_account = &mut ctx.accounts.deposit_token_account;
 
     assert_collection_valid(
         &ctx.accounts.metadata,
@@ -114,8 +114,8 @@ pub fn handle_take_loan_offer(
     loan.lender = Some(ctx.accounts.lender.key());
     loan.bump = *ctx.bumps.get("loan").unwrap();
     //
-    loan.init_state(offer.amount.unwrap(), offer.basis_points, offer.duration);
-    loan.set_active(ctx.accounts.clock.unix_timestamp);
+    Loan::init_ask_state(loan, offer.amount.unwrap(), offer.basis_points, offer.duration)?;
+    Loan::set_active(loan, ctx.accounts.clock.unix_timestamp)?;
     //
     token_manager.accounts.loan = true;
     token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
@@ -130,10 +130,12 @@ pub fn handle_take_loan_offer(
         ctx.accounts.token_program.to_account_info(),
     )?;
 
+    let bump = &[offer.escrow_bump];
+    let offer_pubkey = offer.key();
     let signer_seeds = &[&[
         LoanOffer::VAULT_PREFIX,
-        offer.key().as_ref(),
-        &[offer.escrow_bump]
+        offer_pubkey.as_ref(),
+        bump
     ][..]];
 
     anchor_lang::solana_program::program::invoke_signed(

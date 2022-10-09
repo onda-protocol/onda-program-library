@@ -1,6 +1,6 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{CallOption, CallOptionState, Collection, TokenManager};
+use crate::state::{CallOption, Collection, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
 use crate::constants::*;
@@ -75,7 +75,7 @@ pub fn handle_ask_call_option(
 ) -> Result<()> {
     let call_option = &mut ctx.accounts.call_option;
     let token_manager = &mut ctx.accounts.token_manager;
-    let deposit_token_account = *ctx.accounts.deposit_token_account;
+    let deposit_token_account = &mut ctx.accounts.deposit_token_account;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
     assert_collection_valid(
@@ -96,10 +96,7 @@ pub fn handle_ask_call_option(
     call_option.mint = ctx.accounts.mint.key();
     call_option.bump = *ctx.bumps.get("call_option").unwrap();
     //
-    call_option.amount = amount;
-    call_option.expiry = expiry;
-    call_option.strike_price = strike_price;
-    call_option.state = CallOptionState::Listed;
+    CallOption::init_ask_state(call_option, amount, strike_price, expiry)?;
     //
     token_manager.accounts.call_option = true;
     token_manager.bump = *ctx.bumps.get("token_manager").unwrap();

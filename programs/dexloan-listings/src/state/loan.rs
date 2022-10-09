@@ -2,7 +2,7 @@ use anchor_lang::prelude::*;
 use crate::constants::*;
 use crate::error::*;
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq)]
+#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Debug)]
 pub enum LoanState {
     Unlisted,
     Listed,
@@ -45,35 +45,42 @@ pub struct Loan {
 }
 
 impl Loan {
-    pub fn init_state(
-        mut self,
+    pub fn init_ask_state<'info>(
+        loan: &mut Account<'info, Loan>,
         amount: u64,
         basis_points: u32,
         duration: i64
-    ) {
-        self.amount = Some(amount);
-        self.outstanding = amount;
-        self.threshold = None;
-        self.installments = 1;
-        self.basis_points = basis_points;
-        self.duration = duration;
-        self.state = LoanState::Listed;
+    ) -> Result<()> {
+        loan.amount = Some(amount);
+        loan.outstanding = amount;
+        loan.threshold = None;
+        loan.installments = 1;
+        loan.basis_points = basis_points;
+        loan.duration = duration;
+        loan.state = LoanState::Listed;
+    
+        Ok(())
     }   
-
-    pub fn set_active(mut self, unix_timestamp: i64) {
-        require_eq!(self.state, LoanState::Listed, DexloanError::InvalidExpiry);
-        require!(self.amount.is_some(), DexloanError::InvalidState);
-        require!(self.lender.is_some(), DexloanError::InvalidState);
-        require!(self.borrower != SYSTEM_ACCOUNT, DexloanError::InvalidState);
-        require!(self.outstanding == self.amount.unwrap(), DexloanError::InvalidState);
-        require!(self.installments > 0, DexloanError::InvalidState);
-        require!(self.basis_points >= 0, DexloanError::InvalidState);
-        require!(self.duration > 0, DexloanError::InvalidState);
-
-        self.state = LoanState::Active;
-        self.start_date = Some(unix_timestamp);
-
-        require!(self.start_date.is_some(), DexloanError::InvalidState);
+    
+    pub fn set_active<'info>(loan: &mut Account<'info, Loan>, unix_timestamp: i64) -> Result<()> {
+        if loan.state != LoanState::Listed {
+            return err!(DexloanError::InvalidState);
+        }
+    
+        require!(loan.lender.is_some(), DexloanError::InvalidState);
+        require!(loan.amount.is_some(), DexloanError::InvalidState);
+        require_keys_neq!(loan.borrower, SYSTEM_ACCOUNT, DexloanError::InvalidState);
+        require_eq!(loan.outstanding, loan.amount.unwrap(), DexloanError::InvalidState);
+        require_gt!(loan.installments, 0, DexloanError::InvalidState);
+        require_gt!(loan.duration, 0, DexloanError::InvalidState);
+        require_gte!(loan.basis_points, 0, DexloanError::InvalidState);
+    
+        loan.state = LoanState::Active;
+        loan.start_date = Some(unix_timestamp);
+    
+        require!(loan.start_date.is_some(), DexloanError::InvalidState);
+    
+        Ok(())
     }
 
     pub fn space() -> usize {

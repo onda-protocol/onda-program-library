@@ -92,14 +92,13 @@ pub struct SellCallOption<'info> {
 
 pub fn handle_sell_call_option(
   ctx: Context<SellCallOption>,
-  _bid_id: u8,
+  _id: u8,
 ) -> Result<()> {
     let call_option = &mut ctx.accounts.call_option;
-    let bid = ctx.accounts.call_option_bid;
-    let seller = ctx.accounts.seller;
-    let escrow_payment_account = ctx.accounts.escrow_payment_account;
+    let bid = &mut ctx.accounts.call_option_bid;
+    let escrow_payment_account = &mut ctx.accounts.escrow_payment_account;
     let token_manager = &mut ctx.accounts.token_manager;
-    let deposit_token_account = *ctx.accounts.deposit_token_account;
+    let deposit_token_account = &mut ctx.accounts.deposit_token_account;
 
     assert_collection_valid(
         &ctx.accounts.metadata,
@@ -116,8 +115,8 @@ pub fn handle_sell_call_option(
     call_option.mint = ctx.accounts.mint.key();
     call_option.bump = *ctx.bumps.get("call_option").unwrap();
     //
-    call_option.init_state(bid.amount, bid.strike_price, bid.expiry);
-    call_option.set_active(ctx.accounts.clock.unix_timestamp);
+    CallOption::init_ask_state(call_option, bid.amount, bid.strike_price, bid.expiry)?;
+    CallOption::set_active(call_option, ctx.accounts.clock.unix_timestamp)?;
     //
     token_manager.accounts.call_option = true;
     token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
@@ -132,10 +131,12 @@ pub fn handle_sell_call_option(
         ctx.accounts.token_program.to_account_info(),
     )?;
 
+    let escrow_bump = &[bid.escrow_bump];
+    let bid_pubkey = bid.key();
     let signer_seeds = &[&[
         CallOptionBid::VAULT_PREFIX,
-        bid.key().as_ref(),
-        &[bid.escrow_bump]
+        bid_pubkey.as_ref(),
+        escrow_bump
     ][..]];
 
     anchor_lang::solana_program::program::invoke_signed(

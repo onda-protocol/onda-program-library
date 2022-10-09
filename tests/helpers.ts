@@ -1,6 +1,8 @@
 import * as anchor from "@project-serum/anchor";
 import * as splToken from "@solana/spl-token";
-import { Metaplex, keypairIdentity, NftClient } from "@metaplex-foundation/js";
+import * as bip39 from "bip39";
+import { derivePath } from "ed25519-hd-key";
+import { Metaplex, keypairIdentity } from "@metaplex-foundation/js";
 import {
   Metadata,
   PROGRAM_ID as METADATA_PROGRAM_ID,
@@ -10,6 +12,15 @@ import { IDL, DexloanListings } from "../target/types/dexloan_listings";
 const PROGRAM_ID = new anchor.web3.PublicKey(
   "GDNxgyEcP6b2FtTtCGrGhmoy5AQEiwuv26hV1CLmL1yu"
 );
+
+export async function getSigner() {
+  const path = "m/44'/501'/0'/0'";
+  const mnemomic = process.env.SIGNER_SEED_PHRASE as string;
+  const seed = await bip39.mnemonicToSeed(mnemomic);
+  const derivedSeed = derivePath(path, seed.toString("hex")).key;
+  const keypair = anchor.web3.Keypair.fromSeed(derivedSeed);
+  return keypair;
+}
 
 export function getProgram(
   provider: anchor.AnchorProvider
@@ -208,6 +219,7 @@ export async function initLoan(
   }
 ) {
   const keypair = anchor.web3.Keypair.generate();
+  const signer = await getSigner();
   const provider = getProvider(connection, keypair);
   const program = getProgram(provider);
   await requestAirdrop(connection, keypair.publicKey);
@@ -237,7 +249,7 @@ export async function initLoan(
 
   try {
     await program.methods
-      .initLoan(amount, basisPoints, duration)
+      .askLoan(amount, basisPoints, duration)
       .accounts({
         tokenManager,
         depositTokenAccount,
@@ -252,6 +264,7 @@ export async function initLoan(
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
         systemProgram: anchor.web3.SystemProgram.programId,
       })
+      .signers([signer])
       .rpc();
   } catch (error) {
     console.log(error.logs);

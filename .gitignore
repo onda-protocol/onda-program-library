@@ -1,5 +1,6 @@
 
 .anchor
+.env
 .DS_Store
 target
 test-ledger

@@ -1,3 +1,5 @@
+require("dotenv").config();
+
 import assert from "assert";
 import {
   Metadata,
@@ -6,7 +8,6 @@ import {
 import * as anchor from "@project-serum/anchor";
 import * as splToken from "@solana/spl-token";
 import * as helpers from "./helpers";
-import { AnchorError } from "@project-serum/anchor";
 
 describe("dexloan_listings", () => {
   // Configure the client to use the local cluster.
