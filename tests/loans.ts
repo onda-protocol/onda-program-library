@@ -1,10 +1,7 @@
 require("dotenv").config();
 
 import assert from "assert";
-import {
-  Metadata,
-  PROGRAM_ID as METADATA_PROGRAM_ID,
-} from "@metaplex-foundation/mpl-token-metadata";
+import { PROGRAM_ID as METADATA_PROGRAM_ID } from "@metaplex-foundation/mpl-token-metadata";
 import * as anchor from "@project-serum/anchor";
 import * as splToken from "@solana/spl-token";
 import * as helpers from "./helpers";
@@ -16,7 +13,7 @@ const connection = new anchor.web3.Connection(
 );
 
 describe.only("Loans", () => {
-  describe.only("Loan repossessions", () => {
+  describe("Loan repossessions", () => {
     let borrower: helpers.LoanBorrower;
     let lender: helpers.LoanLender;
     let options;
@@ -123,6 +120,7 @@ describe.only("Loans", () => {
     it("Will only allow lender to repossess an overdue loan", async () => {
       // Creates another signer
       const keypair = anchor.web3.Keypair.generate();
+      const signer = await helpers.getSigner();
       const provider = helpers.getProvider(connection, keypair);
       const program = helpers.getProgram(provider);
       await helpers.requestAirdrop(connection, keypair.publicKey);
@@ -138,6 +136,7 @@ describe.only("Loans", () => {
         await program.methods
           .repossess()
           .accounts({
+            signer: signer.publicKey,
             borrower: borrower.keypair.publicKey,
             depositTokenAccount: borrower.depositTokenAccount,
             lender: lender.keypair.publicKey,
@@ -152,6 +151,7 @@ describe.only("Loans", () => {
             clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
             rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           })
+          .signers([signer])
           .rpc();
 
         assert.ok(false);
@@ -163,6 +163,7 @@ describe.only("Loans", () => {
     });
 
     it("Allows an overdue loan to be repossessed by the lender", async () => {
+      const signer = await helpers.getSigner();
       const loan = await borrower.program.account.loan.fetch(borrower.loan);
       const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
         connection,
@@ -175,6 +176,7 @@ describe.only("Loans", () => {
         await lender.program.methods
           .repossess()
           .accounts({
+            signer: signer.publicKey,
             borrower: borrower.keypair.publicKey,
             depositTokenAccount: borrower.depositTokenAccount,
             lender: lender.keypair.publicKey,
@@ -189,6 +191,7 @@ describe.only("Loans", () => {
             clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
             rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           })
+          .signers([signer])
           .rpc();
       } catch (err) {
         console.log(err.logs);
@@ -216,10 +219,13 @@ describe.only("Loans", () => {
     });
 
     it("Will allow accounts to be closed once overdue loans are repossessed", async () => {
+      const signer = await helpers.getSigner();
+
       try {
         await borrower.program.methods
           .closeLoan()
           .accounts({
+            signer: signer.publicKey,
             borrower: borrower.keypair.publicKey,
             depositTokenAccount: borrower.depositTokenAccount,
             loan: borrower.loan,
@@ -230,6 +236,7 @@ describe.only("Loans", () => {
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: splToken.TOKEN_PROGRAM_ID,
           })
+          .signers([signer])
           .rpc();
       } catch (err) {
         console.log(err.logs);
@@ -303,6 +310,7 @@ describe.only("Loans", () => {
             new anchor.BN(1)
           )
           .accounts({
+            signer: signer.publicKey,
             loan: borrower.loan,
             collection: borrower.collection,
             tokenManager: borrower.tokenManager,
@@ -331,6 +339,7 @@ describe.only("Loans", () => {
         await borrower.program.methods
           .closeLoan()
           .accounts({
+            signer: signer.publicKey,
             loan: borrower.loan,
             tokenManager: borrower.tokenManager,
             borrower: borrower.keypair.publicKey,
@@ -366,6 +375,7 @@ describe.only("Loans", () => {
       await borrower.program.methods
         .askLoan(amount, basisPoints, duration)
         .accounts({
+          signer: signer.publicKey,
           loan: borrower.loan,
           collection: borrower.collection,
           tokenManager: borrower.tokenManager,
@@ -449,6 +459,7 @@ describe.only("Loans", () => {
         await lender.program.methods
           .repossess()
           .accounts({
+            signer: signer.publicKey,
             borrower: borrower.keypair.publicKey,
             depositTokenAccount: borrower.depositTokenAccount,
             lender: lender.keypair.publicKey,
@@ -484,6 +495,7 @@ describe.only("Loans", () => {
       await borrower.program.methods
         .repayLoan()
         .accounts({
+          signer: signer.publicKey,
           loan: borrower.loan,
           tokenManager: borrower.tokenManager,
           borrower: borrower.keypair.publicKey,
