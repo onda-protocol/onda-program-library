@@ -94,6 +94,7 @@ pub struct TakeLoanOffer<'info> {
 
 pub fn handle_take_loan_offer(
   ctx: Context<TakeLoanOffer>,
+  _id: u8,
 ) -> Result<()> {
     let loan = &mut ctx.accounts.loan;
     let offer = &mut ctx.accounts.loan_offer;
@@ -132,25 +133,10 @@ pub fn handle_take_loan_offer(
         ctx.accounts.token_program.to_account_info(),
     )?;
 
-    let bump = &[offer.escrow_bump];
-    let offer_pubkey = offer.key();
-    let signer_seeds = &[&[
-        LoanOffer::VAULT_PREFIX,
-        offer_pubkey.as_ref(),
-        bump
-    ][..]];
-
-    anchor_lang::solana_program::program::invoke_signed(
-        &anchor_lang::solana_program::system_instruction::transfer(
-            &escrow_payment_account.key(),
-            &loan.borrower,
-            loan.amount.unwrap(),
-        ),
-        &[
-            escrow_payment_account.to_account_info(),
-            ctx.accounts.borrower.to_account_info(),
-        ],
-        signer_seeds
+    transfer_from_escrow(
+        &mut escrow_payment_account.to_account_info(),
+        &mut ctx.accounts.borrower.to_account_info(),
+        loan.amount.unwrap(),
     )?;
 
     Ok(())

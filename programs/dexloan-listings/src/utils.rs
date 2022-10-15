@@ -303,7 +303,7 @@ pub fn calculate_widthdawl_amount<'info>(hire: &mut Account<'info, Hire>, unix_t
     Ok(withdrawl_amount.round() as u64)
 }
 
-fn transfer_from_escrow(
+pub fn transfer_from_escrow(
     escrow: &mut AccountInfo,
     to: &mut AccountInfo,
     amount: u64,

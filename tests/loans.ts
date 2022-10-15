@@ -13,6 +13,31 @@ const connection = new anchor.web3.Connection(
 );
 
 describe.only("Loans", () => {
+  describe.only("Offers", () => {
+    let lender: helpers.LoanOfferLender;
+    let options;
+
+    it("Creates an offer", async () => {
+      options = {
+        amount: anchor.web3.LAMPORTS_PER_SOL,
+        basisPoints: 500,
+        duration: 86_400,
+      };
+
+      lender = await helpers.offerLoan(connection, options);
+
+      const offer = await lender.program.account.loanOffer.fetch(
+        lender.loanOffer
+      );
+
+      assert.equal(offer.amount.toNumber(), options.amount);
+    });
+
+    it("Takes an offer", async () => {
+      await helpers.takeLoan(connection, lender);
+    });
+  });
+
   describe("Loan repossessions", () => {
     let borrower: helpers.LoanBorrower;
     let lender: helpers.LoanLender;

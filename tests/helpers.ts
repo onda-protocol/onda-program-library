@@ -99,6 +99,35 @@ export async function findLoanAddress(
   return loanAddress;
 }
 
+export async function findLoanOfferAddress(
+  collection: anchor.web3.PublicKey,
+  lender: anchor.web3.PublicKey,
+  id: number
+): Promise<anchor.web3.PublicKey> {
+  const [loanOfferAddress] = await anchor.web3.PublicKey.findProgramAddress(
+    [
+      Buffer.from("loan_offer"),
+      collection.toBuffer(),
+      lender.toBuffer(),
+      new anchor.BN(id).toArrayLike(Buffer),
+    ],
+    PROGRAM_ID
+  );
+
+  return loanOfferAddress;
+}
+
+export async function findLoanOfferVaultAddress(
+  loanOffer: anchor.web3.PublicKey
+): Promise<anchor.web3.PublicKey> {
+  const [loanAddress] = await anchor.web3.PublicKey.findProgramAddress(
+    [Buffer.from("loan_offer_vault"), loanOffer.toBuffer()],
+    PROGRAM_ID
+  );
+
+  return loanAddress;
+}
+
 export async function findCallOptionAddress(
   mint: anchor.web3.PublicKey,
   seller: anchor.web3.PublicKey
@@ -152,7 +181,7 @@ export async function mintNFT(
   const program = getProgram(provider);
   await requestAirdrop(connection, authority.publicKey);
 
-  const metaplex = Metaplex.make(connection).use(keypairIdentity(keypair));
+  const metaplex = Metaplex.make(connection).use(keypairIdentity(authority));
 
   const { nft: collection } = await metaplex
     .nfts()
@@ -209,7 +238,7 @@ export async function mintNFT(
     .verifyCollection({
       mintAddress: nft.mint.address,
       collectionMintAddress: nft.collection.address,
-      collectionAuthority: keypair,
+      collectionAuthority: authority,
       payer: keypair,
     })
     .run();
@@ -334,6 +363,132 @@ export async function giveLoan(
     provider,
     program,
   };
+}
+
+export type LoanOfferLender = Awaited<ReturnType<typeof offerLoan>>;
+
+export async function offerLoan(
+  connection: anchor.web3.Connection,
+  options: {
+    amount: number;
+    basisPoints: number;
+    duration: number;
+  }
+) {
+  const keypair = anchor.web3.Keypair.generate();
+  const signer = await getSigner();
+  const provider = getProvider(connection, keypair);
+  const program = getProgram(provider);
+  await requestAirdrop(connection, keypair.publicKey);
+
+  const { nft, collection } = await mintNFT(connection, keypair);
+
+  const amount = new anchor.BN(options.amount);
+  const basisPoints = options.basisPoints;
+  const duration = new anchor.BN(options.duration);
+  const id = 0;
+
+  const loanOffer = await findLoanOfferAddress(
+    collection.address,
+    keypair.publicKey,
+    id
+  );
+  const escrowPaymentAccount = await findLoanOfferVaultAddress(loanOffer);
+  const collectionAddress = await findCollectionAddress(
+    collection.mint.address
+  );
+
+  await program.methods
+    .offerLoan(amount, basisPoints, duration, id)
+    .accounts({
+      loanOffer,
+      escrowPaymentAccount,
+      collection: collectionAddress,
+      signer: signer.publicKey,
+      lender: keypair.publicKey,
+    })
+    .signers([signer])
+    .rpc();
+
+  return {
+    keypair,
+    provider,
+    program,
+    id,
+    loanOffer,
+    collection,
+    nft,
+    escrowPaymentAccount,
+  };
+}
+
+export async function takeLoan(
+  connection: anchor.web3.Connection,
+  lender: LoanOfferLender
+) {
+  const keypair = anchor.web3.Keypair.generate();
+  const signer = await getSigner();
+  const provider = getProvider(connection, keypair);
+  const program = getProgram(provider);
+  await requestAirdrop(connection, keypair.publicKey);
+
+  // Transfer NFT from authority to borrower
+  const authority = await getAuthority();
+  const metaplex = await Metaplex.make(connection).use(
+    keypairIdentity(authority)
+  );
+
+  await metaplex
+    .nfts()
+    .send({
+      mintAddress: lender.nft.mint.address,
+      toOwner: keypair.publicKey,
+    })
+    .run();
+
+  const depositTokenAccount = (
+    await connection.getTokenLargestAccounts(lender.nft.mint.address)
+  ).value[0].address;
+
+  const loanAddress = await findLoanAddress(
+    lender.nft.mint.address,
+    keypair.publicKey
+  );
+  const collectionAddress = await findCollectionAddress(
+    lender.collection.mint.address
+  );
+  const tokenManager = await findTokenManagerAddress(
+    lender.nft.mint.address,
+    keypair.publicKey
+  );
+
+  try {
+    await program.methods
+      .takeLoanOffer(new anchor.BN(0))
+      .accounts({
+        signer: signer.publicKey,
+        tokenManager,
+        depositTokenAccount,
+        loan: loanAddress,
+        loanOffer: lender.loanOffer,
+        collection: collectionAddress,
+        escrowPaymentAccount: lender.escrowPaymentAccount,
+        lender: lender.keypair.publicKey,
+        borrower: keypair.publicKey,
+        mint: lender.nft.mint.address,
+        metadata: lender.nft.metadataAddress,
+        edition: lender.nft.edition.address,
+        metadataProgram: METADATA_PROGRAM_ID,
+        tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+      })
+      .signers([signer])
+      .rpc();
+  } catch (err) {
+    console.log(err);
+    console.log(err.logs);
+    throw err;
+  }
 }
 
 export type CallOptionSeller = Awaited<ReturnType<typeof initCallOption>>;

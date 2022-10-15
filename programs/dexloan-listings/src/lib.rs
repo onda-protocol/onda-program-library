@@ -18,15 +18,6 @@ pub mod dexloan_listings {
     use super::*;
 
     // Loans
-    pub fn ask_loan<'info>(
-        ctx: Context<'_, '_, '_, 'info, AskLoan<'info>>,
-        amount: u64,
-        basis_points: u32,
-        duration: i64
-    ) -> Result<()> {
-        handle_ask_loan(ctx, amount, basis_points, duration)
-    }
-
     pub fn offer_loan<'info>(
         ctx: Context<'_, '_, '_, 'info, OfferLoan<'info>>,
         amount: u64,
@@ -37,12 +28,28 @@ pub mod dexloan_listings {
         handle_offer_loan(ctx, amount, basis_points, duration, id)
     }
 
-    pub fn close_loan<'info>(ctx: Context<'_, '_, '_, 'info, CloseLoan<'info>>) -> Result<()> {
-        handle_close_loan(ctx)
+    pub fn take_loan_offer<'info>(
+        ctx: Context<'_, '_, '_, 'info, TakeLoanOffer<'info>>,
+        id: u8,
+    ) -> Result<()> {
+        handle_take_loan_offer(ctx, id)
+    }
+
+    pub fn ask_loan<'info>(
+        ctx: Context<'_, '_, '_, 'info, AskLoan<'info>>,
+        amount: u64,
+        basis_points: u32,
+        duration: i64
+    ) -> Result<()> {
+        handle_ask_loan(ctx, amount, basis_points, duration)
     }
 
     pub fn give_loan<'info>(ctx: Context<'_, '_, '_, 'info, GiveLoan<'info>>) -> Result<()> {
         handle_give_loan(ctx)
+    }
+
+    pub fn close_loan<'info>(ctx: Context<'_, '_, '_, 'info, CloseLoan<'info>>) -> Result<()> {
+        handle_close_loan(ctx)
     }
 
     pub fn repay_loan<'info>(ctx: Context<'_, '_, '_, 'info, RepayLoan<'info>>) -> Result<()> {
