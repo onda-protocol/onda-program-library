@@ -25,6 +25,7 @@ pub struct OfferLoan<'info> {
         bump,
     )]
     pub loan_offer: Box<Account<'info, LoanOffer>>,
+    /// CHECK: constrained by seeds
     #[account(
         init,
         seeds=[
