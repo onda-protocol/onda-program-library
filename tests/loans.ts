@@ -15,6 +15,7 @@ const connection = new anchor.web3.Connection(
 describe.only("Loans", () => {
   describe.only("Offers", () => {
     let lender: helpers.LoanOfferLender;
+    let borrower: helpers.LoanOfferBorrower;
     let options;
 
     it("Creates an offer", async () => {
@@ -29,12 +30,51 @@ describe.only("Loans", () => {
       const offer = await lender.program.account.loanOffer.fetch(
         lender.loanOffer
       );
-
       assert.equal(offer.amount.toNumber(), options.amount);
     });
 
     it("Takes an offer", async () => {
-      await helpers.takeLoan(connection, lender);
+      borrower = await helpers.takeLoan(connection, lender);
+
+      try {
+        await lender.program.account.loanOffer.fetch(borrower.loanOffer);
+      } catch (err) {
+        assert.ok(err.message.includes("Account does not exist"));
+      }
+      const loan = await lender.program.account.loan.fetch(borrower.loan);
+      const borrowerLamportsAfter = (
+        await connection.getAccountInfo(borrower.keypair.publicKey)
+      ).lamports;
+      assert.ok(loan.borrower.equals(borrower.keypair.publicKey), "borrower");
+      assert.ok(loan.lender.equals(lender.keypair.publicKey), "lender");
+      assert.equal(loan.amount.toNumber(), options.amount, "amount");
+      assert.equal(loan.duration.toNumber(), options.duration, "duration");
+      assert.ok(loan.startDate.toNumber() > 0, "startDate");
+      assert.ok(
+        borrowerLamportsAfter > anchor.web3.LAMPORTS_PER_SOL * 3 - 9_000_000,
+        "lamports"
+      );
+    });
+
+    it("Closes an offer", async () => {
+      const signer = await helpers.getSigner();
+      const offer = await helpers.offerLoan(connection, {
+        amount: anchor.web3.LAMPORTS_PER_SOL,
+        basisPoints: 500,
+        duration: 86_400,
+      });
+
+      await offer.program.methods
+        .closeLoanOffer(offer.id)
+        .accounts({
+          signer: signer.publicKey,
+          lender: offer.keypair.publicKey,
+          loanOffer: offer.loanOffer,
+          escrowPaymentAccount: offer.escrowPaymentAccount,
+          collection: offer.collection,
+        })
+        .signers([signer])
+        .rpc();
     });
   });
 

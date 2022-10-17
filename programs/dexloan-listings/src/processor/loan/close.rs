@@ -1,6 +1,6 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{Loan, LoanState, TokenManager};
+use crate::state::{Collection, Loan, LoanState, LoanOffer, TokenManager};
 use crate::utils::*;
 use crate::constants::*;
 
@@ -50,6 +50,8 @@ pub struct CloseLoan<'info> {
     pub token_program: Program<'info, Token>,
 }
 
+
+
 pub fn handle_close_loan(ctx: Context<CloseLoan>) -> Result<()> {
     let token_manager = &mut ctx.accounts.token_manager;
 
@@ -80,5 +82,59 @@ pub fn handle_close_loan(ctx: Context<CloseLoan>) -> Result<()> {
         )?;
     }
   
+    Ok(())
+}
+
+#[derive(Accounts)]
+#[instruction(id: u8)]
+pub struct CloseLoanOffer<'info> {
+    #[account(
+        constraint = signer.key() == SIGNER_PUBKEY
+    )]
+    pub signer: Signer<'info>,
+    #[account(mut)]
+    pub lender: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [
+            LoanOffer::PREFIX,
+            collection.mint.as_ref(),
+            lender.key().as_ref(),
+            &[id],
+        ],
+        close = lender,
+        bump,
+    )]
+    pub loan_offer: Box<Account<'info, LoanOffer>>,
+    /// CHECK: seeds
+    #[account(
+        mut,
+        seeds=[
+            LoanOffer::VAULT_PREFIX,
+            loan_offer.key().as_ref()
+        ],
+        bump,
+    )]
+    pub escrow_payment_account: AccountInfo<'info>,
+    #[account(
+        seeds = [
+            Collection::PREFIX,
+            collection.mint.as_ref(),
+        ],
+        bump,
+    )]
+    pub collection: Box<Account<'info, Collection>>,
+    /// Misc
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+pub fn handle_close_loan_offer(ctx: Context<CloseLoanOffer>, _id: u8) -> Result<()> {
+    transfer_from_escrow(
+        &mut ctx.accounts.escrow_payment_account.to_account_info(),
+        &mut ctx.accounts.lender.to_account_info(),
+        ctx.accounts.escrow_payment_account.lamports()
+    )?;
+
     Ok(())
 }

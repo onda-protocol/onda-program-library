@@ -416,11 +416,13 @@ export async function offerLoan(
     program,
     id,
     loanOffer,
-    collection,
     nft,
     escrowPaymentAccount,
+    collection: collectionAddress,
   };
 }
+
+export type LoanOfferBorrower = Awaited<ReturnType<typeof takeLoan>>;
 
 export async function takeLoan(
   connection: anchor.web3.Connection,
@@ -454,9 +456,6 @@ export async function takeLoan(
     lender.nft.mint.address,
     keypair.publicKey
   );
-  const collectionAddress = await findCollectionAddress(
-    lender.collection.mint.address
-  );
   const tokenManager = await findTokenManagerAddress(
     lender.nft.mint.address,
     keypair.publicKey
@@ -471,7 +470,7 @@ export async function takeLoan(
         depositTokenAccount,
         loan: loanAddress,
         loanOffer: lender.loanOffer,
-        collection: collectionAddress,
+        collection: lender.collection,
         escrowPaymentAccount: lender.escrowPaymentAccount,
         lender: lender.keypair.publicKey,
         borrower: keypair.publicKey,
@@ -489,6 +488,16 @@ export async function takeLoan(
     console.log(err.logs);
     throw err;
   }
+
+  return {
+    keypair,
+    provider,
+    program,
+    loan: loanAddress,
+    loanOffer: lender.loanOffer,
+    collection: lender.collection,
+    escrowPaymentAccount: lender.escrowPaymentAccount,
+  };
 }
 
 export type CallOptionSeller = Awaited<ReturnType<typeof initCallOption>>;
