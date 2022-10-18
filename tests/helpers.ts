@@ -100,14 +100,14 @@ export async function findLoanAddress(
 }
 
 export async function findLoanOfferAddress(
-  collection: anchor.web3.PublicKey,
+  collectionMint: anchor.web3.PublicKey,
   lender: anchor.web3.PublicKey,
   id: number
 ): Promise<anchor.web3.PublicKey> {
   const [loanOfferAddress] = await anchor.web3.PublicKey.findProgramAddress(
     [
       Buffer.from("loan_offer"),
-      collection.toBuffer(),
+      collectionMint.toBuffer(),
       lender.toBuffer(),
       new anchor.BN(id).toArrayLike(Buffer),
     ],
@@ -120,12 +120,42 @@ export async function findLoanOfferAddress(
 export async function findLoanOfferVaultAddress(
   loanOffer: anchor.web3.PublicKey
 ): Promise<anchor.web3.PublicKey> {
-  const [loanAddress] = await anchor.web3.PublicKey.findProgramAddress(
-    [Buffer.from("loan_offer_vault"), loanOffer.toBuffer()],
+  const [loanOfferVaultAddress] =
+    await anchor.web3.PublicKey.findProgramAddress(
+      [Buffer.from("loan_offer_vault"), loanOffer.toBuffer()],
+      PROGRAM_ID
+    );
+
+  return loanOfferVaultAddress;
+}
+
+export async function findCallOptionBidAddress(
+  collectionMint: anchor.web3.PublicKey,
+  buyer: anchor.web3.PublicKey,
+  id: number
+) {
+  const [callOptionBidAddress] = await anchor.web3.PublicKey.findProgramAddress(
+    [
+      Buffer.from("call_option_bid"),
+      collectionMint.toBuffer(),
+      buyer.toBuffer(),
+      new anchor.BN(id).toArrayLike(Buffer),
+    ],
     PROGRAM_ID
   );
 
-  return loanAddress;
+  return callOptionBidAddress;
+}
+
+export async function findCallOptionBidVaultAddress(
+  callOptionBid: anchor.web3.PublicKey
+): Promise<anchor.web3.PublicKey> {
+  const [callOptionBidAddress] = await anchor.web3.PublicKey.findProgramAddress(
+    [Buffer.from("call_option_bid_vault"), callOptionBid.toBuffer()],
+    PROGRAM_ID
+  );
+
+  return callOptionBidAddress;
 }
 
 export async function findCallOptionAddress(
@@ -366,6 +396,7 @@ export async function giveLoan(
 }
 
 export type LoanOfferLender = Awaited<ReturnType<typeof offerLoan>>;
+export type LoanOfferBorrower = Awaited<ReturnType<typeof takeLoan>>;
 
 export async function offerLoan(
   connection: anchor.web3.Connection,
@@ -421,8 +452,6 @@ export async function offerLoan(
     collection: collectionAddress,
   };
 }
-
-export type LoanOfferBorrower = Awaited<ReturnType<typeof takeLoan>>;
 
 export async function takeLoan(
   connection: anchor.web3.Connection,
@@ -500,10 +529,144 @@ export async function takeLoan(
   };
 }
 
-export type CallOptionSeller = Awaited<ReturnType<typeof initCallOption>>;
+export type CallOptionBidBuyer = Awaited<ReturnType<typeof bidCallOption>>;
+export type CallOptionBidSeller = Awaited<ReturnType<typeof sellCallOption>>;
+
+export async function bidCallOption(
+  connection: anchor.web3.Connection,
+  options: {
+    amount: number;
+    strikePrice: number;
+    expiry: number;
+  }
+) {
+  const keypair = anchor.web3.Keypair.generate();
+  const signer = await getSigner();
+  const provider = getProvider(connection, keypair);
+  const program = getProgram(provider);
+  await requestAirdrop(connection, keypair.publicKey);
+
+  const { nft, collection } = await mintNFT(connection, keypair);
+
+  const amount = new anchor.BN(options.amount);
+  const strikePrice = new anchor.BN(options.strikePrice);
+  const duration = new anchor.BN(options.expiry);
+  const id = 0;
+
+  const callOptionBid = await findCallOptionBidAddress(
+    collection.address,
+    keypair.publicKey,
+    id
+  );
+  const escrowPaymentAccount = await findCallOptionBidVaultAddress(
+    callOptionBid
+  );
+  const collectionAddress = await findCollectionAddress(
+    collection.mint.address
+  );
+
+  await program.methods
+    .bidCallOption(amount, strikePrice, duration, id)
+    .accounts({
+      callOptionBid,
+      escrowPaymentAccount,
+      collection: collectionAddress,
+      signer: signer.publicKey,
+      buyer: keypair.publicKey,
+    })
+    .signers([signer])
+    .rpc();
+
+  return {
+    nft,
+    keypair,
+    provider,
+    program,
+    id,
+    callOptionBid,
+    escrowPaymentAccount,
+    collection: collectionAddress,
+  };
+}
+
+export async function sellCallOption(
+  connection: anchor.web3.Connection,
+  buyer: CallOptionBidBuyer
+) {
+  const keypair = anchor.web3.Keypair.generate();
+  const signer = await getSigner();
+  const provider = getProvider(connection, keypair);
+  const program = getProgram(provider);
+  await requestAirdrop(connection, keypair.publicKey);
+
+  // Transfer NFT from authority to borrower
+  const authority = await getAuthority();
+  const metaplex = await Metaplex.make(connection).use(
+    keypairIdentity(authority)
+  );
+
+  await metaplex
+    .nfts()
+    .send({
+      mintAddress: buyer.nft.mint.address,
+      toOwner: keypair.publicKey,
+    })
+    .run();
+
+  const depositTokenAccount = (
+    await connection.getTokenLargestAccounts(buyer.nft.mint.address)
+  ).value[0].address;
+
+  const callOptionAddress = await findCallOptionAddress(
+    buyer.nft.mint.address,
+    keypair.publicKey
+  );
+  const tokenManager = await findTokenManagerAddress(
+    buyer.nft.mint.address,
+    keypair.publicKey
+  );
+
+  try {
+    await program.methods
+      .sellCallOption(new anchor.BN(0))
+      .accounts({
+        signer: signer.publicKey,
+        tokenManager,
+        depositTokenAccount,
+        callOption: callOptionAddress,
+        callOptionBid: buyer.callOptionBid,
+        collection: buyer.collection,
+        escrowPaymentAccount: buyer.escrowPaymentAccount,
+        buyer: buyer.keypair.publicKey,
+        seller: keypair.publicKey,
+        mint: buyer.nft.mint.address,
+        metadata: buyer.nft.metadataAddress,
+        edition: buyer.nft.edition.address,
+        metadataProgram: METADATA_PROGRAM_ID,
+      })
+      .signers([signer])
+      .rpc();
+  } catch (err) {
+    console.log(err);
+    console.log(err.logs);
+    throw err;
+  }
+
+  return {
+    keypair,
+    provider,
+    program,
+    callOption: callOptionAddress,
+    callOptionBid: buyer.callOptionBid,
+    collection: buyer.collection,
+    escrowPaymentAccount: buyer.escrowPaymentAccount,
+  };
+}
+
+export type CallOptionSeller = Awaited<ReturnType<typeof askCallOption>>;
 export type CallOptionBuyer = Awaited<ReturnType<typeof buyCallOption>>;
 
-export async function initCallOption(
+export async function askCallOption(
   connection: anchor.web3.Connection,
   options: {
     amount: number;
@@ -581,7 +744,7 @@ export async function initCallOption(
 
 export async function buyCallOption(
   connection: anchor.web3.Connection,
-  seller: Awaited<ReturnType<typeof initCallOption>>
+  seller: Awaited<ReturnType<typeof askCallOption>>
 ) {
   const keypair = anchor.web3.Keypair.generate();
   const signer = await getSigner();

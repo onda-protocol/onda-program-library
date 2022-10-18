@@ -72,15 +72,6 @@ pub mod dexloan_listings {
     }
 
     // Call Options
-    pub fn ask_call_option(
-        ctx: Context<AskCallOption>,
-        amount: u64,
-        strike_price: u64,
-        expiry: i64,
-    ) -> Result<()> {
-        handle_ask_call_option(ctx, amount, strike_price, expiry)
-    }
-
     pub fn bid_call_option(
         ctx: Context<BidCallOption>,
         amount: u64,
@@ -91,11 +82,24 @@ pub mod dexloan_listings {
         handle_bid_call_option(ctx, amount, strike_price, expiry, id)
     }
 
-    pub fn sell_call_option(
-        ctx: Context<SellCallOption>,
-        bid_id: u8,
+    pub fn close_call_option_bid(ctx: Context<CloseCallOptionBid>, id: u8) -> Result<()> {
+        handle_close_call_option_bid(ctx, id)
+    }
+
+    pub fn sell_call_option<'info>(
+        ctx: Context<'_, '_, '_, 'info, SellCallOption<'info>>,
+        id: u8,
     ) -> Result<()> {
-        handle_sell_call_option(ctx, bid_id)
+        handle_sell_call_option(ctx, id)
+    }
+
+    pub fn ask_call_option<'info>(
+        ctx: Context<'_, '_, '_, 'info, AskCallOption<'info>>,
+        amount: u64,
+        strike_price: u64,
+        expiry: i64,
+    ) -> Result<()> {
+        handle_ask_call_option(ctx, amount, strike_price, expiry)
     }
 
     pub fn buy_call_option<'info>(ctx: Context<'_, '_, '_, 'info, BuyCallOption<'info>>) -> Result<()> {

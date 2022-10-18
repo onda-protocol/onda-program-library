@@ -141,17 +141,10 @@ pub fn handle_sell_call_option(
         escrow_bump
     ][..]];
 
-    anchor_lang::solana_program::program::invoke_signed(
-        &anchor_lang::solana_program::system_instruction::transfer(
-            &escrow_payment_account.key(),
-            &call_option.seller,
-            call_option.amount,
-        ),
-        &[
-            escrow_payment_account.to_account_info(),
-            ctx.accounts.seller.to_account_info(),
-        ],
-        signer_seeds
+    transfer_from_escrow(
+        &mut escrow_payment_account.to_account_info(),
+        &mut ctx.accounts.seller.to_account_info(),
+        call_option.amount,
     )?;
 
     Ok(())

@@ -12,8 +12,8 @@ const connection = new anchor.web3.Connection(
   anchor.AnchorProvider.defaultOptions().preflightCommitment
 );
 
-describe.only("Loans", () => {
-  describe.only("Offers", () => {
+describe("Loans", () => {
+  describe("Offers", () => {
     let lender: helpers.LoanOfferLender;
     let borrower: helpers.LoanOfferBorrower;
     let options;

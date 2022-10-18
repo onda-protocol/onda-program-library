@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{CallOption, CallOptionState, TokenManager};
+use crate::state::{CallOption, CallOptionBid, CallOptionState, Collection, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
 use crate::constants::*;
@@ -93,6 +93,63 @@ pub fn handle_close_call_option(ctx: Context<CloseCallOption>) -> Result<()> {
             )
         )?;
     }
+
+    Ok(())
+}
+
+#[derive(Accounts)]
+#[instruction(id: u8)]
+pub struct CloseCallOptionBid<'info> {
+    #[account(
+        constraint = signer.key() == SIGNER_PUBKEY
+    )]
+    pub signer: Signer<'info>,
+    #[account(mut)]
+    pub buyer: Signer<'info>,
+    #[account(
+        init,
+        seeds = [
+            CallOptionBid::PREFIX,
+            collection.mint.as_ref(),
+            buyer.key().as_ref(),
+            &[id],
+        ],
+        payer = buyer,
+        space = CallOptionBid::space(),
+        bump,
+    )]
+    pub call_option_bid: Box<Account<'info, CallOptionBid>>,
+    #[account(
+        init_if_needed,
+        seeds=[
+            CallOptionBid::VAULT_PREFIX,
+            call_option_bid.key().as_ref()
+        ],
+        payer = buyer,
+        space = 0,
+        bump,
+    )]
+    /// CHECK: seeds
+    pub escrow_payment_account: UncheckedAccount<'info>,
+    #[account(
+        seeds = [
+            Collection::PREFIX,
+            collection.mint.as_ref(),
+        ],
+        bump,
+    )]
+    pub collection: Box<Account<'info, Collection>>,
+    /// Misc
+    pub system_program: Program<'info, System>,
+    pub rent: Sysvar<'info, Rent>,
+}
+
+pub fn handle_close_call_option_bid(ctx: Context<CloseCallOptionBid>, _id: u8) -> Result<()> {
+    transfer_from_escrow(
+        &mut ctx.accounts.escrow_payment_account.to_account_info(),
+        &mut ctx.accounts.buyer.to_account_info(),
+        ctx.accounts.escrow_payment_account.lamports()
+    )?;
 
     Ok(())
 }

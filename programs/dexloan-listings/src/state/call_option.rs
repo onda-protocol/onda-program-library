@@ -101,7 +101,8 @@ impl CallOptionBid {
         8 + // strike_price
         8 + // amount
         32 + // collection
-        1 // bump
+        1 + // bump
+        1 // escrow_bump
     }
 
     pub const PREFIX: &'static [u8] = b"call_option_bid";

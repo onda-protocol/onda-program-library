@@ -15,7 +15,28 @@ const connection = new anchor.web3.Connection(
   anchor.AnchorProvider.defaultOptions().preflightCommitment
 );
 
-describe("Call Options", () => {
+describe.only("Call Options", () => {
+  describe.only("Bids", () => {
+    let buyer: helpers.CallOptionBidBuyer;
+    let seller: helpers.CallOptionBidSeller;
+    let options;
+
+    it("Creates a call option bid", async () => {
+      options = {
+        amount: anchor.web3.LAMPORTS_PER_SOL,
+        strikePrice: 500,
+        expiry: Date.now() / 1000 + 86_400,
+      };
+
+      buyer = await helpers.bidCallOption(connection, options);
+
+      const bid = await buyer.program.account.callOptionBid.fetch(
+        buyer.callOptionBid
+      );
+      assert.equal(bid.amount.toNumber(), options.amount);
+    });
+  });
+
   describe("Exercise call option", () => {
     let options;
     let seller: helpers.CallOptionSeller;
@@ -27,7 +48,7 @@ describe("Call Options", () => {
         strikePrice: anchor.web3.LAMPORTS_PER_SOL,
         expiry: Math.round(Date.now() / 1000) + 30 * 24 * 60 * 2, // 2 days
       };
-      seller = await helpers.initCallOption(connection, options);
+      seller = await helpers.askCallOption(connection, options);
 
       const callOption = await seller.program.account.callOption.fetch(
         seller.callOption
@@ -258,7 +279,7 @@ describe("Call Options", () => {
 
   describe("Call option expiry", () => {
     let options;
-    let seller: Awaited<ReturnType<typeof helpers.initCallOption>>;
+    let seller: Awaited<ReturnType<typeof helpers.askCallOption>>;
     let buyer: Awaited<ReturnType<typeof helpers.buyCallOption>>;
 
     it("Creates a dexloan call option", async () => {
@@ -267,7 +288,7 @@ describe("Call Options", () => {
         strikePrice: anchor.web3.LAMPORTS_PER_SOL,
         expiry: Math.round(Date.now() / 1000) + 20, // 20 seconds
       };
-      seller = await helpers.initCallOption(connection, options);
+      seller = await helpers.askCallOption(connection, options);
 
       const callOption = await seller.program.account.callOption.fetch(
         seller.callOption

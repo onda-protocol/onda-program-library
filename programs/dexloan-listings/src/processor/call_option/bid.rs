@@ -1,5 +1,4 @@
 use anchor_lang::{prelude::*};
-use anchor_spl::token::{Mint, Token};
 use crate::state::{CallOptionBid, Collection};
 use crate::constants::*;
 
@@ -45,15 +44,8 @@ pub struct BidCallOption<'info> {
         bump,
     )]
     pub collection: Box<Account<'info, Collection>>,
-    #[account(constraint = mint.supply == 1)]
-    pub mint: Box<Account<'info, Mint>>,
-    /// CHECK: deserialized and checked
-    pub metadata: UncheckedAccount<'info>,
-    /// CHECK: validated in cpi
-    pub metadata_program: UncheckedAccount<'info>,
     /// Misc
     pub system_program: Program<'info, System>,
-    pub token_program: Program<'info, Token>,
     pub rent: Sysvar<'info, Rent>,
 }
 
