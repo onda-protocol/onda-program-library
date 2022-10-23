@@ -61,26 +61,14 @@ pub fn handle_close_loan(ctx: Context<CloseLoan>) -> Result<()> {
         return Ok(());
     }
 
-    if ctx.accounts.deposit_token_account.is_frozen() {
-        thaw_and_revoke_token_account(
-            token_manager,
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.deposit_token_account.to_account_info(),
-            ctx.accounts.borrower.to_account_info(),
-            ctx.accounts.mint.to_account_info(),
-            ctx.accounts.edition.to_account_info(),
-        )?;
-    } else {
-        anchor_spl::token::revoke(
-            CpiContext::new(
-                ctx.accounts.token_program.to_account_info(),
-                anchor_spl::token::Revoke {
-                    source: ctx.accounts.deposit_token_account.to_account_info(),
-                    authority: ctx.accounts.borrower.to_account_info(),
-                }
-            )
-        )?;
-    }
+    thaw_and_revoke_token_account(
+        token_manager,
+        ctx.accounts.token_program.to_account_info(),
+        ctx.accounts.deposit_token_account.to_account_info(),
+        ctx.accounts.borrower.to_account_info(),
+        ctx.accounts.mint.to_account_info(),
+        ctx.accounts.edition.to_account_info(),
+    )?;
   
     Ok(())
 }
