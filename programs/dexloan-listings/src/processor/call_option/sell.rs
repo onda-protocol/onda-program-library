@@ -133,14 +133,6 @@ pub fn handle_sell_call_option(
         ctx.accounts.token_program.to_account_info(),
     )?;
 
-    let escrow_bump = &[bid.escrow_bump];
-    let bid_pubkey = bid.key();
-    let signer_seeds = &[&[
-        CallOptionBid::VAULT_PREFIX,
-        bid_pubkey.as_ref(),
-        escrow_bump
-    ][..]];
-
     transfer_from_escrow(
         &mut escrow_payment_account.to_account_info(),
         &mut ctx.accounts.seller.to_account_info(),
