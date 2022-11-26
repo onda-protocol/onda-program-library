@@ -15,8 +15,8 @@ const connection = new anchor.web3.Connection(
   anchor.AnchorProvider.defaultOptions().preflightCommitment
 );
 
-describe.only("Call Options", () => {
-  describe.only("Bids", () => {
+describe("Call Options", () => {
+  describe("Bids", () => {
     let buyer: helpers.CallOptionBidBuyer;
     let seller: helpers.CallOptionBidSeller;
     let options;
@@ -122,10 +122,13 @@ describe.only("Call Options", () => {
     });
 
     it("Can't be closed if active", async () => {
+      const signer = await helpers.getSigner();
+
       try {
         await seller.program.methods
           .closeCallOption()
           .accounts({
+            signer: signer.publicKey,
             callOption: seller.callOption,
             tokenManager: seller.tokenManager,
             seller: seller.keypair.publicKey,
@@ -137,6 +140,7 @@ describe.only("Call Options", () => {
             tokenProgram: splToken.TOKEN_PROGRAM_ID,
             clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
           })
+          .signers([signer])
           .rpc();
         assert.fail("Active call option was closed!");
       } catch (err) {
@@ -147,6 +151,7 @@ describe.only("Call Options", () => {
     });
 
     it("Exercises a call option", async () => {
+      const signer = await helpers.getSigner();
       const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
         connection,
         buyer.keypair,
@@ -173,6 +178,7 @@ describe.only("Call Options", () => {
         const signature = await buyer.program.methods
           .exerciseCallOption()
           .accounts({
+            signer: signer.publicKey,
             seller: seller.keypair.publicKey,
             buyer: buyer.keypair.publicKey,
             callOption: seller.callOption,
@@ -195,6 +201,7 @@ describe.only("Call Options", () => {
               isWritable: true,
             }))
           )
+          .signers([signer])
           .rpc();
 
         const latestBlockhash = await connection.getLatestBlockhash();
@@ -245,9 +252,12 @@ describe.only("Call Options", () => {
     });
 
     it("Can be closed after being exercised", async () => {
+      const signer = await helpers.getSigner();
+
       await seller.program.methods
         .closeCallOption()
         .accounts({
+          signer: signer.publicKey,
           seller: seller.keypair.publicKey,
           callOption: seller.callOption,
           tokenManager: seller.tokenManager,
@@ -259,6 +269,7 @@ describe.only("Call Options", () => {
           tokenProgram: splToken.TOKEN_PROGRAM_ID,
           clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
         })
+        .signers([signer])
         .rpc();
 
       try {
@@ -340,6 +351,7 @@ describe.only("Call Options", () => {
     });
 
     it("Cannot be exercised if expired", async () => {
+      const signer = await helpers.getSigner();
       const callOption = await seller.program.account.callOption.fetch(
         seller.callOption
       );
@@ -358,6 +370,7 @@ describe.only("Call Options", () => {
         await buyer.program.methods
           .exerciseCallOption()
           .accounts({
+            signer: signer.publicKey,
             seller: seller.keypair.publicKey,
             buyer: buyer.keypair.publicKey,
             buyerTokenAccount: tokenAccount.address,
@@ -371,6 +384,7 @@ describe.only("Call Options", () => {
             clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
             rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           })
+          .signers([signer])
           .rpc();
         assert.fail();
       } catch (error) {
@@ -380,9 +394,12 @@ describe.only("Call Options", () => {
     });
 
     it("Can be closed by seller when expired", async () => {
+      const signer = await helpers.getSigner();
+
       await seller.program.methods
         .closeCallOption()
         .accounts({
+          signer: signer.publicKey,
           seller: seller.keypair.publicKey,
           callOption: seller.callOption,
           tokenManager: seller.tokenManager,
@@ -394,6 +411,7 @@ describe.only("Call Options", () => {
           tokenProgram: splToken.TOKEN_PROGRAM_ID,
           clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
         })
+        .signers([signer])
         .rpc();
 
       try {

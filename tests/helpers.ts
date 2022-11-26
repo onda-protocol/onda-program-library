@@ -8,6 +8,7 @@ import {
   PROGRAM_ID as METADATA_PROGRAM_ID,
 } from "@metaplex-foundation/mpl-token-metadata";
 import { IDL, DexloanListings } from "../target/types/dexloan_listings";
+import { getAccount } from "@solana/spl-token";
 
 const PROGRAM_ID = new anchor.web3.PublicKey(
   "GDNxgyEcP6b2FtTtCGrGhmoy5AQEiwuv26hV1CLmL1yu"
@@ -261,9 +262,7 @@ export async function mintNFT(
     })
     .run();
 
-  const {
-    response: { signature },
-  } = await metaplex
+  const verifyResult = await metaplex
     .nfts()
     .verifyCollection({
       mintAddress: nft.mint.address,
@@ -273,8 +272,24 @@ export async function mintNFT(
     })
     .run();
 
-  const latestBlockhash = await connection.getLatestBlockhash();
-  await connection.confirmTransaction({ signature, ...latestBlockhash });
+  await connection.confirmTransaction({
+    signature: verifyResult.response.signature,
+    ...(await connection.getLatestBlockhash()),
+  });
+
+  // Transfer nft to provided keypair
+  const sendResult = await metaplex
+    .nfts()
+    .send({
+      mintAddress: nft.mint.address,
+      toOwner: keypair.publicKey,
+    })
+    .run();
+
+  await connection.confirmTransaction({
+    signature: sendResult.response.signature,
+    ...(await connection.getLatestBlockhash()),
+  });
 
   return { nft, collection };
 }
@@ -680,12 +695,10 @@ export async function askCallOption(
   const program = getProgram(provider);
   await requestAirdrop(connection, keypair.publicKey);
   const { nft, collection } = await mintNFT(connection, keypair);
-
   const largestAccounts = await connection.getTokenLargestAccounts(
     nft.mint.address
   );
   const depositTokenAccount = largestAccounts.value[0].address;
-
   const callOptionAddress = await findCallOptionAddress(
     nft.mint.address,
     keypair.publicKey
@@ -752,22 +765,24 @@ export async function buyCallOption(
   const program = getProgram(provider);
   await requestAirdrop(connection, keypair.publicKey);
 
+  const accounts = {
+    signer: signer.publicKey,
+    seller: seller.keypair.publicKey,
+    buyer: keypair.publicKey,
+    callOption: seller.callOption,
+    tokenManager: seller.tokenManager,
+    mint: seller.mint,
+    edition: seller.edition,
+    metadataProgram: METADATA_PROGRAM_ID,
+    systemProgram: anchor.web3.SystemProgram.programId,
+    tokenProgram: splToken.TOKEN_PROGRAM_ID,
+    clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+  };
+
   try {
     const signature = await program.methods
       .buyCallOption()
-      .accounts({
-        signer: signer.publicKey,
-        seller: seller.keypair.publicKey,
-        buyer: keypair.publicKey,
-        callOption: seller.callOption,
-        tokenManager: seller.tokenManager,
-        mint: seller.mint,
-        edition: seller.edition,
-        metadataProgram: METADATA_PROGRAM_ID,
-        systemProgram: anchor.web3.SystemProgram.programId,
-        tokenProgram: splToken.TOKEN_PROGRAM_ID,
-        clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-      })
+      .accounts(accounts)
       .signers([signer])
       .rpc();
 

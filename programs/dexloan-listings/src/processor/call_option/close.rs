@@ -14,7 +14,6 @@ pub struct CloseCallOption<'info> {
     /// CHECK: contrained on listing_account
     #[account(mut)]
     pub seller: Signer<'info>,
-    /// The listing the loan is being issued against
     #[account(
         mut,
         seeds = [
@@ -40,7 +39,6 @@ pub struct CloseCallOption<'info> {
     pub token_manager: Account<'info, TokenManager>,
     #[account(
         mut,
-        // constraint = deposit_token_account.delegate == COption::Some(escrow_account.key()),
         associated_token::mint = mint,
         associated_token::authority = seller
     )]

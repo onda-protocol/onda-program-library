@@ -47,7 +47,6 @@ impl CallOption {
         }
         
         require!(call_option.buyer.is_some(), DexloanError::InvalidState);
-        require_keys_eq!(call_option.seller, SYSTEM_ACCOUNT, DexloanError::InvalidState);
         require_keys_neq!(call_option.seller, SYSTEM_ACCOUNT, DexloanError::InvalidState);
         require_gt!(call_option.amount, 0, DexloanError::InvalidState);
         require_gt!(call_option.expiry, unix_timestamp, DexloanError::InvalidExpiry);
