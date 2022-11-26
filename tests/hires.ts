@@ -48,6 +48,7 @@ describe("Hires", () => {
     });
 
     it("Does not allow a different address to take the hire", async () => {
+      const signer = await helpers.getSigner();
       const newKeypair = anchor.web3.Keypair.generate();
       await helpers.requestAirdrop(connection, newKeypair.publicKey);
       const provider = helpers.getProvider(connection, newKeypair);
@@ -68,6 +69,7 @@ describe("Hires", () => {
         await program.methods
           .takeHire(1)
           .accounts({
+            signer: signer.publicKey,
             borrower: newKeypair.publicKey,
             lender: lender.keypair.publicKey,
             hire: lender.hire,
@@ -90,6 +92,7 @@ describe("Hires", () => {
               isWritable: true,
             }))
           )
+          .signers([signer])
           .rpc();
         assert.fail("Expected to fail");
       } catch (err) {
@@ -100,6 +103,7 @@ describe("Hires", () => {
     });
 
     it("Allows a hire to be taken by the borrower", async () => {
+      const signer = await helpers.getSigner();
       await helpers.requestAirdrop(connection, privateBorrower.publicKey);
       const provider = helpers.getProvider(connection, privateBorrower);
       const program = helpers.getProgram(provider);
@@ -123,6 +127,7 @@ describe("Hires", () => {
       await program.methods
         .takeHire(days)
         .accounts({
+          signer: signer.publicKey,
           borrower: privateBorrower.publicKey,
           lender: lender.keypair.publicKey,
           hire: lender.hire,
@@ -145,6 +150,7 @@ describe("Hires", () => {
             isWritable: true,
           }))
         )
+        .signers([signer])
         .rpc();
 
       const hire = await lender.program.account.hire.fetch(lender.hire);
@@ -188,10 +194,13 @@ describe("Hires", () => {
     });
 
     it("Does not allow a hire to be recovered before expiry", async () => {
+      const signer = await helpers.getSigner();
+
       try {
         await lender.program.methods
           .recoverHire()
           .accounts({
+            signer: signer.publicKey,
             borrower: privateBorrower.publicKey,
             lender: lender.keypair.publicKey,
             hire: lender.hire,
@@ -206,6 +215,7 @@ describe("Hires", () => {
             tokenProgram: splToken.TOKEN_PROGRAM_ID,
             clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
           })
+          .signers([signer])
           .rpc();
         assert.fail();
       } catch (err) {
@@ -284,6 +294,7 @@ describe("Hires", () => {
     };
 
     it("Allows collateralized NFTs to be listed for hire", async () => {
+      const signer = await helpers.getSigner();
       borrower = await helpers.askLoan(connection, options);
       lender = await helpers.giveLoan(connection, borrower);
 
@@ -303,6 +314,7 @@ describe("Hires", () => {
       await borrower.program.methods
         .initHire({ amount, expiry, borrower: null })
         .accounts({
+          signer: signer.publicKey,
           hire: hireAddress,
           collection: borrower.collection,
           tokenManager: tokenManagerAddress,
@@ -316,6 +328,7 @@ describe("Hires", () => {
           tokenProgram: splToken.TOKEN_PROGRAM_ID,
           clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
         })
+        .signers([signer])
         .rpc();
 
       const hire = await lender.program.account.hire.fetch(hireAddress);
@@ -333,6 +346,7 @@ describe("Hires", () => {
     });
 
     it("Allows collateralized NFTs to be hired", async () => {
+      const signer = await helpers.getSigner();
       await helpers.requestAirdrop(connection, thirdPartyKeypair.publicKey);
       const provider = helpers.getProvider(connection, thirdPartyKeypair);
       const program = helpers.getProgram(provider);
@@ -362,6 +376,7 @@ describe("Hires", () => {
         await program.methods
           .takeHire(2)
           .accounts({
+            signer: signer.publicKey,
             borrower: thirdPartyKeypair.publicKey,
             lender: borrower.keypair.publicKey,
             hire: hireAddress,
@@ -377,6 +392,7 @@ describe("Hires", () => {
             tokenProgram: splToken.TOKEN_PROGRAM_ID,
             clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
           })
+          .signers([signer])
           .rpc();
       } catch (error) {
         console.log(error.logs);
@@ -409,6 +425,7 @@ describe("Hires", () => {
     });
 
     it("Allows loans to be repaid", async () => {
+      const signer = await helpers.getSigner();
       const borrower = await helpers.askLoan(connection, options);
       const lender = await helpers.giveLoan(connection, borrower);
       const lenderPreRepaymentBalance = await connection.getBalance(
@@ -418,6 +435,7 @@ describe("Hires", () => {
       await borrower.program.methods
         .repayLoan()
         .accounts({
+          signer: signer.publicKey,
           loan: borrower.loan,
           tokenManager: borrower.tokenManager,
           borrower: borrower.keypair.publicKey,
@@ -430,15 +448,12 @@ describe("Hires", () => {
           tokenProgram: splToken.TOKEN_PROGRAM_ID,
           clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
         })
+        .signers([signer])
         .rpc();
 
       const lenderPostRepaymentBalance = await connection.getBalance(
         lender.keypair.publicKey
       );
-      const estimatedLenderBalance =
-        lenderPreRepaymentBalance +
-        options.amount +
-        (options.amount * options.basisPoints) / 10_000;
       const borrowerTokenAccount = await splToken.getAccount(
         connection,
         borrower.depositTokenAccount
@@ -454,7 +469,10 @@ describe("Hires", () => {
       });
       assert.equal(borrowerTokenAccount.amount, BigInt(1));
       assert.equal(borrowerTokenAccount.delegate, null);
-      assert.equal(lenderPostRepaymentBalance, estimatedLenderBalance);
+      assert.ok(
+        lenderPostRepaymentBalance > lenderPreRepaymentBalance,
+        "balance"
+      );
     });
   });
 
@@ -464,6 +482,7 @@ describe("Hires", () => {
     let thirdPartyKeypair = anchor.web3.Keypair.generate();
 
     it("Allows collateralized NFTs to be listed for hire", async () => {
+      const signer = await helpers.getSigner();
       borrower = await helpers.askLoan(connection, {
         amount: anchor.web3.LAMPORTS_PER_SOL / 100,
         basisPoints: 500,
@@ -487,6 +506,7 @@ describe("Hires", () => {
       await borrower.program.methods
         .initHire({ amount, expiry, borrower: null })
         .accounts({
+          signer: signer.publicKey,
           hire: hireAddress,
           collection: borrower.collection,
           tokenManager: tokenManagerAddress,
@@ -500,6 +520,7 @@ describe("Hires", () => {
           tokenProgram: splToken.TOKEN_PROGRAM_ID,
           clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
         })
+        .signers([signer])
         .rpc();
 
       const hire = await lender.program.account.hire.fetch(hireAddress);
@@ -517,6 +538,7 @@ describe("Hires", () => {
     });
 
     it("Allows collateralized NFTs to be hired", async () => {
+      const signer = await helpers.getSigner();
       await helpers.requestAirdrop(connection, thirdPartyKeypair.publicKey);
       const provider = helpers.getProvider(connection, thirdPartyKeypair);
       const program = helpers.getProgram(provider);
@@ -546,6 +568,7 @@ describe("Hires", () => {
         await program.methods
           .takeHire(2)
           .accounts({
+            signer: signer.publicKey,
             borrower: thirdPartyKeypair.publicKey,
             lender: borrower.keypair.publicKey,
             hire: hireAddress,
@@ -561,6 +584,7 @@ describe("Hires", () => {
             tokenProgram: splToken.TOKEN_PROGRAM_ID,
             clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
           })
+          .signers([signer])
           .rpc();
       } catch (error) {
         console.log(error.logs);
@@ -593,6 +617,7 @@ describe("Hires", () => {
     });
 
     it("Will settle hire fees when collateral is repossessed", async () => {
+      const signer = await helpers.getSigner();
       await helpers.wait(10); // Wait to allow some rent to accrue
 
       const hireAddress = await helpers.findHireAddress(
@@ -621,6 +646,7 @@ describe("Hires", () => {
         await lender.program.methods
           .repossessWithHire()
           .accounts({
+            signer: signer.publicKey,
             hire: hireAddress,
             hireEscrow: hireEscrowAddress,
             borrower: borrower.keypair.publicKey,
@@ -644,6 +670,7 @@ describe("Hires", () => {
               pubkey: thirdPartyKeypair.publicKey,
             },
           ])
+          .signers([signer])
           .rpc();
       } catch (err) {
         console.log(err.logs);
@@ -681,6 +708,7 @@ describe("Hires", () => {
     let lender: helpers.LoanLender;
 
     it("Allows collateralized NFTs to be listed for hire", async () => {
+      const signer = await helpers.getSigner();
       borrower = await helpers.askLoan(connection, {
         amount: anchor.web3.LAMPORTS_PER_SOL / 100,
         basisPoints: 500,
@@ -702,6 +730,7 @@ describe("Hires", () => {
       await borrower.program.methods
         .initHire({ amount, expiry, borrower: null })
         .accounts({
+          signer: signer.publicKey,
           hire: hireAddress,
           collection: borrower.collection,
           tokenManager: tokenManagerAddress,
@@ -715,6 +744,7 @@ describe("Hires", () => {
           tokenProgram: splToken.TOKEN_PROGRAM_ID,
           clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
         })
+        .signers([signer])
         .rpc();
 
       const hire = await lender.program.account.hire.fetch(hireAddress);
@@ -732,6 +762,7 @@ describe("Hires", () => {
     });
 
     it("Will settle hire fees when collateral is repossessed", async () => {
+      const signer = await helpers.getSigner();
       const hireAddress = await helpers.findHireAddress(
         borrower.mint,
         borrower.keypair.publicKey
@@ -752,6 +783,7 @@ describe("Hires", () => {
         await lender.program.methods
           .repossessWithHire()
           .accounts({
+            signer: signer.publicKey,
             hire: hireAddress,
             hireEscrow: hireEscrowAddress,
             borrower: borrower.keypair.publicKey,
@@ -768,6 +800,7 @@ describe("Hires", () => {
             clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
             rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           })
+          .signers([signer])
           .rpc();
       } catch (err) {
         console.log(err.logs);
@@ -817,7 +850,8 @@ describe("Hires", () => {
     };
 
     it("Allows active options to be listed for hire", async () => {
-      seller = await helpers.initCallOption(connection, callOptionOptions);
+      const signer = await helpers.getSigner();
+      seller = await helpers.askCallOption(connection, callOptionOptions);
       buyer = await helpers.buyCallOption(connection, seller);
 
       const hireAddress = await helpers.findHireAddress(
@@ -827,6 +861,7 @@ describe("Hires", () => {
       await seller.program.methods
         .initHire(hireOptions)
         .accounts({
+          signer: signer.publicKey,
           hire: hireAddress,
           collection: seller.collection,
           tokenManager: seller.tokenManager,
@@ -840,6 +875,7 @@ describe("Hires", () => {
           tokenProgram: splToken.TOKEN_PROGRAM_ID,
           clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
         })
+        .signers([signer])
         .rpc();
 
       const callOption = await seller.program.account.callOption.fetch(
@@ -881,6 +917,7 @@ describe("Hires", () => {
     });
 
     it("Allows listed NFTs to be hired", async () => {
+      const signer = await helpers.getSigner();
       await helpers.requestAirdrop(connection, thirdPartyKeypair.publicKey);
       const provider = helpers.getProvider(connection, thirdPartyKeypair);
       const program = helpers.getProgram(provider);
@@ -908,6 +945,7 @@ describe("Hires", () => {
         await program.methods
           .takeHire(2)
           .accounts({
+            signer: signer.publicKey,
             hireTokenAccount,
             borrower: thirdPartyKeypair.publicKey,
             lender: seller.keypair.publicKey,
@@ -923,6 +961,7 @@ describe("Hires", () => {
             tokenProgram: splToken.TOKEN_PROGRAM_ID,
             clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
           })
+          .signers([signer])
           .rpc();
       } catch (error) {
         console.log(error.logs);
@@ -955,6 +994,7 @@ describe("Hires", () => {
     });
 
     it("Allows hired NFTs with active call options to be exercised", async () => {
+      const signer = await helpers.getSigner();
       const hireAddress = await helpers.findHireAddress(
         seller.mint,
         seller.keypair.publicKey
@@ -1001,6 +1041,7 @@ describe("Hires", () => {
         const signature = await buyer.program.methods
           .exerciseCallOptionWithHire()
           .accounts({
+            signer: signer.publicKey,
             seller: seller.keypair.publicKey,
             buyer: buyer.keypair.publicKey,
             callOption: seller.callOption,
@@ -1019,6 +1060,7 @@ describe("Hires", () => {
             rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           })
           .remainingAccounts(remainingAccounts)
+          .signers([signer])
           .rpc();
 
         const latestBlockhash = await connection.getLatestBlockhash();
@@ -1095,7 +1137,6 @@ describe("Hires", () => {
         connection,
         lender.depositTokenAccount
       );
-
       assert.deepEqual(tokenManager.accounts, {
         hire: true,
         callOption: false,
@@ -1140,6 +1181,7 @@ describe("Hires", () => {
     });
 
     it("Restricts call option creation to original lender", async () => {
+      const signer = await helpers.getSigner();
       const amount = new anchor.BN(1_000_000);
       const strikePrice = new anchor.BN(anchor.web3.LAMPORTS_PER_SOL);
       const expiry = new anchor.BN(
@@ -1158,6 +1200,7 @@ describe("Hires", () => {
         await borrower.program.methods
           .askCallOption(amount, strikePrice, expiry)
           .accounts({
+            signer: signer.publicKey,
             tokenManager,
             callOption: callOptionAddress,
             collection: lender.collection,
@@ -1172,6 +1215,7 @@ describe("Hires", () => {
             systemProgram: anchor.web3.SystemProgram.programId,
             clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
           })
+          .signers([signer])
           .rpc();
         assert.fail("Expected to throw");
       } catch (err) {
@@ -1182,6 +1226,7 @@ describe("Hires", () => {
     });
 
     it("Allows active hires to be listed as call options", async () => {
+      const signer = await helpers.getSigner();
       const callOptionAddress = await helpers.findCallOptionAddress(
         lender.mint,
         lender.keypair.publicKey
@@ -1200,6 +1245,7 @@ describe("Hires", () => {
       await lender.program.methods
         .askCallOption(amount, strikePrice, expiry)
         .accounts({
+          signer: signer.publicKey,
           tokenManager,
           callOption: callOptionAddress,
           collection: lender.collection,
@@ -1214,6 +1260,7 @@ describe("Hires", () => {
           systemProgram: anchor.web3.SystemProgram.programId,
           clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
         })
+        .signers([signer])
         .rpc();
 
       const callOption = await lender.program.account.callOption.fetch(
