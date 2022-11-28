@@ -96,15 +96,15 @@ pub fn handle_exercise_call_option<'info>(ctx: Context<'_, '_, '_, 'info, Exerci
         ctx.accounts.edition.to_account_info(),
     )?;
 
-    let remaining_amount = pay_creator_fees(
-        remaining_accounts,
+    let remaining_amount = pay_creator_royalties(
         call_option.strike_price,
         &ctx.accounts.mint.to_account_info(),
         &ctx.accounts.metadata.to_account_info(),
-        &ctx.accounts.buyer.to_account_info(),
+        &mut ctx.accounts.buyer.to_account_info(),
+        remaining_accounts,
     )?;  
 
-    msg!("remaining_amount {}", remaining_amount);
+    msg!("remaining amount {}", remaining_amount);
     msg!("paid to creators {}", call_option.strike_price - remaining_amount);
 
     anchor_lang::solana_program::program::invoke(
@@ -235,12 +235,12 @@ pub fn handle_exercise_call_option_with_hire<'info>(ctx: Context<'_, '_, '_, 'in
         ctx.accounts.edition.to_account_info(),
     )?;
 
-    let remaining_amount = pay_creator_fees(
-        remaining_accounts,
+    let remaining_amount = pay_creator_royalties(
         call_option.strike_price,
         &ctx.accounts.mint.to_account_info(),
         &ctx.accounts.metadata.to_account_info(),
-        &ctx.accounts.buyer.to_account_info(),
+        &mut ctx.accounts.buyer.to_account_info(),
+        remaining_accounts,
     )?;
 
     msg!("remaining_amount {}", remaining_amount);

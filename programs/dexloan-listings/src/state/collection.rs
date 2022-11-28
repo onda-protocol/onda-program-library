@@ -4,8 +4,16 @@ use anchor_lang::prelude::*;
 pub struct Collection {
     pub authority: Pubkey,
     pub mint: Pubkey,
-    pub reserved: [u8; 128],
+    pub fees: Fees,
+    pub reserved: [u8; 64],
     pub bump: u8,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Copy, Clone, PartialEq, Debug)]
+pub struct Fees {
+    pub loan_basis_points: u16,
+    pub option_basis_points: u16,
+    pub rental_basis_points: u16, 
 }
 
 impl Collection {
@@ -13,7 +21,8 @@ impl Collection {
         8 +
         32 + // authority
         32 + // collection
-        128 + // reserved
+        2 + 2 + 2 + // fees
+        64 + // reserved
         1 // bump
     }
 

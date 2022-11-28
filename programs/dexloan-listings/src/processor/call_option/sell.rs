@@ -92,20 +92,22 @@ pub struct SellCallOption<'info> {
     pub clock: Sysvar<'info, Clock>,
 }
 
-pub fn handle_sell_call_option(
-  ctx: Context<SellCallOption>,
+pub fn handle_sell_call_option<'info>(
+  ctx: Context<'_, '_, '_, 'info, SellCallOption<'info>>,
   _id: u8,
 ) -> Result<()> {
     let call_option = &mut ctx.accounts.call_option;
+    let collection = &ctx.accounts.collection;
     let bid = &mut ctx.accounts.call_option_bid;
     let escrow_payment_account = &mut ctx.accounts.escrow_payment_account;
     let token_manager = &mut ctx.accounts.token_manager;
     let deposit_token_account = &mut ctx.accounts.deposit_token_account;
+    let remaining_accounts = &mut ctx.remaining_accounts.iter();
 
     assert_collection_valid(
         &ctx.accounts.metadata,
         ctx.accounts.mint.key(),
-        ctx.accounts.collection.key(),
+        collection.key(),
         ctx.program_id.clone(),
     )?;
 
@@ -133,10 +135,21 @@ pub fn handle_sell_call_option(
         ctx.accounts.token_program.to_account_info(),
     )?;
 
+
+    let fee_basis_points = collection.fees.option_basis_points;
+    let remaining_amount = pay_creator_fees(
+        call_option.amount,
+        fee_basis_points, 
+        &ctx.accounts.mint.to_account_info(),
+        &ctx.accounts.metadata.to_account_info(),
+        &mut ctx.accounts.buyer.to_account_info(),
+        remaining_accounts
+    )?;
+
     transfer_from_escrow(
         &mut escrow_payment_account.to_account_info(),
         &mut ctx.accounts.seller.to_account_info(),
-        call_option.amount,
+        remaining_amount,
     )?;
 
     Ok(())

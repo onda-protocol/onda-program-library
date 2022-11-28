@@ -1,15 +1,16 @@
 use {
     std::{slice::Iter},
     anchor_lang::{
-    prelude::*,
-    solana_program::{
-        program::{invoke, invoke_signed},
-    },
+        prelude::*,
+        system_program,
+        solana_program::{
+            program::{invoke, invoke_signed},
+        },
     },
     anchor_spl::token::{TokenAccount},
     mpl_token_metadata::{
-    instruction::{freeze_delegated_account, thaw_delegated_account},
-    state::{Metadata}
+        instruction::{freeze_delegated_account, thaw_delegated_account},
+        state::{Metadata}
     },
 };
 use crate::constants::*;
@@ -473,11 +474,12 @@ pub fn calculate_fee_from_basis_points(
 }
 
 pub fn pay_creator_fees<'a>(
-    remaining_accounts: &mut Iter<AccountInfo<'a>>,
     amount: u64,
+    basis_points: u16,
     mint: &AccountInfo<'a>,
     metadata_info: &AccountInfo<'a>,
-    fee_payer: &AccountInfo<'a>,
+    fee_payer: &mut AccountInfo<'a>,
+    remaining_accounts: &mut Iter<AccountInfo<'a>>,
 ) -> Result<u64> {
     let metadata = Metadata::deserialize(
         &mut metadata_info.data.borrow_mut().as_ref()
@@ -492,8 +494,7 @@ pub fn pay_creator_fees<'a>(
         &mint
     )?;
 
-    let fees = metadata.data.seller_fee_basis_points;
-    let total_fee = calculate_fee_from_basis_points(amount as u128, fees as u128)?;
+    let total_fee = calculate_fee_from_basis_points(amount as u128, basis_points as u128)?;
     let mut remaining_fee = total_fee;
     let remaining_amount = amount
             .checked_sub(total_fee)
@@ -514,22 +515,28 @@ pub fn pay_creator_fees<'a>(
                         .ok_or(DexloanError::NumericalOverflow)?;
 
                 let current_creator_info = next_account_info(remaining_accounts)?;
-
-                msg!("current creator {}", current_creator_info.key());
                 require_keys_eq!(current_creator_info.key(), creator.address);
 
                 if creator_fee > 0 {
-                    invoke(
-                        &anchor_lang::solana_program::system_instruction::transfer(
-                            &fee_payer.key(),
-                            &current_creator_info.key(),
-                            creator_fee,
-                        ),
-                        &[
-                            current_creator_info.to_account_info(),
-                            fee_payer.to_account_info(),
-                        ]
-                    )?;
+                    if fee_payer.owner.key() == system_program::ID {
+                        invoke(
+                            &anchor_lang::solana_program::system_instruction::transfer(
+                                &fee_payer.key(),
+                                &current_creator_info.key(),
+                                creator_fee,
+                            ),
+                            &[
+                                current_creator_info.to_account_info(),
+                                fee_payer.to_account_info(),
+                            ]
+                        )?;
+                    } else {
+                        transfer_from_escrow(
+                            fee_payer,
+                            &mut current_creator_info.to_account_info(),
+                            creator_fee
+                        )?;
+                    }
                 }
             }
         }
@@ -540,6 +547,29 @@ pub fn pay_creator_fees<'a>(
 
     // Any dust is returned to the party posting the NFT
     Ok(remaining_amount.checked_add(remaining_fee).ok_or(DexloanError::NumericalOverflow)?)
+}
+
+pub fn pay_creator_royalties<'a>(
+    amount: u64,
+    mint: &AccountInfo<'a>,
+    metadata_info: &AccountInfo<'a>,
+    fee_payer: &mut AccountInfo<'a>,
+    remaining_accounts: &mut Iter<AccountInfo<'a>>,
+) -> Result<u64> {
+    let metadata = Metadata::deserialize(
+        &mut metadata_info.data.borrow_mut().as_ref()
+    )?;
+    let basis_points = metadata.data.seller_fee_basis_points;
+    let remaining_amount = pay_creator_fees(
+        amount,
+        basis_points,
+        mint,
+        metadata_info,
+        fee_payer,
+        remaining_accounts,
+    )?;
+
+    Ok(remaining_amount)
 }
 
 pub fn calculate_loan_repayment(

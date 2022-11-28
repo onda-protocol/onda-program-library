@@ -8,7 +8,6 @@ import {
   PROGRAM_ID as METADATA_PROGRAM_ID,
 } from "@metaplex-foundation/mpl-token-metadata";
 import { IDL, DexloanListings } from "../target/types/dexloan_listings";
-import { getAccount } from "@solana/spl-token";
 
 const PROGRAM_ID = new anchor.web3.PublicKey(
   "GDNxgyEcP6b2FtTtCGrGhmoy5AQEiwuv26hV1CLmL1yu"
@@ -765,6 +764,11 @@ export async function buyCallOption(
   const program = getProgram(provider);
   await requestAirdrop(connection, keypair.publicKey);
 
+  const metadata = await Metadata.fromAccountAddress(
+    connection,
+    seller.metatdata
+  );
+
   const accounts = {
     signer: signer.publicKey,
     seller: seller.keypair.publicKey,
@@ -772,7 +776,9 @@ export async function buyCallOption(
     callOption: seller.callOption,
     tokenManager: seller.tokenManager,
     mint: seller.mint,
+    metadata: seller.metatdata,
     edition: seller.edition,
+    collection: seller.collection,
     metadataProgram: METADATA_PROGRAM_ID,
     systemProgram: anchor.web3.SystemProgram.programId,
     tokenProgram: splToken.TOKEN_PROGRAM_ID,
@@ -783,6 +789,13 @@ export async function buyCallOption(
     const signature = await program.methods
       .buyCallOption()
       .accounts(accounts)
+      .remainingAccounts(
+        metadata.data.creators.map((creator) => ({
+          pubkey: creator.address,
+          isSigner: false,
+          isWritable: true,
+        }))
+      )
       .signers([signer])
       .rpc();
 

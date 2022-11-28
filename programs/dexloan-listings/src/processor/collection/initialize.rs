@@ -38,6 +38,9 @@ pub fn handle_init_collection(
     
     collection.authority = ctx.accounts.authority.key();
     collection.mint = ctx.accounts.mint.key();
+    collection.fees.loan_basis_points = 200;
+    collection.fees.option_basis_points = 200;
+    collection.fees.rental_basis_points = 200;
     collection.bump = *ctx.bumps.get("collection").unwrap();
 
     Ok(())
