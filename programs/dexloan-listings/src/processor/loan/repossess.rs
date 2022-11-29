@@ -1,6 +1,6 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Token, TokenAccount, Mint};
-use crate::state::{Loan, LoanState, Hire, TokenManager};
+use crate::state::{Loan, LoanState, Rental, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
 use crate::constants::*;
@@ -50,7 +50,7 @@ pub struct Repossess<'info> {
             borrower.key().as_ref()
         ],
         bump,
-        constraint = token_manager.accounts.hire == false,
+        constraint = token_manager.accounts.rental == false,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
     /// CHECK: contrained on loan_account
@@ -94,7 +94,7 @@ pub fn handle_repossess(ctx: Context<Repossess>) -> Result<()> {
 }
 
 #[derive(Accounts)]
-pub struct RepossessWithHire<'info> {
+pub struct RepossessWithRental<'info> {
     #[account(
         constraint = signer.key() == SIGNER_PUBKEY
     )]
@@ -127,25 +127,25 @@ pub struct RepossessWithHire<'info> {
     #[account(
         mut,
         seeds = [
-            Hire::PREFIX,
+            Rental::PREFIX,
             mint.key().as_ref(),
             borrower.key().as_ref(),
         ],
         bump,
         close = borrower
     )]
-    pub hire: Box<Account<'info, Hire>>,
+    pub rental: Box<Account<'info, Rental>>,
     /// CHECK: constrained by seeds
     #[account(
         mut,
         seeds = [
-            Hire::ESCROW_PREFIX,
+            Rental::ESCROW_PREFIX,
             mint.key().as_ref(),
             borrower.key().as_ref(),
         ],
         bump,
     )]
-    pub hire_escrow: AccountInfo<'info>,  
+    pub rental_escrow: AccountInfo<'info>,  
     #[account(
         mut,
         constraint = token_account.mint == mint.key(),
@@ -173,9 +173,9 @@ pub struct RepossessWithHire<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn handle_repossess_with_hire<'info>(ctx: Context<'_, '_, '_, 'info, RepossessWithHire<'info>>) -> Result<()> {
+pub fn handle_repossess_with_rental<'info>(ctx: Context<'_, '_, '_, 'info, RepossessWithRental<'info>>) -> Result<()> {
     let loan = &mut ctx.accounts.loan;
-    let hire = &mut ctx.accounts.hire;
+    let rental = &mut ctx.accounts.rental;
     let token_manager = &mut ctx.accounts.token_manager;
     let remaining_accounts = &mut ctx.remaining_accounts.iter();
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
@@ -189,13 +189,13 @@ pub fn handle_repossess_with_hire<'info>(ctx: Context<'_, '_, '_, 'info, Reposse
 
     loan.state = LoanState::Defaulted;
     token_manager.accounts.loan = false;
-    token_manager.accounts.hire = false;
+    token_manager.accounts.rental = false;
 
-    if hire.borrower.is_some() {
-        settle_hire_escrow_balance(
-            hire,
+    if rental.borrower.is_some() {
+        settle_rental_escrow_balance(
+            rental,
             remaining_accounts,
-            &ctx.accounts.hire_escrow.to_account_info(),
+            &ctx.accounts.rental_escrow.to_account_info(),
             &ctx.accounts.borrower.to_account_info(),
             unix_timestamp,
         )?;

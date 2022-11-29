@@ -67,8 +67,8 @@ pub mod dexloan_listings {
         handle_repossess(ctx)
     }
 
-    pub fn repossess_with_hire<'info>(ctx: Context<'_, '_, '_, 'info, RepossessWithHire<'info>>) -> Result<()> {
-        handle_repossess_with_hire(ctx)
+    pub fn repossess_with_rental<'info>(ctx: Context<'_, '_, '_, 'info, RepossessWithRental<'info>>) -> Result<()> {
+        handle_repossess_with_rental(ctx)
     }
 
     // Call Options
@@ -110,40 +110,40 @@ pub mod dexloan_listings {
         handle_exercise_call_option(ctx)
     }
 
-    pub fn exercise_call_option_with_hire<'info>(ctx: Context<'_, '_, '_, 'info, ExerciseCallOptionWithHire<'info>>) -> Result<()> {
-        handle_exercise_call_option_with_hire(ctx)
+    pub fn exercise_call_option_with_rental<'info>(ctx: Context<'_, '_, '_, 'info, ExerciseCallOptionWithRental<'info>>) -> Result<()> {
+        handle_exercise_call_option_with_rental(ctx)
     }
 
     pub fn close_call_option<'info>(ctx: Context<'_, '_, '_, 'info, CloseCallOption<'info>>) -> Result<()> {
         handle_close_call_option(ctx)
     }
 
-    // Hires
-    pub fn init_hire<'info>(
-        ctx: Context<'_, '_, '_, 'info, InitHire<'info>>,
-        args: HireArgs
+    // Rentals
+    pub fn init_rental<'info>(
+        ctx: Context<'_, '_, '_, 'info, InitRental<'info>>,
+        args: RentalArgs
     ) -> Result<()> {
-        handle_init_hire(ctx, args)
+        handle_init_rental(ctx, args)
     }
 
-    pub fn take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>, days: u16) -> Result<()> {
-        handle_take_hire(ctx, days)
+    pub fn take_rental<'info>(ctx: Context<'_, '_, '_, 'info, TakeRental<'info>>, days: u16) -> Result<()> {
+        handle_take_rental(ctx, days)
     }
 
-    pub fn extend_hire<'info>(ctx: Context<'_, '_, '_, 'info, ExtendHire<'info>>, days: u16) -> Result<()> {
-        handle_extend_hire(ctx, days)
+    pub fn extend_rental<'info>(ctx: Context<'_, '_, '_, 'info, ExtendRental<'info>>, days: u16) -> Result<()> {
+        handle_extend_rental(ctx, days)
     }
 
-    pub fn recover_hire<'info>(ctx: Context<'_, '_, '_, 'info, RecoverHire<'info>>) -> Result<()> {
-        handle_recover_hire(ctx)
+    pub fn recover_rental<'info>(ctx: Context<'_, '_, '_, 'info, RecoverRental<'info>>) -> Result<()> {
+        handle_recover_rental(ctx)
     }
 
-    pub fn withdraw_from_hire_escrow<'info>(ctx: Context<'_, '_, '_, 'info, WithdrawFromHireEscrow<'info>>) -> Result<()> {
-        handle_withdraw_from_hire_escrow(ctx)
+    pub fn withdraw_from_rental_escrow<'info>(ctx: Context<'_, '_, '_, 'info, WithdrawFromRentalEscrow<'info>>) -> Result<()> {
+        handle_withdraw_from_rental_escrow(ctx)
     }
 
-    pub fn close_hire<'info>(ctx: Context<'_, '_, '_, 'info, CloseHire<'info>>) -> Result<()> {
-        handle_close_hire(ctx)
+    pub fn close_rental<'info>(ctx: Context<'_, '_, '_, 'info, CloseRental<'info>>) -> Result<()> {
+        handle_close_rental(ctx)
     }
 
     // Collection

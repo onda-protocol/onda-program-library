@@ -120,7 +120,7 @@ pub fn handle_sell_call_option<'info>(
     call_option.mint = ctx.accounts.mint.key();
     call_option.bump = *ctx.bumps.get("call_option").unwrap();
     //
-    CallOption::init_ask_state(call_option, bid.amount, bid.strike_price, bid.expiry)?;
+    CallOption::init_ask_state(call_option, bid.amount, collection.config.option_basis_points, bid.strike_price, bid.expiry)?;
     CallOption::set_active(call_option, ctx.accounts.clock.unix_timestamp)?;
     //
     token_manager.accounts.call_option = true;

@@ -1,11 +1,11 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token};
-use crate::state::{Hire};
+use crate::state::{Rental};
 use crate::utils::*;
 use crate::constants::*;
 
 #[derive(Accounts)]
-pub struct WithdrawFromHireEscrow<'info> {
+pub struct WithdrawFromRentalEscrow<'info> {
     #[account(
         constraint = signer.key() == SIGNER_PUBKEY
     )]
@@ -17,7 +17,7 @@ pub struct WithdrawFromHireEscrow<'info> {
     #[account(
         mut,
         seeds = [
-            Hire::PREFIX,
+            Rental::PREFIX,
             mint.key().as_ref(),
             lender.key().as_ref(),
         ],
@@ -25,18 +25,18 @@ pub struct WithdrawFromHireEscrow<'info> {
         has_one = mint,
         has_one = lender,
     )]
-    pub hire: Account<'info, Hire>,
+    pub rental: Account<'info, Rental>,
     /// CHECK: constrained by seeds
     #[account(
         mut,
         seeds = [
-            Hire::ESCROW_PREFIX,
+            Rental::ESCROW_PREFIX,
             mint.key().as_ref(),
             lender.key().as_ref(),
         ],
         bump,
     )]
-    pub hire_escrow: AccountInfo<'info>,  
+    pub rental_escrow: AccountInfo<'info>,  
     pub mint: Box<Account<'info, Mint>>,
     /// Misc
     pub system_program: Program<'info, System>,
@@ -45,12 +45,12 @@ pub struct WithdrawFromHireEscrow<'info> {
 }
 
 
-pub fn handle_withdraw_from_hire_escrow(ctx: Context<WithdrawFromHireEscrow>) -> Result<()> {
-    let hire = &mut ctx.accounts.hire;
+pub fn handle_withdraw_from_rental_escrow(ctx: Context<WithdrawFromRentalEscrow>) -> Result<()> {
+    let rental = &mut ctx.accounts.rental;
 
-    withdraw_from_hire_escrow(
-        hire,
-        &ctx.accounts.hire_escrow.to_account_info(),
+    withdraw_from_rental_escrow(
+        rental,
+        &ctx.accounts.rental_escrow.to_account_info(),
         &ctx.accounts.lender.to_account_info(),
         ctx.accounts.clock.unix_timestamp,
     )?;

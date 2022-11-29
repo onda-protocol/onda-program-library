@@ -15,6 +15,8 @@ pub struct CallOption {
     pub state: CallOptionState,
     /// The cost of the call option
     pub amount: u64,
+    /// The creator fee
+    pub creator_basis_points: u16,
     /// The issuer of the call option
     pub seller: Pubkey,
     /// The buyer of the call option
@@ -22,7 +24,7 @@ pub struct CallOption {
     /// Duration of the loan in seconds
     pub expiry: i64,
     /// The start date of the loan
-    pub strike_price: u64,
+    pub strike_price: u64,    
     /// The mint of the token being used for collateral
     pub mint: Pubkey,
     /// (Optional) The mint of the spl-token mint
@@ -32,9 +34,16 @@ pub struct CallOption {
 }
 
 impl CallOption {
-    pub fn init_ask_state<'info>(call_option: &mut Account<'info, CallOption>, amount: u64, strike_price: u64, expiry: i64) -> Result<()> {
+    pub fn init_ask_state<'info>(
+        call_option: &mut Account<'info, CallOption>,
+        amount: u64,
+        creator_basis_points: u16,
+        strike_price: u64,
+        expiry: i64
+    ) -> Result<()> {
         call_option.state = CallOptionState::Listed;
         call_option.amount = amount;
+        call_option.creator_basis_points = creator_basis_points;
         call_option.strike_price = strike_price;
         call_option.expiry = expiry;
     
@@ -61,6 +70,7 @@ impl CallOption {
         8 + // key
         1 + // state
         8 + // amount
+        2 + // create_basis_points
         32 + // seller
         1 + 32 + // buyer
         8 + // expiry

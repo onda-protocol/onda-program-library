@@ -67,7 +67,7 @@ pub fn handle_close_call_option(ctx: Context<CloseCallOption>) -> Result<()> {
 
     token_manager.accounts.call_option = false;
     // IMPORTANT CHECK!
-    if token_manager.accounts.hire == true {
+    if token_manager.accounts.rental == true {
         return Ok(());
     }
 

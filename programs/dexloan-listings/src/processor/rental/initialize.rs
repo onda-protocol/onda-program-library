@@ -1,19 +1,19 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{Hire, HireState, Collection, TokenManager};
+use crate::state::{Rental, RentalState, Collection, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
 use crate::constants::*;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct HireArgs {
+pub struct RentalArgs {
     amount: u64,
     expiry: i64,
     borrower: Option<Pubkey>,
 }
 
 #[derive(Accounts)]
-pub struct InitHire<'info> {
+pub struct InitRental<'info> {
     #[account(
         constraint = signer.key() == SIGNER_PUBKEY
     )]
@@ -30,14 +30,14 @@ pub struct InitHire<'info> {
         init,
         payer = lender,
         seeds = [
-            Hire::PREFIX,
+            Rental::PREFIX,
             mint.key().as_ref(),
             lender.key().as_ref(),
         ],
-        space = Hire::space(),
+        space = Rental::space(),
         bump,
     )]
-    pub hire: Box<Account<'info, Hire>>,    
+    pub rental: Box<Account<'info, Rental>>,    
     #[account(
         init_if_needed,
         payer = lender,
@@ -74,11 +74,11 @@ pub struct InitHire<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn handle_init_hire(
-  ctx: Context<InitHire>,
-  args: HireArgs,
+pub fn handle_init_rental(
+  ctx: Context<InitRental>,
+  args: RentalArgs,
 ) -> Result<()> {
-    let hire = &mut ctx.accounts.hire;
+    let rental = &mut ctx.accounts.rental;
     let token_manager = &mut ctx.accounts.token_manager;
     let deposit_token_account = &mut ctx.accounts.deposit_token_account;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
@@ -99,19 +99,19 @@ pub fn handle_init_hire(
     }
 
     // Init
-    hire.lender = ctx.accounts.lender.key();
-    hire.mint = ctx.accounts.mint.key();
-    hire.bump = *ctx.bumps.get("hire").unwrap();
+    rental.lender = ctx.accounts.lender.key();
+    rental.mint = ctx.accounts.mint.key();
+    rental.bump = *ctx.bumps.get("rental").unwrap();
     //
-    hire.amount = args.amount;
-    hire.escrow_balance = 0;
-    hire.expiry = args.expiry;
-    hire.state = HireState::Listed;
+    rental.amount = args.amount;
+    rental.escrow_balance = 0;
+    rental.expiry = args.expiry;
+    rental.state = RentalState::Listed;
     if args.borrower.is_some() {
-        hire.borrower = args.borrower;
+        rental.borrower = args.borrower;
     }
     //
-    token_manager.accounts.hire = true;
+    token_manager.accounts.rental = true;
     token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
 
     if deposit_token_account.delegate.is_some() {

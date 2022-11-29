@@ -170,28 +170,28 @@ export async function findCallOptionAddress(
   return callOptionAddress;
 }
 
-export async function findHireAddress(
+export async function findRentalAddress(
   mint: anchor.web3.PublicKey,
   lender: anchor.web3.PublicKey
 ): Promise<anchor.web3.PublicKey> {
-  const [hireAddress] = await anchor.web3.PublicKey.findProgramAddress(
-    [Buffer.from("hire"), mint.toBuffer(), lender.toBuffer()],
+  const [rentalAddress] = await anchor.web3.PublicKey.findProgramAddress(
+    [Buffer.from("rental"), mint.toBuffer(), lender.toBuffer()],
     PROGRAM_ID
   );
 
-  return hireAddress;
+  return rentalAddress;
 }
 
-export async function findHireEscrowAddress(
+export async function findRentalEscrowAddress(
   mint: anchor.web3.PublicKey,
   lender: anchor.web3.PublicKey
 ): Promise<anchor.web3.PublicKey> {
-  const [hireEscrowAddress] = await anchor.web3.PublicKey.findProgramAddress(
-    [Buffer.from("hire_escrow"), mint.toBuffer(), lender.toBuffer()],
+  const [rentalEscrowAddress] = await anchor.web3.PublicKey.findProgramAddress(
+    [Buffer.from("rental_escrow"), mint.toBuffer(), lender.toBuffer()],
     PROGRAM_ID
   );
 
-  return hireEscrowAddress;
+  return rentalEscrowAddress;
 }
 
 export async function findMetadataAddress(mint: anchor.web3.PublicKey) {
@@ -823,10 +823,10 @@ export async function buyCallOption(
   };
 }
 
-export type HireLender = Awaited<ReturnType<typeof initHire>>;
-export type HireBorrower = Awaited<ReturnType<typeof takeHire>>;
+export type RentalLender = Awaited<ReturnType<typeof initRental>>;
+export type RentalBorrower = Awaited<ReturnType<typeof takeRental>>;
 
-export async function initHire(
+export async function initRental(
   connection: anchor.web3.Connection,
   options: {
     amount: number;
@@ -847,8 +847,8 @@ export async function initHire(
   );
   const depositTokenAccount = largestAccounts.value[0].address;
 
-  const hire = await findHireAddress(nft.mint.address, keypair.publicKey);
-  const hireEscrow = await findHireEscrowAddress(
+  const rental = await findRentalAddress(nft.mint.address, keypair.publicKey);
+  const rentalEscrow = await findRentalEscrowAddress(
     nft.mint.address,
     keypair.publicKey
   );
@@ -866,9 +866,9 @@ export async function initHire(
 
   try {
     await program.methods
-      .initHire({ amount, expiry, borrower })
+      .initRental({ amount, expiry, borrower })
       .accounts({
-        hire,
+        rental,
         tokenManager,
         signer: signer.publicKey,
         collection: collectionAddress,
@@ -894,8 +894,8 @@ export async function initHire(
     program,
     provider,
     tokenManager,
-    hire,
-    hireEscrow,
+    rental,
+    rentalEscrow,
     collection: collectionAddress,
     depositTokenAccount,
     mint: nft.mint.address,
@@ -904,9 +904,9 @@ export async function initHire(
   };
 }
 
-export async function takeHire(
+export async function takeRental(
   connection: anchor.web3.Connection,
-  lender: Awaited<ReturnType<typeof initHire>>,
+  lender: Awaited<ReturnType<typeof initRental>>,
   days: number
 ) {
   const keypair = anchor.web3.Keypair.generate();
@@ -927,16 +927,16 @@ export async function takeHire(
 
   try {
     await program.methods
-      .takeHire(days)
+      .takeRental(days)
       .accounts({
         signer: signer.publicKey,
         borrower: keypair.publicKey,
         lender: lender.keypair.publicKey,
-        hire: lender.hire,
-        hireEscrow: lender.hireEscrow,
+        rental: lender.rental,
+        rentalEscrow: lender.rentalEscrow,
         tokenManager: lender.tokenManager,
         depositTokenAccount: lender.depositTokenAccount,
-        hireTokenAccount: tokenAccount.address,
+        rentalTokenAccount: tokenAccount.address,
         mint: lender.mint,
         edition: lender.edition,
         metadata: lender.metadata,
@@ -963,25 +963,28 @@ export async function takeHire(
     keypair,
     provider,
     program,
-    hireTokenAccount: tokenAccount.address,
+    rentalTokenAccount: tokenAccount.address,
   };
 }
 
-export async function recoverHire(lender: HireLender, borrower: HireBorrower) {
+export async function recoverRental(
+  lender: RentalLender,
+  borrower: RentalBorrower
+) {
   const signer = await getSigner();
 
   try {
     await lender.program.methods
-      .recoverHire()
+      .recoverRental()
       .accounts({
         signer: signer.publicKey,
         borrower: borrower.keypair.publicKey,
         lender: lender.keypair.publicKey,
-        hire: lender.hire,
-        hireEscrow: lender.hireEscrow,
+        rental: lender.rental,
+        rentalEscrow: lender.rentalEscrow,
         tokenManager: lender.tokenManager,
         depositTokenAccount: lender.depositTokenAccount,
-        hireTokenAccount: borrower.hireTokenAccount,
+        rentalTokenAccount: borrower.rentalTokenAccount,
         mint: lender.mint,
         edition: lender.edition,
         metadataProgram: METADATA_PROGRAM_ID,

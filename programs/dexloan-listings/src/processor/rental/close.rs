@@ -1,11 +1,11 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{Hire, HireState, TokenManager};
+use crate::state::{Rental, RentalState, TokenManager};
 use crate::utils::*;
 use crate::constants::*;
 
 #[derive(Accounts)]
-pub struct CloseHire<'info> {
+pub struct CloseRental<'info> {
     #[account(
         constraint = signer.key() == SIGNER_PUBKEY
     )]
@@ -17,7 +17,7 @@ pub struct CloseHire<'info> {
     #[account(
         mut,
         seeds = [
-            Hire::PREFIX,
+            Rental::PREFIX,
             mint.key().as_ref(),
             lender.key().as_ref(),
         ],
@@ -25,10 +25,10 @@ pub struct CloseHire<'info> {
         close = lender,
         has_one = mint,
         has_one = lender,
-        constraint = hire.borrower == None,
-        constraint = hire.state != HireState::Hired
+        constraint = rental.borrower == None,
+        constraint = rental.state != RentalState::Rented
     )]
-    pub hire: Box<Account<'info, Hire>>,
+    pub rental: Box<Account<'info, Rental>>,
     #[account(
         mut,
         seeds = [
@@ -57,10 +57,10 @@ pub struct CloseHire<'info> {
 }
 
 
-pub fn handle_close_hire(ctx: Context<CloseHire>) -> Result<()> {
+pub fn handle_close_rental(ctx: Context<CloseRental>) -> Result<()> {
     let token_manager = &mut ctx.accounts.token_manager;
 
-    token_manager.accounts.hire = false;
+    token_manager.accounts.rental = false;
     // IMPORTANT CHECKS!
     if token_manager.accounts.call_option == true || token_manager.accounts.loan == true {
         return Ok(());

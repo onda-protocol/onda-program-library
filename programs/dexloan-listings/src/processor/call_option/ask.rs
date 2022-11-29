@@ -76,6 +76,7 @@ pub fn handle_ask_call_option(
 ) -> Result<()> {
     let call_option = &mut ctx.accounts.call_option;
     let token_manager = &mut ctx.accounts.token_manager;
+    let collection = &ctx.accounts.collection;
     let deposit_token_account = &mut ctx.accounts.deposit_token_account;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
@@ -97,7 +98,7 @@ pub fn handle_ask_call_option(
     call_option.mint = ctx.accounts.mint.key();
     call_option.bump = *ctx.bumps.get("call_option").unwrap();
     //
-    CallOption::init_ask_state(call_option, amount, strike_price, expiry)?;
+    CallOption::init_ask_state(call_option, amount, collection.config.option_basis_points, strike_price, expiry)?;
     //
     token_manager.accounts.call_option = true;
     token_manager.bump = *ctx.bumps.get("token_manager").unwrap();

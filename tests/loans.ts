@@ -102,7 +102,7 @@ describe("Loans", () => {
       );
 
       assert.deepEqual(tokenManager.accounts, {
-        hire: false,
+        rental: false,
         callOption: false,
         loan: true,
       });
@@ -166,7 +166,7 @@ describe("Loans", () => {
       );
 
       assert.deepEqual(tokenManager.accounts, {
-        hire: false,
+        rental: false,
         callOption: false,
         loan: true,
       });
@@ -275,7 +275,7 @@ describe("Loans", () => {
       );
 
       assert.deepEqual(tokenManager.accounts, {
-        hire: false,
+        rental: false,
         callOption: false,
         loan: false,
       });
@@ -342,7 +342,7 @@ describe("Loans", () => {
       );
 
       assert.deepEqual(tokenManager.accounts, {
-        hire: false,
+        rental: false,
         callOption: false,
         loan: true,
       });
@@ -494,7 +494,7 @@ describe("Loans", () => {
       );
 
       assert.deepEqual(tokenManager.accounts, {
-        hire: false,
+        rental: false,
         callOption: false,
         loan: true,
       });
@@ -588,7 +588,7 @@ describe("Loans", () => {
       );
 
       assert.deepEqual(tokenManager.accounts, {
-        hire: false,
+        rental: false,
         callOption: false,
         loan: false,
       });

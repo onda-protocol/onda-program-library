@@ -16,6 +16,8 @@ pub struct Loan {
     pub state: LoanState,
     /// The amount of the loan
     pub amount: Option<u64>,
+    /// The creator fee
+    pub creator_basis_points: u16,
     /// The amount outstanding
     pub outstanding: u64,
     /// The liquidation threshold in basis points
@@ -48,10 +50,12 @@ impl Loan {
     pub fn init_ask_state<'info>(
         loan: &mut Account<'info, Loan>,
         amount: u64,
+        creator_basis_points: u16,
         basis_points: u32,
         duration: i64
     ) -> Result<()> {
         loan.amount = Some(amount);
+        loan.creator_basis_points = creator_basis_points;
         loan.outstanding = amount;
         loan.threshold = None;
         loan.installments = 1;
@@ -87,6 +91,7 @@ impl Loan {
         8 + // key
         1 + // state
         (1 + 8) + // amount
+        2 + // creator_basis_points
         8 + // outstanding
         (1 + 4) + // threshold
         32 + // borrower

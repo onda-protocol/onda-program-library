@@ -75,6 +75,7 @@ pub fn handle_ask_loan(
 ) -> Result<()> {
     let loan = &mut ctx.accounts.loan;
     let token_manager = &mut ctx.accounts.token_manager;
+    let collection = &ctx.accounts.collection;
     let deposit_token_account = &mut ctx.accounts.deposit_token_account;
 
     assert_collection_valid(
@@ -91,7 +92,7 @@ pub fn handle_ask_loan(
     loan.borrower = ctx.accounts.borrower.key();
     loan.bump = *ctx.bumps.get("loan").unwrap();
     //
-    Loan::init_ask_state(loan, amount, basis_points, duration)?;
+    Loan::init_ask_state(loan, amount, collection.config.loan_basis_points, basis_points, duration)?;
     //
     token_manager.accounts.loan = true;
     token_manager.bump = *ctx.bumps.get("token_manager").unwrap();

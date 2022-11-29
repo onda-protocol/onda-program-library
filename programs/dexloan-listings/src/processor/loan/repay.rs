@@ -82,6 +82,15 @@ pub fn handle_repay_loan(ctx: Context<RepayLoan>) -> Result<()> {
         is_overdue
     )?;
 
+    let creator_fee = calculate_loan_repayment(
+        loan.amount.unwrap(),
+        u32::from(loan.creator_basis_points),
+        duration,
+        false
+    )?;
+
+    let total_amount_due = amount_due.checked_add(creator_fee).ok_or(DexloanError::NumericalOverflow)?;
+
     // Transfer payment
     invoke(
         &anchor_lang::solana_program::system_instruction::transfer(
@@ -95,7 +104,7 @@ pub fn handle_repay_loan(ctx: Context<RepayLoan>) -> Result<()> {
         ]
     )?;
 
-    if token_manager.accounts.hire == false {
+    if token_manager.accounts.rental == false {
         thaw_and_revoke_token_account(
             token_manager,
             ctx.accounts.token_program.to_account_info(),

@@ -14,7 +14,7 @@ use {
     },
 };
 use crate::constants::*;
-use crate::state::{Hire, Collection, TokenManager};
+use crate::state::{Rental, Collection, TokenManager};
 use crate::error::*;
 
 pub struct FreezeParams<'a, 'b> {
@@ -285,17 +285,17 @@ pub fn thaw_and_transfer_from_token_account<'info>(
     Ok(())
 }
 
-pub fn calculate_widthdawl_amount<'info>(hire: &mut Account<'info, Hire>, unix_timestamp: i64) -> Result<u64> {
-    require!(hire.current_start.is_some(), DexloanError::InvalidState);
-    require!(hire.current_expiry.is_some(), DexloanError::InvalidState);
+pub fn calculate_widthdawl_amount<'info>(rental: &mut Account<'info, Rental>, unix_timestamp: i64) -> Result<u64> {
+    require!(rental.current_start.is_some(), DexloanError::InvalidState);
+    require!(rental.current_expiry.is_some(), DexloanError::InvalidState);
 
-    let start = hire.current_start.unwrap() as f64;
-    let end = hire.current_expiry.unwrap() as f64;
+    let start = rental.current_start.unwrap() as f64;
+    let end = rental.current_expiry.unwrap() as f64;
     let now = unix_timestamp as f64;
-    let balance = hire.escrow_balance as f64;
+    let balance = rental.escrow_balance as f64;
 
     if now > end {
-        return Ok(hire.escrow_balance)
+        return Ok(rental.escrow_balance)
     }
 
     let fraction = (now - start) / (end - start);
@@ -322,87 +322,87 @@ pub fn transfer_from_escrow(
 }
 
 // TODO pay creator fees on escrow withdrawls!
-pub fn withdraw_from_hire_escrow<'a, 'b>(
-    hire: &mut Account<'a, Hire>,
-    hire_escrow: &AccountInfo<'b>,
+pub fn withdraw_from_rental_escrow<'a, 'b>(
+    rental: &mut Account<'a, Rental>,
+    rental_escrow: &AccountInfo<'b>,
     lender: &AccountInfo<'b>,
     unix_timestamp: i64,
 ) -> Result<u64> {
-    require_keys_eq!(lender.key(), hire.lender);
+    require_keys_eq!(lender.key(), rental.lender);
 
-    let amount = calculate_widthdawl_amount(hire, unix_timestamp)?;
+    let amount = calculate_widthdawl_amount(rental, unix_timestamp)?;
     msg!("Withdrawing {} lamports to lender from escrow balance ", amount);
 
     transfer_from_escrow(
-        &mut hire_escrow.to_account_info(),
+        &mut rental_escrow.to_account_info(),
         &mut lender.to_account_info(),
         amount
     )?;
 
-    let remaining_amount = hire.escrow_balance - amount;
-    hire.escrow_balance = remaining_amount;
-    hire.current_start = Some(unix_timestamp);
+    let remaining_amount = rental.escrow_balance - amount;
+    rental.escrow_balance = remaining_amount;
+    rental.current_start = Some(unix_timestamp);
 
     Ok(remaining_amount)
 }
 
-// If a call option is exercised or a loan repossessed while a hire is active
-// Then any unearned balance must be paid back to the hire's borrower
-pub fn settle_hire_escrow_balance<'a, 'b>(
-    hire: &mut Account<'a, Hire>,
+// If a call option is exercised or a loan repossessed while a rental is active
+// Then any unearned balance must be paid back to the rental's borrower
+pub fn settle_rental_escrow_balance<'a, 'b>(
+    rental: &mut Account<'a, Rental>,
     remaining_accounts: &mut Iter<AccountInfo<'b>>,
-    hire_escrow: &AccountInfo<'b>,
+    rental_escrow: &AccountInfo<'b>,
     lender: &AccountInfo<'b>,
     unix_timestamp: i64,
 ) -> Result<()> {
-    let remaining_escrow_balance = withdraw_from_hire_escrow(
-        hire,
-        &hire_escrow,
+    let remaining_escrow_balance = withdraw_from_rental_escrow(
+        rental,
+        &rental_escrow,
         &lender,
         unix_timestamp,
     )?;
 
-    if hire.borrower.is_some() {
+    if rental.borrower.is_some() {
         let borrower = next_account_info(remaining_accounts)?;
-        require_keys_eq!(borrower.key(), hire.borrower.unwrap());
+        require_keys_eq!(borrower.key(), rental.borrower.unwrap());
 
         msg!("Returning {} lamports to borrower {} from escrow balance", remaining_escrow_balance, borrower.key());        
 
         transfer_from_escrow(
-            &mut hire_escrow.to_account_info(),
+            &mut rental_escrow.to_account_info(),
             &mut borrower.to_account_info(),
             remaining_escrow_balance
         )?;
     }
 
-    hire.escrow_balance = 0;
+    rental.escrow_balance = 0;
 
     Ok(())
 }
 
 
 
-pub fn process_payment_to_hire_escrow<'info>(
-    hire: &mut Account<'info, Hire>,
-    hire_escrow: AccountInfo<'info>,
+pub fn process_payment_to_rental_escrow<'info>(
+    rental: &mut Account<'info, Rental>,
+    rental_escrow: AccountInfo<'info>,
     borrower: AccountInfo<'info>,
     days: u16,
 ) -> Result<()> {
-    let amount = u64::from(days).checked_mul(hire.amount).ok_or(DexloanError::NumericalOverflow)?;
+    let amount = u64::from(days).checked_mul(rental.amount).ok_or(DexloanError::NumericalOverflow)?;
 
-    msg!("Paying {} lamports to hire escrow", amount);
+    msg!("Paying {} lamports to rental escrow", amount);
 
-    hire.escrow_balance = hire.escrow_balance + amount;
+    rental.escrow_balance = rental.escrow_balance + amount;
 
     anchor_lang::solana_program::program::invoke(
         &anchor_lang::solana_program::system_instruction::transfer(
-            &hire.borrower.unwrap(),
-            &hire_escrow.key(),
+            &rental.borrower.unwrap(),
+            &rental_escrow.key(),
             amount,
         ),
         &[
             borrower.to_account_info(),
-            hire_escrow.to_account_info(),
+            rental_escrow.to_account_info(),
         ]
     )?;
 

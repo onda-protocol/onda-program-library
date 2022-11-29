@@ -15,22 +15,22 @@ const connection = new anchor.web3.Connection(
   anchor.AnchorProvider.defaultOptions().preflightCommitment
 );
 
-describe("Hires", () => {
+describe("Rentals", () => {
   describe("Specified borrower", async () => {
-    let lender: helpers.HireLender;
+    let lender: helpers.RentalLender;
     let borrowerTokenAccount: anchor.web3.PublicKey;
     let options;
     let privateBorrower = anchor.web3.Keypair.generate();
 
-    it("Initializes a hire with a borrower", async () => {
+    it("Initializes a rental with a borrower", async () => {
       options = {
         amount: 0,
         expiry: Date.now() / 1000 + 84_600 * 3,
         borrower: privateBorrower.publicKey,
       };
-      lender = await helpers.initHire(connection, options);
+      lender = await helpers.initRental(connection, options);
 
-      const hire = await lender.program.account.hire.fetch(lender.hire);
+      const rental = await lender.program.account.rental.fetch(lender.rental);
       const tokenAddress = (
         await connection.getTokenLargestAccounts(lender.mint)
       ).value[0].address;
@@ -41,13 +41,16 @@ describe("Hires", () => {
         tokenAccount.delegate.toBase58(),
         lender.tokenManager.toBase58()
       );
-      assert.equal(hire.amount.toNumber(), options.amount);
-      assert.equal(hire.lender.toBase58(), lender.keypair.publicKey.toBase58());
-      assert.equal(hire.borrower.toBase58(), options.borrower.toBase58());
-      assert.deepEqual(hire.state, { listed: {} });
+      assert.equal(rental.amount.toNumber(), options.amount);
+      assert.equal(
+        rental.lender.toBase58(),
+        lender.keypair.publicKey.toBase58()
+      );
+      assert.equal(rental.borrower.toBase58(), options.borrower.toBase58());
+      assert.deepEqual(rental.state, { listed: {} });
     });
 
-    it("Does not allow a different address to take the hire", async () => {
+    it("Does not allow a different address to take the rental", async () => {
       const signer = await helpers.getSigner();
       const newKeypair = anchor.web3.Keypair.generate();
       await helpers.requestAirdrop(connection, newKeypair.publicKey);
@@ -67,16 +70,16 @@ describe("Hires", () => {
 
       try {
         await program.methods
-          .takeHire(1)
+          .takeRental(1)
           .accounts({
             signer: signer.publicKey,
             borrower: newKeypair.publicKey,
             lender: lender.keypair.publicKey,
-            hire: lender.hire,
-            hireEscrow: lender.hireEscrow,
+            rental: lender.rental,
+            rentalEscrow: lender.rentalEscrow,
             tokenManager: lender.tokenManager,
             depositTokenAccount: lender.depositTokenAccount,
-            hireTokenAccount: tokenAccount.address,
+            rentalTokenAccount: tokenAccount.address,
             mint: lender.mint,
             edition: lender.edition,
             metadata: lender.metadata,
@@ -102,7 +105,7 @@ describe("Hires", () => {
       }
     });
 
-    it("Allows a hire to be taken by the borrower", async () => {
+    it("Allows a rental to be taken by the borrower", async () => {
       const signer = await helpers.getSigner();
       await helpers.requestAirdrop(connection, privateBorrower.publicKey);
       const provider = helpers.getProvider(connection, privateBorrower);
@@ -125,16 +128,16 @@ describe("Hires", () => {
       );
 
       await program.methods
-        .takeHire(days)
+        .takeRental(days)
         .accounts({
           signer: signer.publicKey,
           borrower: privateBorrower.publicKey,
           lender: lender.keypair.publicKey,
-          hire: lender.hire,
-          hireEscrow: lender.hireEscrow,
+          rental: lender.rental,
+          rentalEscrow: lender.rentalEscrow,
           tokenManager: lender.tokenManager,
           depositTokenAccount: lender.depositTokenAccount,
-          hireTokenAccount: borrowerTokenAccount,
+          rentalTokenAccount: borrowerTokenAccount,
           mint: lender.mint,
           edition: lender.edition,
           metadata: lender.metadata,
@@ -153,28 +156,28 @@ describe("Hires", () => {
         .signers([signer])
         .rpc();
 
-      const hire = await lender.program.account.hire.fetch(lender.hire);
+      const rental = await lender.program.account.rental.fetch(lender.rental);
       const tokenAccount = await splToken.getAccount(
         connection,
         borrowerTokenAccount
       );
 
-      assert.deepEqual(hire.state, { hired: {} });
+      assert.deepEqual(rental.state, { rentald: {} });
       assert.equal(tokenAccount.isFrozen, true, "isFrozen");
       assert.equal(tokenAccount.amount, BigInt(1));
       assert.equal(
-        hire.borrower.toBase58(),
+        rental.borrower.toBase58(),
         privateBorrower.publicKey.toBase58(),
         "borrower"
       );
       assert.ok(
-        hire.currentExpiry.toNumber() >= estimatedCurrentExpiry - 2 &&
-          hire.currentExpiry.toNumber() <= estimatedCurrentExpiry + 2,
+        rental.currentExpiry.toNumber() >= estimatedCurrentExpiry - 2 &&
+          rental.currentExpiry.toNumber() <= estimatedCurrentExpiry + 2,
         "currentExpiry"
       );
     });
 
-    it("Does not allow hire token account to be closed", async () => {
+    it("Does not allow rental token account to be closed", async () => {
       try {
         await splToken.closeAccount(
           connection,
@@ -193,21 +196,21 @@ describe("Hires", () => {
       }
     });
 
-    it("Does not allow a hire to be recovered before expiry", async () => {
+    it("Does not allow a rental to be recovered before expiry", async () => {
       const signer = await helpers.getSigner();
 
       try {
         await lender.program.methods
-          .recoverHire()
+          .recoverRental()
           .accounts({
             signer: signer.publicKey,
             borrower: privateBorrower.publicKey,
             lender: lender.keypair.publicKey,
-            hire: lender.hire,
-            hireEscrow: lender.hireEscrow,
+            rental: lender.rental,
+            rentalEscrow: lender.rentalEscrow,
             tokenManager: lender.tokenManager,
             depositTokenAccount: lender.depositTokenAccount,
-            hireTokenAccount: borrowerTokenAccount,
+            rentalTokenAccount: borrowerTokenAccount,
             mint: lender.mint,
             edition: lender.edition,
             metadataProgram: METADATA_PROGRAM_ID,
@@ -226,19 +229,19 @@ describe("Hires", () => {
     });
   });
 
-  describe("Open hire", async () => {
+  describe("Open rental", async () => {
     let options;
-    let lender: helpers.HireLender;
-    let borrower: helpers.HireBorrower;
+    let lender: helpers.RentalLender;
+    let borrower: helpers.RentalBorrower;
 
-    it("Initializes an open hire", async () => {
+    it("Initializes an open rental", async () => {
       options = {
         amount: 10_000,
         expiry: Date.now() / 1000 + 86_400 * 180,
       };
-      lender = await helpers.initHire(connection, options);
+      lender = await helpers.initRental(connection, options);
 
-      const hire = await lender.program.account.hire.fetch(lender.hire);
+      const rental = await lender.program.account.rental.fetch(lender.rental);
       const tokenAddress = (
         await connection.getTokenLargestAccounts(lender.mint)
       ).value[0].address;
@@ -249,41 +252,44 @@ describe("Hires", () => {
         tokenAccount.delegate.toBase58(),
         lender.tokenManager.toBase58()
       );
-      assert.equal(hire.amount.toNumber(), options.amount);
-      assert.equal(hire.lender.toBase58(), lender.keypair.publicKey.toBase58());
-      assert.equal(hire.borrower, null);
-      assert.deepEqual(hire.state, { listed: {} });
+      assert.equal(rental.amount.toNumber(), options.amount);
+      assert.equal(
+        rental.lender.toBase58(),
+        lender.keypair.publicKey.toBase58()
+      );
+      assert.equal(rental.borrower, null);
+      assert.deepEqual(rental.state, { listed: {} });
     });
 
-    it("Allows a hire to be taken for x days", async () => {
+    it("Allows a rental to be taken for x days", async () => {
       const days = 2;
       const estimatedCurrentExpiry = Math.round(
         Date.now() / 1000 + 86_400 * days
       );
-      borrower = await helpers.takeHire(connection, lender, days);
+      borrower = await helpers.takeRental(connection, lender, days);
 
-      const hire = await lender.program.account.hire.fetch(lender.hire);
+      const rental = await lender.program.account.rental.fetch(lender.rental);
       const tokenAddress = (
         await connection.getTokenLargestAccounts(lender.mint)
       ).value[0].address;
 
       const tokenAccount = await splToken.getAccount(connection, tokenAddress);
 
-      assert.deepEqual(hire.state, { hired: {} });
+      assert.deepEqual(rental.state, { rentald: {} });
       assert.equal(tokenAccount.isFrozen, true);
       assert.equal(tokenAccount.amount, BigInt(1));
       assert.equal(
-        hire.borrower.toBase58(),
+        rental.borrower.toBase58(),
         borrower.keypair.publicKey.toBase58()
       );
       assert.ok(
-        hire.currentExpiry.toNumber() >= estimatedCurrentExpiry - 2 &&
-          hire.currentExpiry.toNumber() <= estimatedCurrentExpiry + 2
+        rental.currentExpiry.toNumber() >= estimatedCurrentExpiry - 2 &&
+          rental.currentExpiry.toNumber() <= estimatedCurrentExpiry + 2
       );
     });
   });
 
-  describe("Loan repayment with active hire", () => {
+  describe("Loan repayment with active rental", () => {
     let borrower: helpers.LoanBorrower;
     let lender: helpers.LoanLender;
     let thirdPartyKeypair = anchor.web3.Keypair.generate();
@@ -293,7 +299,7 @@ describe("Hires", () => {
       duration: 86_400 * 365, // 1 year
     };
 
-    it("Allows collateralized NFTs to be listed for hire", async () => {
+    it("Allows collateralized NFTs to be listed for rental", async () => {
       const signer = await helpers.getSigner();
       borrower = await helpers.askLoan(connection, options);
       lender = await helpers.giveLoan(connection, borrower);
@@ -301,7 +307,7 @@ describe("Hires", () => {
       const amount = new anchor.BN(anchor.web3.LAMPORTS_PER_SOL / 100);
       const expiry = new anchor.BN(Date.now() / 1000 + 86_400 * 3);
 
-      const hireAddress = await helpers.findHireAddress(
+      const rentalAddress = await helpers.findRentalAddress(
         borrower.mint,
         borrower.keypair.publicKey
       );
@@ -312,10 +318,10 @@ describe("Hires", () => {
       );
 
       await borrower.program.methods
-        .initHire({ amount, expiry, borrower: null })
+        .initRental({ amount, expiry, borrower: null })
         .accounts({
           signer: signer.publicKey,
-          hire: hireAddress,
+          rental: rentalAddress,
           collection: borrower.collection,
           tokenManager: tokenManagerAddress,
           lender: borrower.keypair.publicKey,
@@ -331,30 +337,30 @@ describe("Hires", () => {
         .signers([signer])
         .rpc();
 
-      const hire = await lender.program.account.hire.fetch(hireAddress);
+      const rental = await lender.program.account.rental.fetch(rentalAddress);
       const tokenManager = await lender.program.account.tokenManager.fetch(
         tokenManagerAddress
       );
 
       assert.deepEqual(tokenManager.accounts, {
         loan: true,
-        hire: true,
+        rental: true,
         callOption: false,
       });
-      assert.equal(hire.borrower, null);
-      assert.deepEqual(hire.state, { listed: {} });
+      assert.equal(rental.borrower, null);
+      assert.deepEqual(rental.state, { listed: {} });
     });
 
-    it("Allows collateralized NFTs to be hired", async () => {
+    it("Allows collateralized NFTs to be rentald", async () => {
       const signer = await helpers.getSigner();
       await helpers.requestAirdrop(connection, thirdPartyKeypair.publicKey);
       const provider = helpers.getProvider(connection, thirdPartyKeypair);
       const program = helpers.getProgram(provider);
-      const hireAddress = await helpers.findHireAddress(
+      const rentalAddress = await helpers.findRentalAddress(
         borrower.mint,
         borrower.keypair.publicKey
       );
-      const hireEscrowAddress = await helpers.findHireEscrowAddress(
+      const rentalEscrowAddress = await helpers.findRentalEscrowAddress(
         borrower.mint,
         borrower.keypair.publicKey
       );
@@ -362,28 +368,29 @@ describe("Hires", () => {
         borrower.mint,
         borrower.keypair.publicKey
       );
-      const hireTokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
-        connection,
-        thirdPartyKeypair,
-        borrower.mint,
-        thirdPartyKeypair.publicKey
-      );
+      const rentalTokenAccount =
+        await splToken.getOrCreateAssociatedTokenAccount(
+          connection,
+          thirdPartyKeypair,
+          borrower.mint,
+          thirdPartyKeypair.publicKey
+        );
       const [metadataAddress] = await helpers.findMetadataAddress(
         borrower.mint
       );
 
       try {
         await program.methods
-          .takeHire(2)
+          .takeRental(2)
           .accounts({
             signer: signer.publicKey,
             borrower: thirdPartyKeypair.publicKey,
             lender: borrower.keypair.publicKey,
-            hire: hireAddress,
-            hireEscrow: hireEscrowAddress,
+            rental: rentalAddress,
+            rentalEscrow: rentalEscrowAddress,
             tokenManager: tokenManagerAddress,
             depositTokenAccount: borrower.depositTokenAccount,
-            hireTokenAccount: hireTokenAccount.address,
+            rentalTokenAccount: rentalTokenAccount.address,
             mint: borrower.mint,
             edition: borrower.edition,
             metadata: metadataAddress,
@@ -399,25 +406,25 @@ describe("Hires", () => {
         throw error;
       }
 
-      const hire = await lender.program.account.hire.fetch(hireAddress);
+      const rental = await lender.program.account.rental.fetch(rentalAddress);
       const tokenManager = await lender.program.account.tokenManager.fetch(
         tokenManagerAddress
       );
       const tokenAccount = await splToken.getAccount(
         connection,
-        hireTokenAccount.address
+        rentalTokenAccount.address
       );
 
       assert.deepEqual(tokenManager.accounts, {
         loan: true,
-        hire: true,
+        rental: true,
         callOption: false,
       });
       assert.equal(
-        hire.borrower.toBase58(),
+        rental.borrower.toBase58(),
         thirdPartyKeypair.publicKey.toBase58()
       );
-      assert.deepEqual(hire.state, { hired: {} });
+      assert.deepEqual(rental.state, { rentald: {} });
       assert.equal(tokenAccount.amount, BigInt(1));
       assert.ok(tokenAccount.isFrozen);
       assert.ok(tokenAccount.delegate.equals(tokenManagerAddress));
@@ -463,7 +470,7 @@ describe("Hires", () => {
       );
 
       assert.deepEqual(tokenManager.accounts, {
-        hire: false,
+        rental: false,
         callOption: false,
         loan: false,
       });
@@ -476,12 +483,12 @@ describe("Hires", () => {
     });
   });
 
-  describe("Repossession with active hire", () => {
+  describe("Repossession with active rental", () => {
     let borrower: helpers.LoanBorrower;
     let lender: helpers.LoanLender;
     let thirdPartyKeypair = anchor.web3.Keypair.generate();
 
-    it("Allows collateralized NFTs to be listed for hire", async () => {
+    it("Allows collateralized NFTs to be listed for rental", async () => {
       const signer = await helpers.getSigner();
       borrower = await helpers.askLoan(connection, {
         amount: anchor.web3.LAMPORTS_PER_SOL / 100,
@@ -493,7 +500,7 @@ describe("Hires", () => {
       const amount = new anchor.BN(anchor.web3.LAMPORTS_PER_SOL / 100);
       const expiry = new anchor.BN(Date.now() / 1000 + 86_400 * 3);
 
-      const hireAddress = await helpers.findHireAddress(
+      const rentalAddress = await helpers.findRentalAddress(
         borrower.mint,
         borrower.keypair.publicKey
       );
@@ -504,10 +511,10 @@ describe("Hires", () => {
       );
 
       await borrower.program.methods
-        .initHire({ amount, expiry, borrower: null })
+        .initRental({ amount, expiry, borrower: null })
         .accounts({
           signer: signer.publicKey,
-          hire: hireAddress,
+          rental: rentalAddress,
           collection: borrower.collection,
           tokenManager: tokenManagerAddress,
           lender: borrower.keypair.publicKey,
@@ -523,30 +530,30 @@ describe("Hires", () => {
         .signers([signer])
         .rpc();
 
-      const hire = await lender.program.account.hire.fetch(hireAddress);
+      const rental = await lender.program.account.rental.fetch(rentalAddress);
       const tokenManager = await lender.program.account.tokenManager.fetch(
         tokenManagerAddress
       );
 
       assert.deepEqual(tokenManager.accounts, {
         loan: true,
-        hire: true,
+        rental: true,
         callOption: false,
       });
-      assert.equal(hire.borrower, null);
-      assert.deepEqual(hire.state, { listed: {} });
+      assert.equal(rental.borrower, null);
+      assert.deepEqual(rental.state, { listed: {} });
     });
 
-    it("Allows collateralized NFTs to be hired", async () => {
+    it("Allows collateralized NFTs to be rentald", async () => {
       const signer = await helpers.getSigner();
       await helpers.requestAirdrop(connection, thirdPartyKeypair.publicKey);
       const provider = helpers.getProvider(connection, thirdPartyKeypair);
       const program = helpers.getProgram(provider);
-      const hireAddress = await helpers.findHireAddress(
+      const rentalAddress = await helpers.findRentalAddress(
         borrower.mint,
         borrower.keypair.publicKey
       );
-      const hireEscrowAddress = await helpers.findHireEscrowAddress(
+      const rentalEscrowAddress = await helpers.findRentalEscrowAddress(
         borrower.mint,
         borrower.keypair.publicKey
       );
@@ -554,28 +561,29 @@ describe("Hires", () => {
         borrower.mint,
         borrower.keypair.publicKey
       );
-      const hireTokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
-        connection,
-        thirdPartyKeypair,
-        borrower.mint,
-        thirdPartyKeypair.publicKey
-      );
+      const rentalTokenAccount =
+        await splToken.getOrCreateAssociatedTokenAccount(
+          connection,
+          thirdPartyKeypair,
+          borrower.mint,
+          thirdPartyKeypair.publicKey
+        );
       const [metadataAddress] = await helpers.findMetadataAddress(
         borrower.mint
       );
 
       try {
         await program.methods
-          .takeHire(2)
+          .takeRental(2)
           .accounts({
             signer: signer.publicKey,
             borrower: thirdPartyKeypair.publicKey,
             lender: borrower.keypair.publicKey,
-            hire: hireAddress,
-            hireEscrow: hireEscrowAddress,
+            rental: rentalAddress,
+            rentalEscrow: rentalEscrowAddress,
             tokenManager: tokenManagerAddress,
             depositTokenAccount: borrower.depositTokenAccount,
-            hireTokenAccount: hireTokenAccount.address,
+            rentalTokenAccount: rentalTokenAccount.address,
             mint: borrower.mint,
             edition: borrower.edition,
             metadata: metadataAddress,
@@ -591,49 +599,50 @@ describe("Hires", () => {
         throw error;
       }
 
-      const hire = await lender.program.account.hire.fetch(hireAddress);
+      const rental = await lender.program.account.rental.fetch(rentalAddress);
       const tokenManager = await lender.program.account.tokenManager.fetch(
         tokenManagerAddress
       );
       const tokenAccount = await splToken.getAccount(
         connection,
-        hireTokenAccount.address
+        rentalTokenAccount.address
       );
 
       assert.deepEqual(tokenManager.accounts, {
         loan: true,
-        hire: true,
+        rental: true,
         callOption: false,
       });
       assert.equal(
-        hire.borrower.toBase58(),
+        rental.borrower.toBase58(),
         thirdPartyKeypair.publicKey.toBase58()
       );
-      assert.deepEqual(hire.state, { hired: {} });
+      assert.deepEqual(rental.state, { rentald: {} });
       assert.equal(tokenAccount.amount, BigInt(1));
       assert.ok(tokenAccount.isFrozen);
       assert.ok(tokenAccount.delegate.equals(tokenManagerAddress));
       assert.equal(tokenAccount.delegatedAmount, BigInt(1));
     });
 
-    it("Will settle hire fees when collateral is repossessed", async () => {
+    it("Will settle rental fees when collateral is repossessed", async () => {
       const signer = await helpers.getSigner();
       await helpers.wait(10); // Wait to allow some rent to accrue
 
-      const hireAddress = await helpers.findHireAddress(
+      const rentalAddress = await helpers.findRentalAddress(
         borrower.mint,
         borrower.keypair.publicKey
       );
-      const hireEscrowAddress = await helpers.findHireEscrowAddress(
+      const rentalEscrowAddress = await helpers.findRentalEscrowAddress(
         borrower.mint,
         borrower.keypair.publicKey
       );
-      const hireTokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
-        connection,
-        thirdPartyKeypair,
-        borrower.mint,
-        thirdPartyKeypair.publicKey
-      );
+      const rentalTokenAccount =
+        await splToken.getOrCreateAssociatedTokenAccount(
+          connection,
+          thirdPartyKeypair,
+          borrower.mint,
+          thirdPartyKeypair.publicKey
+        );
       const lenderTokenAccount =
         await splToken.getOrCreateAssociatedTokenAccount(
           connection,
@@ -644,15 +653,15 @@ describe("Hires", () => {
 
       try {
         await lender.program.methods
-          .repossessWithHire()
+          .repossessWithRental()
           .accounts({
             signer: signer.publicKey,
-            hire: hireAddress,
-            hireEscrow: hireEscrowAddress,
+            rental: rentalAddress,
+            rentalEscrow: rentalEscrowAddress,
             borrower: borrower.keypair.publicKey,
             lender: lender.keypair.publicKey,
             lenderTokenAccount: lenderTokenAccount.address,
-            tokenAccount: hireTokenAccount.address,
+            tokenAccount: rentalTokenAccount.address,
             loan: borrower.loan,
             tokenManager: borrower.tokenManager,
             mint: borrower.mint,
@@ -681,9 +690,9 @@ describe("Hires", () => {
         connection,
         lenderTokenAccount.address
       );
-      const updatedHireTokenAccount = await splToken.getAccount(
+      const updatedRentalTokenAccount = await splToken.getAccount(
         connection,
-        hireTokenAccount.address
+        rentalTokenAccount.address
       );
       const tokenManager = await borrower.program.account.tokenManager.fetch(
         borrower.tokenManager
@@ -693,21 +702,21 @@ describe("Hires", () => {
       );
 
       assert.deepEqual(tokenManager.accounts, {
-        hire: false,
+        rental: false,
         callOption: false,
         loan: false,
       });
       assert.equal(updatedLendertokenAccount.amount, BigInt(1));
-      assert.equal(updatedHireTokenAccount.amount, BigInt(0));
+      assert.equal(updatedRentalTokenAccount.amount, BigInt(0));
       assert.deepEqual(defaultedLoan.state, { defaulted: {} });
     });
   });
 
-  describe("Repossession with listed hire", () => {
+  describe("Repossession with listed rental", () => {
     let borrower: helpers.LoanBorrower;
     let lender: helpers.LoanLender;
 
-    it("Allows collateralized NFTs to be listed for hire", async () => {
+    it("Allows collateralized NFTs to be listed for rental", async () => {
       const signer = await helpers.getSigner();
       borrower = await helpers.askLoan(connection, {
         amount: anchor.web3.LAMPORTS_PER_SOL / 100,
@@ -719,7 +728,7 @@ describe("Hires", () => {
       const amount = new anchor.BN(anchor.web3.LAMPORTS_PER_SOL / 100);
       const expiry = new anchor.BN(Date.now() / 1000 + 86_400 * 3);
 
-      const hireAddress = await helpers.findHireAddress(
+      const rentalAddress = await helpers.findRentalAddress(
         borrower.mint,
         borrower.keypair.publicKey
       );
@@ -728,10 +737,10 @@ describe("Hires", () => {
         borrower.keypair.publicKey
       );
       await borrower.program.methods
-        .initHire({ amount, expiry, borrower: null })
+        .initRental({ amount, expiry, borrower: null })
         .accounts({
           signer: signer.publicKey,
-          hire: hireAddress,
+          rental: rentalAddress,
           collection: borrower.collection,
           tokenManager: tokenManagerAddress,
           lender: borrower.keypair.publicKey,
@@ -747,27 +756,27 @@ describe("Hires", () => {
         .signers([signer])
         .rpc();
 
-      const hire = await lender.program.account.hire.fetch(hireAddress);
+      const rental = await lender.program.account.rental.fetch(rentalAddress);
       const tokenManager = await lender.program.account.tokenManager.fetch(
         tokenManagerAddress
       );
 
       assert.deepEqual(tokenManager.accounts, {
         loan: true,
-        hire: true,
+        rental: true,
         callOption: false,
       });
-      assert.equal(hire.borrower, null);
-      assert.deepEqual(hire.state, { listed: {} });
+      assert.equal(rental.borrower, null);
+      assert.deepEqual(rental.state, { listed: {} });
     });
 
-    it("Will settle hire fees when collateral is repossessed", async () => {
+    it("Will settle rental fees when collateral is repossessed", async () => {
       const signer = await helpers.getSigner();
-      const hireAddress = await helpers.findHireAddress(
+      const rentalAddress = await helpers.findRentalAddress(
         borrower.mint,
         borrower.keypair.publicKey
       );
-      const hireEscrowAddress = await helpers.findHireEscrowAddress(
+      const rentalEscrowAddress = await helpers.findRentalEscrowAddress(
         borrower.mint,
         borrower.keypair.publicKey
       );
@@ -781,11 +790,11 @@ describe("Hires", () => {
 
       try {
         await lender.program.methods
-          .repossessWithHire()
+          .repossessWithRental()
           .accounts({
             signer: signer.publicKey,
-            hire: hireAddress,
-            hireEscrow: hireEscrowAddress,
+            rental: rentalAddress,
+            rentalEscrow: rentalEscrowAddress,
             borrower: borrower.keypair.publicKey,
             lender: lender.keypair.publicKey,
             lenderTokenAccount: lenderTokenAccount.address,
@@ -823,7 +832,7 @@ describe("Hires", () => {
       );
 
       assert.deepEqual(tokenManager.accounts, {
-        hire: false,
+        rental: false,
         callOption: false,
         loan: false,
       });
@@ -833,36 +842,36 @@ describe("Hires", () => {
     });
   });
 
-  describe("exercise option with active hire", () => {
+  describe("exercise option with active rental", () => {
     let seller: helpers.CallOptionSeller;
     let buyer: helpers.CallOptionBuyer;
-    let hireTokenAccount: anchor.web3.PublicKey;
+    let rentalTokenAccount: anchor.web3.PublicKey;
     let thirdPartyKeypair = anchor.web3.Keypair.generate();
     let callOptionOptions = {
       amount: 1_000_000,
       strikePrice: anchor.web3.LAMPORTS_PER_SOL,
       expiry: Math.round(Date.now() / 1000) + 30 * 24 * 60 * 2, // 2 days
     };
-    let hireOptions = {
+    let rentalOptions = {
       amount: new anchor.BN(anchor.web3.LAMPORTS_PER_SOL / 100),
       expiry: new anchor.BN(Date.now() / 1000 + 86_400 * 3),
       borrower: null,
     };
 
-    it("Allows active options to be listed for hire", async () => {
+    it("Allows active options to be listed for rental", async () => {
       const signer = await helpers.getSigner();
       seller = await helpers.askCallOption(connection, callOptionOptions);
       buyer = await helpers.buyCallOption(connection, seller);
 
-      const hireAddress = await helpers.findHireAddress(
+      const rentalAddress = await helpers.findRentalAddress(
         seller.mint,
         seller.keypair.publicKey
       );
       await seller.program.methods
-        .initHire(hireOptions)
+        .initRental(rentalOptions)
         .accounts({
           signer: signer.publicKey,
-          hire: hireAddress,
+          rental: rentalAddress,
           collection: seller.collection,
           tokenManager: seller.tokenManager,
           lender: seller.keypair.publicKey,
@@ -881,7 +890,7 @@ describe("Hires", () => {
       const callOption = await seller.program.account.callOption.fetch(
         seller.callOption
       );
-      const hire = await seller.program.account.hire.fetch(hireAddress);
+      const rental = await seller.program.account.rental.fetch(rentalAddress);
       const tokenManager = await seller.program.account.tokenManager.fetch(
         seller.tokenManager
       );
@@ -891,7 +900,7 @@ describe("Hires", () => {
       );
 
       assert.deepEqual(tokenManager.accounts, {
-        hire: true,
+        rental: true,
         callOption: true,
         loan: false,
       });
@@ -911,21 +920,21 @@ describe("Hires", () => {
       assert.equal(callOption.mint.toBase58(), seller.mint.toBase58());
       assert.deepEqual(callOption.state, { active: {} });
       assert.equal(sellerTokenAccount.amount, BigInt(1));
-      assert.equal(hire.borrower, null);
-      assert.equal(hire.expiry.toNumber(), hireOptions.expiry);
-      assert.deepEqual(hire.state, { listed: {} });
+      assert.equal(rental.borrower, null);
+      assert.equal(rental.expiry.toNumber(), rentalOptions.expiry);
+      assert.deepEqual(rental.state, { listed: {} });
     });
 
-    it("Allows listed NFTs to be hired", async () => {
+    it("Allows listed NFTs to be rentald", async () => {
       const signer = await helpers.getSigner();
       await helpers.requestAirdrop(connection, thirdPartyKeypair.publicKey);
       const provider = helpers.getProvider(connection, thirdPartyKeypair);
       const program = helpers.getProgram(provider);
-      const hireAddress = await helpers.findHireAddress(
+      const rentalAddress = await helpers.findRentalAddress(
         seller.mint,
         seller.keypair.publicKey
       );
-      const hireEscrowAddress = await helpers.findHireEscrowAddress(
+      const rentalEscrowAddress = await helpers.findRentalEscrowAddress(
         seller.mint,
         seller.keypair.publicKey
       );
@@ -933,7 +942,7 @@ describe("Hires", () => {
         seller.mint,
         seller.keypair.publicKey
       );
-      hireTokenAccount = await splToken.createAccount(
+      rentalTokenAccount = await splToken.createAccount(
         connection,
         thirdPartyKeypair,
         seller.mint,
@@ -943,14 +952,14 @@ describe("Hires", () => {
 
       try {
         await program.methods
-          .takeHire(2)
+          .takeRental(2)
           .accounts({
             signer: signer.publicKey,
-            hireTokenAccount,
+            rentalTokenAccount,
             borrower: thirdPartyKeypair.publicKey,
             lender: seller.keypair.publicKey,
-            hire: hireAddress,
-            hireEscrow: hireEscrowAddress,
+            rental: rentalAddress,
+            rentalEscrow: rentalEscrowAddress,
             tokenManager: tokenManagerAddress,
             depositTokenAccount: seller.depositTokenAccount,
             mint: seller.mint,
@@ -968,38 +977,38 @@ describe("Hires", () => {
         throw error;
       }
 
-      const hire = await seller.program.account.hire.fetch(hireAddress);
+      const rental = await seller.program.account.rental.fetch(rentalAddress);
       const tokenManager = await seller.program.account.tokenManager.fetch(
         tokenManagerAddress
       );
       const tokenAccount = await splToken.getAccount(
         connection,
-        hireTokenAccount
+        rentalTokenAccount
       );
 
       assert.deepEqual(tokenManager.accounts, {
         loan: false,
-        hire: true,
+        rental: true,
         callOption: true,
       });
       assert.equal(
-        hire.borrower.toBase58(),
+        rental.borrower.toBase58(),
         thirdPartyKeypair.publicKey.toBase58()
       );
-      assert.deepEqual(hire.state, { hired: {} });
+      assert.deepEqual(rental.state, { rentald: {} });
       assert.equal(tokenAccount.amount, BigInt(1));
       assert.ok(tokenAccount.isFrozen);
       assert.ok(tokenAccount.delegate.equals(tokenManagerAddress));
       assert.equal(tokenAccount.delegatedAmount, BigInt(1));
     });
 
-    it("Allows hired NFTs with active call options to be exercised", async () => {
+    it("Allows rentald NFTs with active call options to be exercised", async () => {
       const signer = await helpers.getSigner();
-      const hireAddress = await helpers.findHireAddress(
+      const rentalAddress = await helpers.findRentalAddress(
         seller.mint,
         seller.keypair.publicKey
       );
-      const hireEscrowAddress = await helpers.findHireEscrowAddress(
+      const rentalEscrowAddress = await helpers.findRentalEscrowAddress(
         seller.mint,
         seller.keypair.publicKey
       );
@@ -1039,17 +1048,17 @@ describe("Hires", () => {
           ]);
 
         const signature = await buyer.program.methods
-          .exerciseCallOptionWithHire()
+          .exerciseCallOptionWithRental()
           .accounts({
             signer: signer.publicKey,
             seller: seller.keypair.publicKey,
             buyer: buyer.keypair.publicKey,
             callOption: seller.callOption,
-            hire: hireAddress,
-            hireEscrow: hireEscrowAddress,
+            rental: rentalAddress,
+            rentalEscrow: rentalEscrowAddress,
             tokenManager: seller.tokenManager,
             buyerTokenAccount: tokenAccount.address,
-            tokenAccount: hireTokenAccount,
+            tokenAccount: rentalTokenAccount,
             mint: seller.mint,
             edition: seller.edition,
             metadata: metadataAddress,
@@ -1086,7 +1095,7 @@ describe("Hires", () => {
       const callOption = await seller.program.account.callOption.fetch(
         seller.callOption
       );
-      const hireAccount = await connection.getAccountInfo(hireAddress);
+      const rentalAccount = await connection.getAccountInfo(rentalAddress);
       const tokenManager = await seller.program.account.tokenManager.fetch(
         seller.tokenManager
       );
@@ -1107,29 +1116,29 @@ describe("Hires", () => {
       assert.ok(afterSellerBalance >= estimatedSellerBalance, "seller balance");
       assert.deepEqual(callOption.state, { exercised: {} });
       assert.equal(buyerTokenAccount.amount, BigInt(1));
-      assert.equal(hireAccount, null);
+      assert.equal(rentalAccount, null);
       assert.deepEqual(tokenManager.accounts, {
-        hire: false,
+        rental: false,
         callOption: false,
         loan: false,
       });
     });
   });
 
-  describe("List call option after active hire", () => {
-    let lender: helpers.HireLender;
-    let borrower: helpers.HireBorrower;
+  describe("List call option after active rental", () => {
+    let lender: helpers.RentalLender;
+    let borrower: helpers.RentalBorrower;
 
-    let hireOptions = {
+    let rentalOptions = {
       amount: anchor.web3.LAMPORTS_PER_SOL / 100,
       expiry: Math.round(Date.now() / 1000 + 86_400 * 3),
       borrower: null,
     };
 
-    it("Lists a hire", async () => {
-      lender = await helpers.initHire(connection, hireOptions);
+    it("Lists a rental", async () => {
+      lender = await helpers.initRental(connection, rentalOptions);
 
-      const hire = await lender.program.account.hire.fetch(lender.hire);
+      const rental = await lender.program.account.rental.fetch(lender.rental);
       const tokenManager = await lender.program.account.tokenManager.fetch(
         lender.tokenManager
       );
@@ -1138,7 +1147,7 @@ describe("Hires", () => {
         lender.depositTokenAccount
       );
       assert.deepEqual(tokenManager.accounts, {
-        hire: true,
+        rental: true,
         callOption: false,
         loan: false,
       });
@@ -1147,33 +1156,33 @@ describe("Hires", () => {
         lender.tokenManager.toBase58()
       );
       assert.equal(tokenAccount.amount, BigInt(1));
-      assert.equal(hire.borrower, null);
-      assert.equal(hire.expiry.toNumber(), hireOptions.expiry);
-      assert.deepEqual(hire.state, { listed: {} });
+      assert.equal(rental.borrower, null);
+      assert.equal(rental.expiry.toNumber(), rentalOptions.expiry);
+      assert.deepEqual(rental.state, { listed: {} });
     });
 
-    it("Allows listed NFTs to be hired", async () => {
-      borrower = await helpers.takeHire(connection, lender, 2);
+    it("Allows listed NFTs to be rentald", async () => {
+      borrower = await helpers.takeRental(connection, lender, 2);
 
-      const hire = await lender.program.account.hire.fetch(lender.hire);
+      const rental = await lender.program.account.rental.fetch(lender.rental);
       const tokenManager = await lender.program.account.tokenManager.fetch(
         lender.tokenManager
       );
       const tokenAccount = await splToken.getAccount(
         connection,
-        borrower.hireTokenAccount
+        borrower.rentalTokenAccount
       );
 
       assert.deepEqual(tokenManager.accounts, {
         loan: false,
-        hire: true,
+        rental: true,
         callOption: false,
       });
       assert.equal(
-        hire.borrower.toBase58(),
+        rental.borrower.toBase58(),
         borrower.keypair.publicKey.toBase58()
       );
-      assert.deepEqual(hire.state, { hired: {} });
+      assert.deepEqual(rental.state, { rentald: {} });
       assert.equal(tokenAccount.amount, BigInt(1));
       assert.ok(tokenAccount.isFrozen);
       assert.ok(tokenAccount.delegate.equals(lender.tokenManager));
@@ -1204,7 +1213,7 @@ describe("Hires", () => {
             tokenManager,
             callOption: callOptionAddress,
             collection: lender.collection,
-            depositTokenAccount: borrower.hireTokenAccount,
+            depositTokenAccount: borrower.rentalTokenAccount,
             mint: lender.mint,
             metadata: lender.metadata,
             edition: lender.edition,
@@ -1225,7 +1234,7 @@ describe("Hires", () => {
       }
     });
 
-    it("Allows active hires to be listed as call options", async () => {
+    it("Allows active rentals to be listed as call options", async () => {
       const signer = await helpers.getSigner();
       const callOptionAddress = await helpers.findCallOptionAddress(
         lender.mint,
@@ -1249,7 +1258,7 @@ describe("Hires", () => {
           tokenManager,
           callOption: callOptionAddress,
           collection: lender.collection,
-          depositTokenAccount: borrower.hireTokenAccount,
+          depositTokenAccount: borrower.rentalTokenAccount,
           mint: lender.mint,
           metadata: lender.metadata,
           edition: lender.edition,
@@ -1271,11 +1280,11 @@ describe("Hires", () => {
       );
       const tokenAccount = await splToken.getAccount(
         connection,
-        borrower.hireTokenAccount
+        borrower.rentalTokenAccount
       );
 
       assert.deepEqual(tokenManagerData.accounts, {
-        hire: true,
+        rental: true,
         callOption: true,
         loan: false,
       });

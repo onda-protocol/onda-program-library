@@ -4,7 +4,7 @@ use anchor_lang::prelude::*;
 pub struct AccountState {
   pub loan: bool,
   pub call_option: bool,
-  pub hire: bool,
+  pub rental: bool,
 }
 
 #[account]

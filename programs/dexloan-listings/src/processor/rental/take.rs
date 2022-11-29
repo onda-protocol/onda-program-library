@@ -1,13 +1,13 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{Hire, HireState, TokenManager};
+use crate::state::{Rental, RentalState, TokenManager};
 use crate::error::{DexloanError};
 use crate::constants::*;
 use crate::utils::*;
 
 #[derive(Accounts)]
 #[instruction(days: u16)]
-pub struct TakeHire <'info> {
+pub struct TakeRental <'info> {
     #[account(
         constraint = signer.key() == SIGNER_PUBKEY
     )]
@@ -20,7 +20,7 @@ pub struct TakeHire <'info> {
     #[account(
         mut,
         seeds = [
-            Hire::PREFIX,
+            Rental::PREFIX,
             mint.key().as_ref(),
             lender.key().as_ref(),
         ],
@@ -28,12 +28,12 @@ pub struct TakeHire <'info> {
         has_one = mint,
         has_one = lender,
     )]
-    pub hire: Box<Account<'info, Hire>>,
+    pub rental: Box<Account<'info, Rental>>,
     /// CHECK: constrained by seeds
     #[account(
         init_if_needed,
         seeds = [
-            Hire::ESCROW_PREFIX,
+            Rental::ESCROW_PREFIX,
             mint.key().as_ref(),
             lender.key().as_ref(),
         ],
@@ -41,7 +41,7 @@ pub struct TakeHire <'info> {
         payer = borrower,
         space = 0,
     )]
-    pub hire_escrow: AccountInfo<'info>,   
+    pub rental_escrow: AccountInfo<'info>,   
     #[account(
         mut,
         associated_token::mint = mint,
@@ -53,7 +53,7 @@ pub struct TakeHire <'info> {
         associated_token::mint = mint,
         associated_token::authority = borrower
     )]
-    pub hire_token_account: Box<Account<'info, TokenAccount>>,
+    pub rental_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
         seeds = [
@@ -78,43 +78,43 @@ pub struct TakeHire <'info> {
     pub clock: Sysvar<'info, Clock>,
 }
 
-pub fn handle_take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>, days: u16) -> Result<()> {
-    let hire = &mut ctx.accounts.hire;
+pub fn handle_take_rental<'info>(ctx: Context<'_, '_, '_, 'info, TakeRental<'info>>, days: u16) -> Result<()> {
+    let rental = &mut ctx.accounts.rental;
     let token_manager = &mut ctx.accounts.token_manager;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
-    msg!("escrow balance is {}", hire.escrow_balance);
+    msg!("escrow balance is {}", rental.escrow_balance);
 
-    if hire.escrow_balance > 0 {
-        withdraw_from_hire_escrow(
-            hire,
-            &ctx.accounts.hire_escrow.to_account_info(),
+    if rental.escrow_balance > 0 {
+        withdraw_from_rental_escrow(
+            rental,
+            &ctx.accounts.rental_escrow.to_account_info(),
             &ctx.accounts.lender.to_account_info(),
             unix_timestamp,
         )?;
     }
 
-    if hire.borrower.is_some() {
-        require_keys_eq!(hire.borrower.unwrap(), ctx.accounts.borrower.key());
+    if rental.borrower.is_some() {
+        require_keys_eq!(rental.borrower.unwrap(), ctx.accounts.borrower.key());
     } else {
-        hire.borrower = Some(ctx.accounts.borrower.key());
+        rental.borrower = Some(ctx.accounts.borrower.key());
     }
 
     let duration = i64::from(days) * SECONDS_PER_DAY;
     let current_expiry = unix_timestamp + duration;
 
-    if current_expiry > hire.expiry {
+    if current_expiry > rental.expiry {
         return err!(DexloanError::InvalidExpiry)
     }
 
-    hire.current_start = Some(unix_timestamp);
-    hire.current_expiry = Some(current_expiry);
-    hire.state = HireState::Hired;
+    rental.current_start = Some(unix_timestamp);
+    rental.current_expiry = Some(current_expiry);
+    rental.state = RentalState::Rented;
 
-    if hire.amount > 0 {
-        process_payment_to_hire_escrow(
-            hire,
-            ctx.accounts.hire_escrow.to_account_info(),
+    if rental.amount > 0 {
+        process_payment_to_rental_escrow(
+            rental,
+            ctx.accounts.rental_escrow.to_account_info(),
             ctx.accounts.borrower.to_account_info(),
             days
         )?;
@@ -125,7 +125,7 @@ pub fn handle_take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>,
         ctx.accounts.token_program.to_account_info(),
         ctx.accounts.lender.to_account_info(),
         ctx.accounts.deposit_token_account.to_account_info(),
-        ctx.accounts.hire_token_account.to_account_info(),
+        ctx.accounts.rental_token_account.to_account_info(),
         ctx.accounts.mint.to_account_info(),
         ctx.accounts.edition.to_account_info(),
     )?;
@@ -133,7 +133,7 @@ pub fn handle_take_hire<'info>(ctx: Context<'_, '_, '_, 'info, TakeHire<'info>>,
     delegate_and_freeze_token_account(
         token_manager,
         ctx.accounts.token_program.to_account_info(),
-        ctx.accounts.hire_token_account.to_account_info(),
+        ctx.accounts.rental_token_account.to_account_info(),
         ctx.accounts.borrower.to_account_info(),
         ctx.accounts.mint.to_account_info(),
         ctx.accounts.edition.to_account_info(),

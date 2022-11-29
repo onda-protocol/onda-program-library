@@ -100,6 +100,7 @@ pub fn handle_take_loan_offer(
     let offer = &mut ctx.accounts.loan_offer;
     let escrow_payment_account = &mut ctx.accounts.escrow_payment_account;
     let token_manager = &mut ctx.accounts.token_manager;
+    let collection = &ctx.accounts.collection;
     let deposit_token_account = &mut ctx.accounts.deposit_token_account;
 
     assert_collection_valid(
@@ -117,7 +118,7 @@ pub fn handle_take_loan_offer(
     loan.lender = Some(ctx.accounts.lender.key());
     loan.bump = *ctx.bumps.get("loan").unwrap();
     //
-    Loan::init_ask_state(loan, offer.amount.unwrap(), offer.basis_points, offer.duration)?;
+    Loan::init_ask_state(loan, offer.amount.unwrap(), collection.config.loan_basis_points, offer.basis_points, offer.duration)?;
     Loan::set_active(loan, ctx.accounts.clock.unix_timestamp)?;
     //
     token_manager.accounts.loan = true;

@@ -1,26 +1,28 @@
 use anchor_lang::prelude::*;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq)]
-pub enum HireState {
+pub enum RentalState {
     Listed,
-    Hired,
+    Rented,
 }
 
 #[account]
-pub struct Hire {
+pub struct Rental {
     /// Whether the loan is active
-    pub state: HireState,
-    /// The daily cost to hire
+    pub state: RentalState,
+    /// The daily cost to rental
     pub amount: u64,
+    /// The creator fee
+    pub creator_basis_points: u16,
     /// The NFT lender
     pub lender: Pubkey,
     /// The NFT borrower
     pub borrower: Option<Pubkey>,
-    /// The latest date this NFT may be hired until
+    /// The latest date this NFT may be rentald until
     pub expiry: i64,
-    /// The start date of the current hire
+    /// The start date of the current rental
     pub current_start: Option<i64>,
-    /// The end date of the current hire
+    /// The end date of the current rental
     pub current_expiry: Option<i64>,
     /// Any amount withheld in escrow
     pub escrow_balance: u64,
@@ -30,11 +32,12 @@ pub struct Hire {
     pub bump: u8,
 }
 
-impl Hire {
+impl Rental {
     pub fn space() -> usize {
         8 + // key
         1 + // state
         8 + // amount
+        2 + // creator_basis_points
         32 + // lender
         (1 + 32) + // borrower
         8 + // expiry
@@ -45,6 +48,6 @@ impl Hire {
         1 // bump
     }
 
-    pub const PREFIX: &'static [u8] = b"hire";
-    pub const ESCROW_PREFIX: &'static [u8] = b"hire_escrow";
+    pub const PREFIX: &'static [u8] = b"rental";
+    pub const ESCROW_PREFIX: &'static [u8] = b"rental_escrow";
 }

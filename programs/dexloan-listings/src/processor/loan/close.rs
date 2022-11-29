@@ -57,7 +57,7 @@ pub fn handle_close_loan(ctx: Context<CloseLoan>) -> Result<()> {
 
     token_manager.accounts.loan = false;
     // IMPORTANT CHECK!
-    if token_manager.accounts.hire == true {
+    if token_manager.accounts.rental == true {
         return Ok(());
     }
 

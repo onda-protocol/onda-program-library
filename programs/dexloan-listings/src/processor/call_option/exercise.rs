@@ -2,7 +2,7 @@ use anchor_lang::{
   prelude::*,
 };
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{CallOption, CallOptionState, Hire, TokenManager};
+use crate::state::{CallOption, CallOptionState, Rental, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
 use crate::constants::*;
@@ -40,7 +40,7 @@ pub struct ExerciseCallOption<'info> {
             seller.key().as_ref()
         ],
         bump,
-        constraint = token_manager.accounts.hire != true,
+        constraint = token_manager.accounts.rental != true,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
     #[account(
@@ -84,7 +84,7 @@ pub fn handle_exercise_call_option<'info>(ctx: Context<'_, '_, '_, 'info, Exerci
 
     call_option.state = CallOptionState::Exercised;
     token_manager.accounts.call_option = false;
-    token_manager.accounts.hire = false;
+    token_manager.accounts.rental = false;
 
     thaw_and_transfer_from_token_account(
         token_manager,
@@ -123,7 +123,7 @@ pub fn handle_exercise_call_option<'info>(ctx: Context<'_, '_, '_, 'info, Exerci
 }
 
 #[derive(Accounts)]
-pub struct ExerciseCallOptionWithHire<'info> {
+pub struct ExerciseCallOptionWithRental<'info> {
     #[account(
         constraint = signer.key() == SIGNER_PUBKEY
     )]
@@ -150,27 +150,27 @@ pub struct ExerciseCallOptionWithHire<'info> {
     #[account(
         mut,
         seeds = [
-            Hire::PREFIX,
+            Rental::PREFIX,
             mint.key().as_ref(),
             seller.key().as_ref(),
         ],
         bump,
         has_one = mint,
-        constraint = hire.lender == seller.key(),
+        constraint = rental.lender == seller.key(),
         close = seller
     )]
-    pub hire: Box<Account<'info, Hire>>,
+    pub rental: Box<Account<'info, Rental>>,
     /// CHECK: constrained by seeds
     #[account(
         mut,
         seeds = [
-            Hire::ESCROW_PREFIX,
+            Rental::ESCROW_PREFIX,
             mint.key().as_ref(),
             seller.key().as_ref(),
         ],
         bump,
     )]
-    pub hire_escrow: AccountInfo<'info>,  
+    pub rental_escrow: AccountInfo<'info>,  
     #[account(
         mut,
         constraint = token_account.mint == mint.key()
@@ -184,7 +184,7 @@ pub struct ExerciseCallOptionWithHire<'info> {
             seller.key().as_ref()
         ],
         bump,
-        constraint = token_manager.accounts.hire == true,
+        constraint = token_manager.accounts.rental == true,
         constraint = token_manager.accounts.call_option == true,
     )]
     pub token_manager: Box<Account<'info, TokenManager>>,
@@ -208,9 +208,9 @@ pub struct ExerciseCallOptionWithHire<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
-pub fn handle_exercise_call_option_with_hire<'info>(ctx: Context<'_, '_, '_, 'info, ExerciseCallOptionWithHire<'info>>) -> Result<()> {
+pub fn handle_exercise_call_option_with_rental<'info>(ctx: Context<'_, '_, '_, 'info, ExerciseCallOptionWithRental<'info>>) -> Result<()> {
     let call_option = &mut ctx.accounts.call_option;
-    let hire = &mut ctx.accounts.hire;
+    let rental = &mut ctx.accounts.rental;
     let token_manager = &mut ctx.accounts.token_manager;
     let remaining_accounts = &mut ctx.remaining_accounts.iter();
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
@@ -223,7 +223,7 @@ pub fn handle_exercise_call_option_with_hire<'info>(ctx: Context<'_, '_, '_, 'in
 
     call_option.state = CallOptionState::Exercised;
     token_manager.accounts.call_option = false;
-    token_manager.accounts.hire = false;
+    token_manager.accounts.rental = false;
 
     thaw_and_transfer_from_token_account(
         token_manager,
@@ -258,11 +258,11 @@ pub fn handle_exercise_call_option_with_hire<'info>(ctx: Context<'_, '_, '_, 'in
         ]
     )?;
 
-    if hire.borrower.is_some() {
-        settle_hire_escrow_balance(
-            hire,
+    if rental.borrower.is_some() {
+        settle_rental_escrow_balance(
+            rental,
             remaining_accounts,
-            &ctx.accounts.hire_escrow.to_account_info(),
+            &ctx.accounts.rental_escrow.to_account_info(),
             &ctx.accounts.seller.to_account_info(),
             unix_timestamp,
         )?;

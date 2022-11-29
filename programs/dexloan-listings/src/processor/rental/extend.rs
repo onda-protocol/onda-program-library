@@ -1,13 +1,13 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token};
-use crate::state::{Hire, HireState, TokenManager};
+use crate::state::{Rental, RentalState, TokenManager};
 use crate::constants::*;
 use crate::error::*;
 use crate::utils::*;
 
 #[derive(Accounts)]
 #[instruction(days: u16)]
-pub struct ExtendHire<'info> {
+pub struct ExtendRental<'info> {
     #[account(
         constraint = signer.key() == SIGNER_PUBKEY
     )]
@@ -20,28 +20,28 @@ pub struct ExtendHire<'info> {
     #[account(
         mut,
         seeds = [
-            Hire::PREFIX,
+            Rental::PREFIX,
             mint.key().as_ref(),
             lender.key().as_ref(),
         ],
         bump,
         has_one = mint,
         has_one = lender,
-        constraint = hire.state == HireState::Hired,
-        constraint = hire.borrower.is_some() && hire.borrower.unwrap() == borrower.key(), 
+        constraint = rental.state == RentalState::Rented,
+        constraint = rental.borrower.is_some() && rental.borrower.unwrap() == borrower.key(), 
     )]
-    pub hire: Box<Account<'info, Hire>>,
+    pub rental: Box<Account<'info, Rental>>,
     /// CHECK: constrained by seeds
     #[account(
         mut,
         seeds = [
-            Hire::ESCROW_PREFIX,
+            Rental::ESCROW_PREFIX,
             mint.key().as_ref(),
             lender.key().as_ref(),
         ],
         bump,
     )]
-    pub hire_escrow: AccountInfo<'info>,   
+    pub rental_escrow: AccountInfo<'info>,   
     #[account(
         mut,
         seeds = [
@@ -60,21 +60,21 @@ pub struct ExtendHire<'info> {
     pub clock: Sysvar<'info, Clock>,
 }
 
-pub fn handle_extend_hire<'info>(ctx: Context<'_, '_, '_, 'info, ExtendHire<'info>>, days: u16) -> Result<()> {
-    let hire = &mut ctx.accounts.hire;
+pub fn handle_extend_rental<'info>(ctx: Context<'_, '_, '_, 'info, ExtendRental<'info>>, days: u16) -> Result<()> {
+    let rental = &mut ctx.accounts.rental;
 
-    require!(hire.current_start.is_some(), DexloanError::InvalidState);
-    require!(hire.current_expiry.is_some(), DexloanError::InvalidState);
+    require!(rental.current_start.is_some(), DexloanError::InvalidState);
+    require!(rental.current_expiry.is_some(), DexloanError::InvalidState);
 
     let duration = i64::from(days) * SECONDS_PER_DAY;
-    let current_expiry = hire.current_expiry.unwrap();
+    let current_expiry = rental.current_expiry.unwrap();
     let new_current_expiry = current_expiry + duration;
     
-    hire.current_expiry = Some(new_current_expiry);
+    rental.current_expiry = Some(new_current_expiry);
 
-    process_payment_to_hire_escrow(
-        hire,
-        ctx.accounts.hire_escrow.to_account_info(),
+    process_payment_to_rental_escrow(
+        rental,
+        ctx.accounts.rental_escrow.to_account_info(),
         ctx.accounts.borrower.to_account_info(),
         days
     )?;

@@ -1,12 +1,12 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{Hire, HireState, TokenManager};
+use crate::state::{Rental, RentalState, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
 use crate::constants::*;
 
 #[derive(Accounts)]
-pub struct RecoverHire<'info> {
+pub struct RecoverRental<'info> {
     #[account(
         constraint = signer.key() == SIGNER_PUBKEY
     )]
@@ -27,32 +27,32 @@ pub struct RecoverHire<'info> {
         associated_token::mint = mint,
         associated_token::authority = borrower
     )]
-    pub hire_token_account: Box<Account<'info, TokenAccount>>,
+    pub rental_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
         seeds = [
-          Hire::PREFIX,
+          Rental::PREFIX,
           mint.key().as_ref(),
           lender.key().as_ref(),
         ],
         bump,
         has_one = mint,
         has_one = lender,
-        constraint = hire.state == HireState::Hired,
-        constraint = hire.borrower.is_some() && hire.borrower.unwrap() == borrower.key(),
+        constraint = rental.state == RentalState::Rented,
+        constraint = rental.borrower.is_some() && rental.borrower.unwrap() == borrower.key(),
     )]
-    pub hire: Box<Account<'info, Hire>>,
+    pub rental: Box<Account<'info, Rental>>,
     /// CHECK: constrained by seeds
     #[account(
         mut,
         seeds = [
-            Hire::ESCROW_PREFIX,
+            Rental::ESCROW_PREFIX,
             mint.key().as_ref(),
             lender.key().as_ref(),
         ],
         bump,
     )]
-    pub hire_escrow: AccountInfo<'info>, 
+    pub rental_escrow: AccountInfo<'info>, 
     #[account(
         mut,
         seeds = [
@@ -75,15 +75,15 @@ pub struct RecoverHire<'info> {
     pub clock: Sysvar<'info, Clock>,
 }
 
-pub fn handle_recover_hire(ctx: Context<RecoverHire>) -> Result<()> {
-    let hire = &mut ctx.accounts.hire;
+pub fn handle_recover_rental(ctx: Context<RecoverRental>) -> Result<()> {
+    let rental = &mut ctx.accounts.rental;
     let token_manager = &mut ctx.accounts.token_manager;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
-    require!(hire.current_start.is_some(), DexloanError::InvalidState);
-    require!(hire.current_expiry.is_some(), DexloanError::InvalidState);
+    require!(rental.current_start.is_some(), DexloanError::InvalidState);
+    require!(rental.current_expiry.is_some(), DexloanError::InvalidState);
 
-    let current_expiry = hire.current_expiry.unwrap();
+    let current_expiry = rental.current_expiry.unwrap();
 
     if current_expiry > unix_timestamp {
         return Err(DexloanError::NotExpired.into());
@@ -93,7 +93,7 @@ pub fn handle_recover_hire(ctx: Context<RecoverHire>) -> Result<()> {
         token_manager,
         ctx.accounts.token_program.to_account_info(),
         ctx.accounts.lender.to_account_info(),
-        ctx.accounts.hire_token_account.to_account_info(),
+        ctx.accounts.rental_token_account.to_account_info(),
         ctx.accounts.deposit_token_account.to_account_info(),
         ctx.accounts.mint.to_account_info(),
         ctx.accounts.edition.to_account_info(),
@@ -110,19 +110,19 @@ pub fn handle_recover_hire(ctx: Context<RecoverHire>) -> Result<()> {
         ctx.accounts.lender.to_account_info(),
     )?;
 
-    if hire.escrow_balance > 0 {
-        withdraw_from_hire_escrow(
-            hire,
-            &ctx.accounts.hire_escrow.to_account_info(),
+    if rental.escrow_balance > 0 {
+        withdraw_from_rental_escrow(
+            rental,
+            &ctx.accounts.rental_escrow.to_account_info(),
             &ctx.accounts.lender.to_account_info(),
             unix_timestamp,
         )?;
     }
 
-    hire.current_start = None;
-    hire.current_expiry = None;
-    hire.borrower = None;
-    hire.state = HireState::Listed;
+    rental.current_start = None;
+    rental.current_expiry = None;
+    rental.borrower = None;
+    rental.state = RentalState::Listed;
 
     Ok(())
 }

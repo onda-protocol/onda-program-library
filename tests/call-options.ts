@@ -62,7 +62,7 @@ describe("Call Options", () => {
       );
 
       assert.deepEqual(tokenManager.accounts, {
-        hire: false,
+        rental: false,
         callOption: true,
         loan: false,
       });
