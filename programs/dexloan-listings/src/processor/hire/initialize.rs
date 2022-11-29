@@ -56,6 +56,7 @@ pub struct InitHire<'info> {
             collection.mint.as_ref(),
         ],
         bump,
+        constraint = collection.config.rental_enabled == true
     )]
     pub collection: Box<Account<'info, Collection>>,
     #[account(constraint = mint.supply == 1)]

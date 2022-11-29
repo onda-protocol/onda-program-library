@@ -75,6 +75,7 @@ pub struct SellCallOption<'info> {
             collection.mint.as_ref(),
         ],
         bump,
+        constraint = collection.config.option_enabled == true
     )]
     pub collection: Box<Account<'info, Collection>>,
     #[account(constraint = mint.supply == 1)]
@@ -136,7 +137,7 @@ pub fn handle_sell_call_option<'info>(
     )?;
 
 
-    let fee_basis_points = collection.fees.option_basis_points;
+    let fee_basis_points = collection.config.option_basis_points;
     let remaining_amount = pay_creator_fees(
         call_option.amount,
         fee_basis_points, 

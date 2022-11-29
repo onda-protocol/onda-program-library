@@ -2,10 +2,11 @@ use anchor_lang::{
     prelude::*,
 };
 use anchor_spl::token::{Mint};
-use crate::state::{Collection};
+use crate::state::{Collection, Config};
 use crate::constants::*;
 
 #[derive(Accounts)]
+#[instruction(config: Config)]
 pub struct InitCollection<'info> {
     #[account(
         constraint = signer.key() == SIGNER_PUBKEY
@@ -30,7 +31,8 @@ pub struct InitCollection<'info> {
 }
 
 pub fn handle_init_collection(
-    ctx: Context<InitCollection>
+    ctx: Context<InitCollection>,
+    config: Config,
 ) -> Result<()> {
     let collection = &mut ctx.accounts.collection;
     
@@ -38,10 +40,8 @@ pub fn handle_init_collection(
     
     collection.authority = ctx.accounts.authority.key();
     collection.mint = ctx.accounts.mint.key();
-    collection.fees.loan_basis_points = 200;
-    collection.fees.option_basis_points = 200;
-    collection.fees.rental_basis_points = 200;
     collection.bump = *ctx.bumps.get("collection").unwrap();
+    collection.config = config;
 
     Ok(())
 }

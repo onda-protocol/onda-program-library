@@ -50,6 +50,7 @@ pub struct AskLoan<'info> {
             collection.mint.as_ref(),
         ],
         bump,
+        constraint = collection.config.loan_enabled == true
     )]
     pub collection: Box<Account<'info, Collection>>,
     #[account(constraint = mint.supply == 1)]

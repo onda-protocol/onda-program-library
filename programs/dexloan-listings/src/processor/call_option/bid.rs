@@ -42,6 +42,7 @@ pub struct BidCallOption<'info> {
             collection.mint.as_ref(),
         ],
         bump,
+        constraint = collection.config.option_enabled == true
     )]
     pub collection: Box<Account<'info, Collection>>,
     /// Misc

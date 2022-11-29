@@ -46,6 +46,7 @@ pub struct BuyCallOption<'info> {
             collection.mint.as_ref(),
         ],
         bump,
+        constraint = collection.config.option_enabled == true
     )]
     pub collection: Box<Account<'info, Collection>>,
     pub mint: Box<Account<'info, Mint>>,
@@ -69,7 +70,7 @@ pub fn handle_buy_call_option<'info>(ctx: Context<'_, '_, '_, 'info, BuyCallOpti
     call_option.buyer = Some(ctx.accounts.buyer.key());
     CallOption::set_active(call_option, ctx.accounts.clock.unix_timestamp)?;
 
-    let fee_basis_points = collection.fees.option_basis_points;
+    let fee_basis_points = collection.config.option_basis_points;
     let remaining_amount = pay_creator_fees(
         call_option.amount,
         fee_basis_points, 

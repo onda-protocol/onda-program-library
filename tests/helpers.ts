@@ -235,7 +235,14 @@ export async function mintNFT(
   );
 
   await program.methods
-    .initCollection()
+    .initCollection({
+      loanEnabled: true,
+      optionEnabled: true,
+      rentalEnabled: true,
+      loanBasisPoints: 200,
+      optionBasisPoints: 200,
+      rentalBasisPoints: 200,
+    })
     .accounts({
       signer: signer.publicKey,
       authority: authority.publicKey,
