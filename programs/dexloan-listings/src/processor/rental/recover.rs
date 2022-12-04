@@ -65,6 +65,8 @@ pub struct RecoverRental<'info> {
     pub token_manager: Box<Account<'info, TokenManager>>,    
     #[account(constraint = mint.supply == 1)]
     pub mint: Box<Account<'info, Mint>>,
+    /// CHECK: deserialized and checked
+    pub metadata: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
@@ -75,7 +77,7 @@ pub struct RecoverRental<'info> {
     pub clock: Sysvar<'info, Clock>,
 }
 
-pub fn handle_recover_rental(ctx: Context<RecoverRental>) -> Result<()> {
+pub fn handle_recover_rental<'info>(ctx: Context<'_, '_, '_, 'info, RecoverRental<'info>>) -> Result<()> {
     let rental = &mut ctx.accounts.rental;
     let token_manager = &mut ctx.accounts.token_manager;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
@@ -113,9 +115,12 @@ pub fn handle_recover_rental(ctx: Context<RecoverRental>) -> Result<()> {
     if rental.escrow_balance > 0 {
         withdraw_from_rental_escrow(
             rental,
-            &ctx.accounts.rental_escrow.to_account_info(),
-            &ctx.accounts.lender.to_account_info(),
-            unix_timestamp,
+            &mut ctx.accounts.rental_escrow,
+            &ctx.accounts.lender,
+            &ctx.accounts.mint.to_account_info(),
+            &ctx.accounts.metadata.to_account_info(),
+            &mut ctx.remaining_accounts.iter(),
+            ctx.accounts.clock.unix_timestamp,
         )?;
     }
 

@@ -484,12 +484,10 @@ export async function takeLoan(
   const program = getProgram(provider);
   await requestAirdrop(connection, keypair.publicKey);
 
-  // Transfer NFT from authority to borrower
-  const authority = await getAuthority();
+  // Transfer NFT from lender to borrower
   const metaplex = await Metaplex.make(connection).use(
-    keypairIdentity(authority)
+    keypairIdentity(lender.keypair)
   );
-
   await metaplex
     .nfts()
     .send({

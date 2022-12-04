@@ -30,6 +30,7 @@ pub struct Rental {
     pub mint: Pubkey,
     /// Misc
     pub bump: u8,
+    pub escrow_bump: u8,
 }
 
 impl Rental {
@@ -45,7 +46,8 @@ impl Rental {
         (1 + 8) + // current_expiry
         8 + // escrow_balance
         32 + // mint
-        1 // bump
+        1 + // bump
+        1 // escrow bump
     }
 
     pub const PREFIX: &'static [u8] = b"rental";

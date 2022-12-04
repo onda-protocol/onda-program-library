@@ -1,6 +1,6 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token};
-use crate::state::{Rental};
+use crate::state::{Rental, Collection};
 use crate::utils::*;
 use crate::constants::*;
 
@@ -13,7 +13,6 @@ pub struct WithdrawFromRentalEscrow<'info> {
     /// CHECK: contrained on listing_account
     #[account(mut)]
     pub lender: Signer<'info>,
-    /// The listing the loan is being issued against
     #[account(
         mut,
         seeds = [
@@ -26,6 +25,14 @@ pub struct WithdrawFromRentalEscrow<'info> {
         has_one = lender,
     )]
     pub rental: Account<'info, Rental>,
+    #[account(
+        seeds = [
+            Collection::PREFIX,
+            collection.mint.as_ref(),
+        ],
+        bump,
+    )]
+    pub collection: Box<Account<'info, Collection>>,
     /// CHECK: constrained by seeds
     #[account(
         mut,
@@ -38,6 +45,8 @@ pub struct WithdrawFromRentalEscrow<'info> {
     )]
     pub rental_escrow: AccountInfo<'info>,  
     pub mint: Box<Account<'info, Mint>>,
+    /// CHECK: deserialized and checked
+    pub metadata: UncheckedAccount<'info>,
     /// Misc
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
@@ -45,13 +54,14 @@ pub struct WithdrawFromRentalEscrow<'info> {
 }
 
 
-pub fn handle_withdraw_from_rental_escrow(ctx: Context<WithdrawFromRentalEscrow>) -> Result<()> {
-    let rental = &mut ctx.accounts.rental;
-
+pub fn handle_withdraw_from_rental_escrow<'info>(ctx: Context<'_, '_, '_, 'info, WithdrawFromRentalEscrow<'info>>) -> Result<()> {
     withdraw_from_rental_escrow(
-        rental,
-        &ctx.accounts.rental_escrow.to_account_info(),
-        &ctx.accounts.lender.to_account_info(),
+        &mut ctx.accounts.rental,
+        &mut ctx.accounts.rental_escrow,
+        &ctx.accounts.lender,
+        &ctx.accounts.mint.to_account_info(),
+        &ctx.accounts.metadata.to_account_info(),
+        &mut ctx.remaining_accounts.iter(),
         ctx.accounts.clock.unix_timestamp,
     )?;
 

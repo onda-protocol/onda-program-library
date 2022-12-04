@@ -1,4 +1,4 @@
-use anchor_lang::{prelude::*};
+use anchor_lang::{system_program,prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{Rental, RentalState, TokenManager};
 use crate::error::{DexloanError};
@@ -39,6 +39,7 @@ pub struct TakeRental <'info> {
         ],
         bump,
         payer = borrower,
+        owner = system_program::ID,
         space = 0,
     )]
     pub rental_escrow: AccountInfo<'info>,   
@@ -85,12 +86,19 @@ pub fn handle_take_rental<'info>(ctx: Context<'_, '_, '_, 'info, TakeRental<'inf
 
     msg!("escrow balance is {}", rental.escrow_balance);
 
+    if ctx.bumps.get("rental_escrow").is_some() {
+        rental.escrow_bump = *ctx.bumps.get("rental_escrow").unwrap();
+    }
+
     if rental.escrow_balance > 0 {
         withdraw_from_rental_escrow(
             rental,
-            &ctx.accounts.rental_escrow.to_account_info(),
-            &ctx.accounts.lender.to_account_info(),
-            unix_timestamp,
+            &mut ctx.accounts.rental_escrow,
+            &ctx.accounts.lender,
+            &ctx.accounts.mint.to_account_info(),
+            &ctx.accounts.metadata.to_account_info(),
+            &mut ctx.remaining_accounts.iter(),
+            ctx.accounts.clock.unix_timestamp,
         )?;
     }
 

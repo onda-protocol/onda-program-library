@@ -53,6 +53,8 @@ pub struct RepayLoan<'info> {
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
     pub mint: Box<Account<'info, Mint>>,
+    /// CHECK: deserialized and validated
+    pub metadata: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
@@ -62,7 +64,7 @@ pub struct RepayLoan<'info> {
     pub clock: Sysvar<'info, Clock>,
 }
 
-pub fn handle_repay_loan(ctx: Context<RepayLoan>) -> Result<()> {
+pub fn handle_repay_loan<'info>(ctx: Context<'_, '_, '_, 'info, RepayLoan<'info>>) -> Result<()> {
     let loan = &mut ctx.accounts.loan;
     let token_manager = &mut ctx.accounts.token_manager;
 
@@ -82,16 +84,6 @@ pub fn handle_repay_loan(ctx: Context<RepayLoan>) -> Result<()> {
         is_overdue
     )?;
 
-    let creator_fee = calculate_loan_repayment(
-        loan.amount.unwrap(),
-        u32::from(loan.creator_basis_points),
-        duration,
-        false
-    )?;
-
-    let total_amount_due = amount_due.checked_add(creator_fee).ok_or(DexloanError::NumericalOverflow)?;
-
-    // Transfer payment
     invoke(
         &anchor_lang::solana_program::system_instruction::transfer(
             &loan.borrower,
@@ -102,6 +94,22 @@ pub fn handle_repay_loan(ctx: Context<RepayLoan>) -> Result<()> {
             ctx.accounts.borrower.to_account_info(),
             ctx.accounts.lender.to_account_info(),
         ]
+    )?;
+
+    let creator_fee = calculate_loan_repayment(
+        loan.amount.unwrap(),
+        u32::from(loan.creator_basis_points),
+        duration,
+        false
+    )?;
+
+    pay_creator_fees(
+        creator_fee,
+        10_000, // 100%
+        &ctx.accounts.mint.to_account_info(),
+        &ctx.accounts.metadata.to_account_info(),
+        &mut ctx.accounts.borrower.to_account_info(),
+        &mut ctx.remaining_accounts.iter(),
     )?;
 
     if token_manager.accounts.rental == false {

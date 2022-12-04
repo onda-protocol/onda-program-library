@@ -163,6 +163,8 @@ pub struct RepossessWithRental<'info> {
     pub token_manager: Box<Account<'info, TokenManager>>,
     /// CHECK: contrained on loan_account
     pub mint: Account<'info, Mint>,
+    /// CHECK: deserialized and checked
+    pub metadata: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
@@ -177,7 +179,6 @@ pub fn handle_repossess_with_rental<'info>(ctx: Context<'_, '_, '_, 'info, Repos
     let loan = &mut ctx.accounts.loan;
     let rental = &mut ctx.accounts.rental;
     let token_manager = &mut ctx.accounts.token_manager;
-    let remaining_accounts = &mut ctx.remaining_accounts.iter();
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
     let start_date = loan.start_date.unwrap();
@@ -194,9 +195,11 @@ pub fn handle_repossess_with_rental<'info>(ctx: Context<'_, '_, '_, 'info, Repos
     if rental.borrower.is_some() {
         settle_rental_escrow_balance(
             rental,
-            remaining_accounts,
-            &ctx.accounts.rental_escrow.to_account_info(),
-            &ctx.accounts.borrower.to_account_info(),
+            &mut ctx.accounts.rental_escrow,
+            &ctx.accounts.borrower,
+            &ctx.accounts.mint.to_account_info(),
+            &ctx.accounts.metadata.to_account_info(),
+            &mut ctx.remaining_accounts.iter(),
             unix_timestamp,
         )?;
     }

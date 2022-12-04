@@ -162,7 +162,7 @@ describe("Rentals", () => {
         borrowerTokenAccount
       );
 
-      assert.deepEqual(rental.state, { rentald: {} });
+      assert.deepEqual(rental.state, { rented: {} });
       assert.equal(tokenAccount.isFrozen, true, "isFrozen");
       assert.equal(tokenAccount.amount, BigInt(1));
       assert.equal(
@@ -198,6 +198,10 @@ describe("Rentals", () => {
 
     it("Does not allow a rental to be recovered before expiry", async () => {
       const signer = await helpers.getSigner();
+      const metadata = await Metadata.fromAccountAddress(
+        connection,
+        lender.metadata
+      );
 
       try {
         await lender.program.methods
@@ -212,12 +216,20 @@ describe("Rentals", () => {
             depositTokenAccount: lender.depositTokenAccount,
             rentalTokenAccount: borrowerTokenAccount,
             mint: lender.mint,
+            metadata: lender.metadata,
             edition: lender.edition,
             metadataProgram: METADATA_PROGRAM_ID,
             systemProgram: anchor.web3.SystemProgram.programId,
             tokenProgram: splToken.TOKEN_PROGRAM_ID,
             clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
           })
+          .remainingAccounts(
+            metadata.data.creators.map((creator) => ({
+              pubkey: creator.address,
+              isSigner: false,
+              isWritable: true,
+            }))
+          )
           .signers([signer])
           .rpc();
         assert.fail();
@@ -275,7 +287,7 @@ describe("Rentals", () => {
 
       const tokenAccount = await splToken.getAccount(connection, tokenAddress);
 
-      assert.deepEqual(rental.state, { rentald: {} });
+      assert.deepEqual(rental.state, { rented: {} });
       assert.equal(tokenAccount.isFrozen, true);
       assert.equal(tokenAccount.amount, BigInt(1));
       assert.equal(
@@ -351,7 +363,7 @@ describe("Rentals", () => {
       assert.deepEqual(rental.state, { listed: {} });
     });
 
-    it("Allows collateralized NFTs to be rentald", async () => {
+    it("Allows collateralized NFTs to be rented", async () => {
       const signer = await helpers.getSigner();
       await helpers.requestAirdrop(connection, thirdPartyKeypair.publicKey);
       const provider = helpers.getProvider(connection, thirdPartyKeypair);
@@ -424,7 +436,7 @@ describe("Rentals", () => {
         rental.borrower.toBase58(),
         thirdPartyKeypair.publicKey.toBase58()
       );
-      assert.deepEqual(rental.state, { rentald: {} });
+      assert.deepEqual(rental.state, { rented: {} });
       assert.equal(tokenAccount.amount, BigInt(1));
       assert.ok(tokenAccount.isFrozen);
       assert.ok(tokenAccount.delegate.equals(tokenManagerAddress));
@@ -544,7 +556,7 @@ describe("Rentals", () => {
       assert.deepEqual(rental.state, { listed: {} });
     });
 
-    it("Allows collateralized NFTs to be rentald", async () => {
+    it("Allows collateralized NFTs to be rented", async () => {
       const signer = await helpers.getSigner();
       await helpers.requestAirdrop(connection, thirdPartyKeypair.publicKey);
       const provider = helpers.getProvider(connection, thirdPartyKeypair);
@@ -617,7 +629,7 @@ describe("Rentals", () => {
         rental.borrower.toBase58(),
         thirdPartyKeypair.publicKey.toBase58()
       );
-      assert.deepEqual(rental.state, { rentald: {} });
+      assert.deepEqual(rental.state, { rented: {} });
       assert.equal(tokenAccount.amount, BigInt(1));
       assert.ok(tokenAccount.isFrozen);
       assert.ok(tokenAccount.delegate.equals(tokenManagerAddress));
@@ -626,6 +638,10 @@ describe("Rentals", () => {
 
     it("Will settle rental fees when collateral is repossessed", async () => {
       const signer = await helpers.getSigner();
+      const metadata = await Metadata.fromAccountAddress(
+        connection,
+        borrower.metadata
+      );
       await helpers.wait(10); // Wait to allow some rent to accrue
 
       const rentalAddress = await helpers.findRentalAddress(
@@ -650,6 +666,9 @@ describe("Rentals", () => {
           borrower.mint,
           lender.keypair.publicKey
         );
+      const renterBalanceBefore = await connection.getBalance(
+        thirdPartyKeypair.publicKey
+      );
 
       try {
         await lender.program.methods
@@ -665,6 +684,7 @@ describe("Rentals", () => {
             loan: borrower.loan,
             tokenManager: borrower.tokenManager,
             mint: borrower.mint,
+            metadata: borrower.metadata,
             edition: borrower.edition,
             metadataProgram: METADATA_PROGRAM_ID,
             systemProgram: anchor.web3.SystemProgram.programId,
@@ -673,6 +693,11 @@ describe("Rentals", () => {
             rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           })
           .remainingAccounts([
+            ...metadata.data.creators.map((creator) => ({
+              pubkey: creator.address,
+              isSigner: false,
+              isWritable: true,
+            })),
             {
               isSigner: false,
               isWritable: true,
@@ -700,6 +725,9 @@ describe("Rentals", () => {
       const defaultedLoan = await borrower.program.account.loan.fetch(
         borrower.loan
       );
+      const renterBalance = await connection.getBalance(
+        thirdPartyKeypair.publicKey
+      );
 
       assert.deepEqual(tokenManager.accounts, {
         rental: false,
@@ -709,6 +737,7 @@ describe("Rentals", () => {
       assert.equal(updatedLendertokenAccount.amount, BigInt(1));
       assert.equal(updatedRentalTokenAccount.amount, BigInt(0));
       assert.deepEqual(defaultedLoan.state, { defaulted: {} });
+      assert.ok(renterBalance > renterBalanceBefore, "renter balance");
     });
   });
 
@@ -772,6 +801,10 @@ describe("Rentals", () => {
 
     it("Will settle rental fees when collateral is repossessed", async () => {
       const signer = await helpers.getSigner();
+      const metadata = await Metadata.fromAccountAddress(
+        connection,
+        borrower.metadata
+      );
       const rentalAddress = await helpers.findRentalAddress(
         borrower.mint,
         borrower.keypair.publicKey
@@ -802,6 +835,7 @@ describe("Rentals", () => {
             loan: borrower.loan,
             tokenManager: borrower.tokenManager,
             mint: borrower.mint,
+            metadata: borrower.metadata,
             edition: borrower.edition,
             metadataProgram: METADATA_PROGRAM_ID,
             systemProgram: anchor.web3.SystemProgram.programId,
@@ -809,6 +843,13 @@ describe("Rentals", () => {
             clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
             rent: anchor.web3.SYSVAR_RENT_PUBKEY,
           })
+          .remainingAccounts([
+            ...metadata.data.creators.map((creator) => ({
+              pubkey: creator.address,
+              isSigner: false,
+              isWritable: true,
+            })),
+          ])
           .signers([signer])
           .rpc();
       } catch (err) {
@@ -925,7 +966,7 @@ describe("Rentals", () => {
       assert.deepEqual(rental.state, { listed: {} });
     });
 
-    it("Allows listed NFTs to be rentald", async () => {
+    it("Allows listed NFTs to be rented", async () => {
       const signer = await helpers.getSigner();
       await helpers.requestAirdrop(connection, thirdPartyKeypair.publicKey);
       const provider = helpers.getProvider(connection, thirdPartyKeypair);
@@ -995,14 +1036,14 @@ describe("Rentals", () => {
         rental.borrower.toBase58(),
         thirdPartyKeypair.publicKey.toBase58()
       );
-      assert.deepEqual(rental.state, { rentald: {} });
+      assert.deepEqual(rental.state, { rented: {} });
       assert.equal(tokenAccount.amount, BigInt(1));
       assert.ok(tokenAccount.isFrozen);
       assert.ok(tokenAccount.delegate.equals(tokenManagerAddress));
       assert.equal(tokenAccount.delegatedAmount, BigInt(1));
     });
 
-    it("Allows rentald NFTs with active call options to be exercised", async () => {
+    it("Allows rented NFTs with active call options to be exercised", async () => {
       const signer = await helpers.getSigner();
       const rentalAddress = await helpers.findRentalAddress(
         seller.mint,
@@ -1161,7 +1202,7 @@ describe("Rentals", () => {
       assert.deepEqual(rental.state, { listed: {} });
     });
 
-    it("Allows listed NFTs to be rentald", async () => {
+    it("Allows listed NFTs to be rented", async () => {
       borrower = await helpers.takeRental(connection, lender, 2);
 
       const rental = await lender.program.account.rental.fetch(lender.rental);
@@ -1182,7 +1223,7 @@ describe("Rentals", () => {
         rental.borrower.toBase58(),
         borrower.keypair.publicKey.toBase58()
       );
-      assert.deepEqual(rental.state, { rentald: {} });
+      assert.deepEqual(rental.state, { rented: {} });
       assert.equal(tokenAccount.amount, BigInt(1));
       assert.ok(tokenAccount.isFrozen);
       assert.ok(tokenAccount.delegate.equals(lender.tokenManager));

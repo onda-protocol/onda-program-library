@@ -1,7 +1,10 @@
 require("dotenv").config();
 
 import assert from "assert";
-import { PROGRAM_ID as METADATA_PROGRAM_ID } from "@metaplex-foundation/mpl-token-metadata";
+import {
+  Metadata,
+  PROGRAM_ID as METADATA_PROGRAM_ID,
+} from "@metaplex-foundation/mpl-token-metadata";
 import * as anchor from "@project-serum/anchor";
 import * as splToken from "@solana/spl-token";
 import * as helpers from "./helpers";
@@ -549,13 +552,16 @@ describe("Loans", () => {
     });
 
     it("Allows loans to be repaid", async () => {
+      const signer = await helpers.getSigner();
       const borrower = await helpers.askLoan(connection, options);
       const lender = await helpers.giveLoan(connection, borrower);
       const lenderPreRepaymentBalance = await connection.getBalance(
         lender.keypair.publicKey
       );
-
-      const signer = await helpers.getSigner();
+      const metadata = await Metadata.fromAccountAddress(
+        connection,
+        borrower.metadata
+      );
 
       await borrower.program.methods
         .repayLoan()
@@ -567,12 +573,20 @@ describe("Loans", () => {
           depositTokenAccount: borrower.depositTokenAccount,
           lender: lender.keypair.publicKey,
           mint: borrower.mint,
+          metadata: borrower.metadata,
           edition: borrower.edition,
           metadataProgram: METADATA_PROGRAM_ID,
           systemProgram: anchor.web3.SystemProgram.programId,
           tokenProgram: splToken.TOKEN_PROGRAM_ID,
           clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
         })
+        .remainingAccounts(
+          metadata.data.creators.map((creator) => ({
+            pubkey: creator.address,
+            isSigner: false,
+            isWritable: true,
+          }))
+        )
         .signers([signer])
         .rpc();
 

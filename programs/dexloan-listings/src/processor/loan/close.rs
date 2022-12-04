@@ -53,6 +53,7 @@ pub struct CloseLoan<'info> {
 
 
 pub fn handle_close_loan(ctx: Context<CloseLoan>) -> Result<()> {
+    let loan = &ctx.accounts.loan;
     let token_manager = &mut ctx.accounts.token_manager;
 
     token_manager.accounts.loan = false;
@@ -61,14 +62,16 @@ pub fn handle_close_loan(ctx: Context<CloseLoan>) -> Result<()> {
         return Ok(());
     }
 
-    thaw_and_revoke_token_account(
-        token_manager,
-        ctx.accounts.token_program.to_account_info(),
-        ctx.accounts.deposit_token_account.to_account_info(),
-        ctx.accounts.borrower.to_account_info(),
-        ctx.accounts.mint.to_account_info(),
-        ctx.accounts.edition.to_account_info(),
-    )?;
+    if loan.state != LoanState::Defaulted {
+        thaw_and_revoke_token_account(
+            token_manager,
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.deposit_token_account.to_account_info(),
+            ctx.accounts.borrower.to_account_info(),
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.edition.to_account_info(),
+        )?;
+    }
   
     Ok(())
 }

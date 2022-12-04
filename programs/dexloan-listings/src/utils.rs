@@ -322,10 +322,13 @@ pub fn transfer_from_escrow(
 }
 
 // TODO pay creator fees on escrow withdrawls!
-pub fn withdraw_from_rental_escrow<'a, 'b>(
-    rental: &mut Account<'a, Rental>,
-    rental_escrow: &AccountInfo<'b>,
-    lender: &AccountInfo<'b>,
+pub fn withdraw_from_rental_escrow<'info>(
+    rental: & mut Account<'info, Rental>,
+    rental_escrow: & mut AccountInfo<'info>,
+    lender: &AccountInfo<'info>,
+    mint: &AccountInfo<'info>,
+    metadata_info: &AccountInfo<'info>,
+    remaining_accounts: & mut Iter<AccountInfo<'info>>,
     unix_timestamp: i64,
 ) -> Result<u64> {
     require_keys_eq!(lender.key(), rental.lender);
@@ -333,10 +336,35 @@ pub fn withdraw_from_rental_escrow<'a, 'b>(
     let amount = calculate_widthdawl_amount(rental, unix_timestamp)?;
     msg!("Withdrawing {} lamports to lender from escrow balance ", amount);
 
-    transfer_from_escrow(
-        &mut rental_escrow.to_account_info(),
-        &mut lender.to_account_info(),
-        amount
+    let remaining_amount = pay_creator_fees(
+        amount,
+        rental.creator_basis_points,
+        mint,
+        metadata_info,
+        rental_escrow,
+        remaining_accounts
+    )?;
+
+    let mint_pubkey = mint.key();
+    let lender_pubkey = lender.key();
+    let signer_bump = &[rental.escrow_bump];
+    let signer_seeds = &[&[
+        Rental::ESCROW_PREFIX,
+        mint_pubkey.as_ref(),
+        lender_pubkey.as_ref(),
+        signer_bump
+    ][..]];
+    anchor_lang::solana_program::program::invoke_signed(
+        &anchor_lang::solana_program::system_instruction::transfer(
+            &rental_escrow.key(),
+            &rental.lender,
+            remaining_amount,
+        ),
+        &[
+            rental_escrow.to_account_info(),
+            lender.to_account_info(),
+        ],
+        signer_seeds
     )?;
 
     let remaining_amount = rental.escrow_balance - amount;
@@ -348,17 +376,22 @@ pub fn withdraw_from_rental_escrow<'a, 'b>(
 
 // If a call option is exercised or a loan repossessed while a rental is active
 // Then any unearned balance must be paid back to the rental's borrower
-pub fn settle_rental_escrow_balance<'a, 'b>(
-    rental: &mut Account<'a, Rental>,
-    remaining_accounts: &mut Iter<AccountInfo<'b>>,
-    rental_escrow: &AccountInfo<'b>,
-    lender: &AccountInfo<'b>,
+pub fn settle_rental_escrow_balance<'info>(
+    rental: & mut Account<'info, Rental>,
+    rental_escrow: & mut AccountInfo<'info>,
+    lender: &AccountInfo<'info>,
+    mint: &AccountInfo<'info>,
+    metadata_info: &AccountInfo<'info>,
+    remaining_accounts: & mut Iter<AccountInfo<'info>>,
     unix_timestamp: i64,
 ) -> Result<()> {
     let remaining_escrow_balance = withdraw_from_rental_escrow(
         rental,
-        &rental_escrow,
-        &lender,
+        rental_escrow,
+        lender,
+        mint,
+        metadata_info,
+        remaining_accounts,
         unix_timestamp,
     )?;
 
@@ -368,11 +401,29 @@ pub fn settle_rental_escrow_balance<'a, 'b>(
 
         msg!("Returning {} lamports to borrower {} from escrow balance", remaining_escrow_balance, borrower.key());        
 
-        transfer_from_escrow(
-            &mut rental_escrow.to_account_info(),
-            &mut borrower.to_account_info(),
-            remaining_escrow_balance
+        let mint_pubkey = mint.key();
+        let lender_pubkey = lender.key();
+        let signer_bump = &[rental.escrow_bump];
+        let signer_seeds = &[&[
+            Rental::ESCROW_PREFIX,
+            mint_pubkey.as_ref(),
+            lender_pubkey.as_ref(),
+            signer_bump
+        ][..]];
+        anchor_lang::solana_program::program::invoke_signed(
+            &anchor_lang::solana_program::system_instruction::transfer(
+                &rental_escrow.key(),
+                &rental.borrower.unwrap(),
+                remaining_escrow_balance,
+            ),
+            &[
+                rental_escrow.to_account_info(),
+                borrower.to_account_info(),
+            ],
+            signer_seeds
         )?;
+
+        
     }
 
     rental.escrow_balance = 0;

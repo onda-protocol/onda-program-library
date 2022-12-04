@@ -260,11 +260,13 @@ pub fn handle_exercise_call_option_with_rental<'info>(ctx: Context<'_, '_, '_, '
 
     if rental.borrower.is_some() {
         settle_rental_escrow_balance(
-            rental,
-            remaining_accounts,
-            &ctx.accounts.rental_escrow.to_account_info(),
-            &ctx.accounts.seller.to_account_info(),
-            unix_timestamp,
+            &mut ctx.accounts.rental,
+            &mut ctx.accounts.rental_escrow,
+            &ctx.accounts.seller,
+            &ctx.accounts.mint.to_account_info(),
+            &ctx.accounts.metadata.to_account_info(),
+            &mut ctx.remaining_accounts.iter(),
+            ctx.accounts.clock.unix_timestamp,
         )?;
     }
   
