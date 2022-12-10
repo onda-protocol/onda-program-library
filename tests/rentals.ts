@@ -447,6 +447,10 @@ describe("Rentals", () => {
       const signer = await helpers.getSigner();
       const borrower = await helpers.askLoan(connection, options);
       const lender = await helpers.giveLoan(connection, borrower);
+      const metadata = await Metadata.fromAccountAddress(
+        connection,
+        borrower.metadata
+      );
       const lenderPreRepaymentBalance = await connection.getBalance(
         lender.keypair.publicKey
       );
@@ -461,12 +465,20 @@ describe("Rentals", () => {
           depositTokenAccount: borrower.depositTokenAccount,
           lender: lender.keypair.publicKey,
           mint: borrower.mint,
+          metadata: borrower.metadata,
           edition: borrower.edition,
           metadataProgram: METADATA_PROGRAM_ID,
           systemProgram: anchor.web3.SystemProgram.programId,
           tokenProgram: splToken.TOKEN_PROGRAM_ID,
           clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
         })
+        .remainingAccounts([
+          ...metadata.data.creators.map((creator) => ({
+            pubkey: creator.address,
+            isSigner: false,
+            isWritable: true,
+          })),
+        ])
         .signers([signer])
         .rpc();
 
