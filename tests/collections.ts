@@ -12,7 +12,7 @@ const connection = new anchor.web3.Connection(
   anchor.AnchorProvider.defaultOptions().preflightCommitment
 );
 
-describe.only("Collections", async () => {
+describe("Collections", async () => {
   let authority: anchor.web3.Keypair;
   let provider: anchor.AnchorProvider;
   let program: anchor.Program<DexloanListings>;
