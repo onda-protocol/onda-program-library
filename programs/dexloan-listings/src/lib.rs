@@ -151,6 +151,10 @@ pub mod dexloan_listings {
         handle_init_collection(ctx, config)
     }
 
+    pub fn update_collection(ctx: Context<UpdateCollection>, config: Config) -> Result<()> {
+        handle_update_collection(ctx, config)
+    }
+
     pub fn close_collection(ctx: Context<CloseCollection>) -> Result<()> {
         handle_close_collection(ctx)
     }

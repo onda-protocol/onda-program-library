@@ -284,18 +284,20 @@ export async function mintNFT(
   });
 
   // Transfer nft to provided keypair
-  const sendResult = await metaplex
-    .nfts()
-    .send({
-      mintAddress: nft.mint.address,
-      toOwner: keypair.publicKey,
-    })
-    .run();
+  if (!keypair.publicKey.equals(authority.publicKey)) {
+    const sendResult = await metaplex
+      .nfts()
+      .send({
+        mintAddress: nft.mint.address,
+        toOwner: keypair.publicKey,
+      })
+      .run();
 
-  await connection.confirmTransaction({
-    signature: sendResult.response.signature,
-    ...(await connection.getLatestBlockhash()),
-  });
+    await connection.confirmTransaction({
+      signature: sendResult.response.signature,
+      ...(await connection.getLatestBlockhash()),
+    });
+  }
 
   return { nft, collection };
 }
