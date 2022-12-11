@@ -2,9 +2,9 @@ use {
     std::{slice::Iter},
     anchor_lang::{
         prelude::*,
-        system_program,
         solana_program::{
             program::{invoke, invoke_signed},
+            system_instruction::{transfer}
         },
     },
     anchor_spl::token::{TokenAccount},
@@ -304,23 +304,6 @@ pub fn calculate_widthdawl_amount<'info>(rental: &mut Account<'info, Rental>, un
     Ok(withdrawl_amount.round() as u64)
 }
 
-pub fn transfer_from_escrow(
-    escrow: &mut AccountInfo,
-    to: &mut AccountInfo,
-    amount: u64,
-) -> Result<()> {
-    **escrow.try_borrow_mut_lamports()? = escrow
-        .lamports()
-        .checked_sub(amount)
-        .ok_or(ProgramError::InvalidArgument)?;
-    **to.try_borrow_mut_lamports()? = to
-        .lamports()
-        .checked_add(amount)
-        .ok_or(ProgramError::InvalidArgument)?;
-    
-    Ok(())
-}
-
 // TODO pay creator fees on escrow withdrawls!
 pub fn withdraw_from_rental_escrow<'info>(
     rental: & mut Account<'info, Rental>,
@@ -333,18 +316,6 @@ pub fn withdraw_from_rental_escrow<'info>(
 ) -> Result<u64> {
     require_keys_eq!(lender.key(), rental.lender);
 
-    let amount = calculate_widthdawl_amount(rental, unix_timestamp)?;
-    msg!("Withdrawing {} lamports to lender from escrow balance ", amount);
-
-    let remaining_amount = pay_creator_fees(
-        amount,
-        rental.creator_basis_points,
-        mint,
-        metadata_info,
-        rental_escrow,
-        remaining_accounts
-    )?;
-
     let mint_pubkey = mint.key();
     let lender_pubkey = lender.key();
     let signer_bump = &[rental.escrow_bump];
@@ -354,8 +325,22 @@ pub fn withdraw_from_rental_escrow<'info>(
         lender_pubkey.as_ref(),
         signer_bump
     ][..]];
-    anchor_lang::solana_program::program::invoke_signed(
-        &anchor_lang::solana_program::system_instruction::transfer(
+
+    let amount = calculate_widthdawl_amount(rental, unix_timestamp)?;
+    msg!("Withdrawing {} lamports to lender from escrow balance ", amount);
+
+    let remaining_amount = pay_creator_fees_with_signer(
+        amount,
+        rental.creator_basis_points,
+        mint,
+        metadata_info,
+        rental_escrow,
+        remaining_accounts,
+        signer_seeds
+    )?;
+
+    invoke_signed(
+        &transfer(
             &rental_escrow.key(),
             &rental.lender,
             remaining_amount,
@@ -410,8 +395,8 @@ pub fn settle_rental_escrow_balance<'info>(
             lender_pubkey.as_ref(),
             signer_bump
         ][..]];
-        anchor_lang::solana_program::program::invoke_signed(
-            &anchor_lang::solana_program::system_instruction::transfer(
+        invoke_signed(
+            &transfer(
                 &rental_escrow.key(),
                 &rental.borrower.unwrap(),
                 remaining_escrow_balance,
@@ -440,16 +425,18 @@ pub fn process_payment_to_rental_escrow<'info>(
     days: u16,
 ) -> Result<()> {
     let amount = u64::from(days).checked_mul(rental.amount).ok_or(DexloanError::NumericalOverflow)?;
+    let creator_fee = calculate_fee_from_basis_points(amount as u128, rental.creator_basis_points as u128)?;
+    let total_amount = amount.checked_add(creator_fee).ok_or(DexloanError::NumericalOverflow)?;
 
     msg!("Paying {} lamports to rental escrow", amount);
 
     rental.escrow_balance = rental.escrow_balance + amount;
 
-    anchor_lang::solana_program::program::invoke(
-        &anchor_lang::solana_program::system_instruction::transfer(
+    invoke(
+        &transfer(
             &rental.borrower.unwrap(),
             &rental_escrow.key(),
-            amount,
+            total_amount,
         ),
         &[
             borrower.to_account_info(),
@@ -524,14 +511,20 @@ pub fn calculate_fee_from_basis_points(
     Ok(total_fee)
 }
 
-pub fn pay_creator_fees<'a>(
+pub struct CreatorFee<'a> {
+    pub amount: u64,
+    pub address: Pubkey,
+    /// CHECK:
+    pub account_info: AccountInfo<'a>
+}
+
+pub fn get_creator_fees<'a>(
     amount: u64,
     basis_points: u16,
     mint: &AccountInfo<'a>,
     metadata_info: &AccountInfo<'a>,
-    fee_payer: &mut AccountInfo<'a>,
     remaining_accounts: &mut Iter<AccountInfo<'a>>,
-) -> Result<u64> {
+) -> Result<(Vec<CreatorFee<'a>>, u64)> {
     let metadata = Metadata::deserialize(
         &mut metadata_info.data.borrow_mut().as_ref()
     )?;
@@ -550,6 +543,8 @@ pub fn pay_creator_fees<'a>(
     let remaining_amount = amount
             .checked_sub(total_fee)
             .ok_or(DexloanError::NumericalOverflow)?;
+    
+    let mut fees: Vec<CreatorFee> = Vec::new();
 
     msg!("Paying {} lamports in royalties", total_fee);
         
@@ -557,38 +552,23 @@ pub fn pay_creator_fees<'a>(
         Some(creators) => {
             for creator in creators {
                 let pct = creator.share as u128;
-                let creator_fee = pct.checked_mul(total_fee as u128)
+                let amount = pct.checked_mul(total_fee as u128)
                         .ok_or(DexloanError::NumericalOverflow)?
                         .checked_div(100)
                         .ok_or(DexloanError::NumericalOverflow)? as u64;
                 remaining_fee = remaining_fee
-                        .checked_sub(creator_fee)
+                        .checked_sub(amount)
                         .ok_or(DexloanError::NumericalOverflow)?;
 
                 let current_creator_info = next_account_info(remaining_accounts)?;
-                require_keys_eq!(current_creator_info.key(), creator.address);
+                let address = current_creator_info.key();
+                require_keys_eq!(address, creator.address);
 
-                if creator_fee > 0 {
-                    if fee_payer.owner.key() == system_program::ID {
-                        invoke(
-                            &anchor_lang::solana_program::system_instruction::transfer(
-                                &fee_payer.key(),
-                                &current_creator_info.key(),
-                                creator_fee,
-                            ),
-                            &[
-                                current_creator_info.to_account_info(),
-                                fee_payer.to_account_info(),
-                            ]
-                        )?;
-                    } else {
-                        transfer_from_escrow(
-                            fee_payer,
-                            &mut current_creator_info.to_account_info(),
-                            creator_fee
-                        )?;
-                    }
-                }
+                fees.push(CreatorFee {
+                    amount,
+                    address,
+                    account_info: current_creator_info.to_account_info()
+                });
             }
         }
         None => {
@@ -596,8 +576,77 @@ pub fn pay_creator_fees<'a>(
         }
     }
 
-    // Any dust is returned to the party posting the NFT
-    Ok(remaining_amount.checked_add(remaining_fee).ok_or(DexloanError::NumericalOverflow)?)
+    let remaining = remaining_amount.checked_add(remaining_fee).ok_or(DexloanError::NumericalOverflow)?;
+
+    Ok((fees, remaining))
+}
+
+pub fn pay_creator_fees<'a>(
+    amount: u64,
+    basis_points: u16,
+    mint: &AccountInfo<'a>,
+    metadata_info: &AccountInfo<'a>,
+    fee_payer: &mut AccountInfo<'a>,
+    remaining_accounts: &mut Iter<AccountInfo<'a>>,
+) -> Result<u64> {
+    let (fees, remaining_amount) = get_creator_fees(
+        amount,
+        basis_points,
+        mint,
+        metadata_info,
+        remaining_accounts,
+    )?;
+
+    for creator_fee in fees {
+        invoke(
+            &transfer(
+                &fee_payer.key(),
+                &creator_fee.address,
+                creator_fee.amount,
+            ),
+            &[
+                fee_payer.to_account_info(),
+                creator_fee.account_info,
+            ],
+        )?;
+    }
+
+    Ok(remaining_amount)
+}
+
+pub fn pay_creator_fees_with_signer<'a>(
+    amount: u64,
+    basis_points: u16,
+    mint: &AccountInfo<'a>,
+    metadata_info: &AccountInfo<'a>,
+    fee_payer: &mut AccountInfo<'a>,
+    remaining_accounts: &mut Iter<AccountInfo<'a>>,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<u64> {
+    let (fees, remaining_amount) = get_creator_fees(
+        amount,
+        basis_points,
+        mint,
+        metadata_info,
+        remaining_accounts,
+    )?;
+
+    for creator_fee in fees {
+        invoke_signed(
+            &transfer(
+                &fee_payer.key(),
+                &creator_fee.address,
+                creator_fee.amount,
+            ),
+            &[
+                fee_payer.to_account_info(),
+                creator_fee.account_info,
+            ],
+            signer_seeds,
+        )?;
+    }
+
+    Ok(remaining_amount)
 }
 
 pub fn pay_creator_royalties<'a>(
@@ -611,14 +660,65 @@ pub fn pay_creator_royalties<'a>(
         &mut metadata_info.data.borrow_mut().as_ref()
     )?;
     let basis_points = metadata.data.seller_fee_basis_points;
-    let remaining_amount = pay_creator_fees(
+    let (fees, remaining_amount) = get_creator_fees(
         amount,
         basis_points,
         mint,
         metadata_info,
-        fee_payer,
         remaining_accounts,
     )?;
+
+    for creator_fee in fees {
+        invoke(
+            &transfer(
+                &fee_payer.key(),
+                &creator_fee.address,
+                creator_fee.amount,
+            ),
+            &[
+                fee_payer.to_account_info(),
+                creator_fee.account_info,
+            ],
+        )?;
+    }
+
+    Ok(remaining_amount)
+}
+
+pub fn pay_creator_royalties_with_signer<'a>(
+    amount: u64,
+    mint: &AccountInfo<'a>,
+    metadata_info: &AccountInfo<'a>,
+    fee_payer: &mut AccountInfo<'a>,
+    remaining_accounts: &mut Iter<AccountInfo<'a>>,
+    signer_seeds: &[&[&[u8]]],
+) -> Result<u64> {
+    let metadata = Metadata::deserialize(
+        &mut metadata_info.data.borrow_mut().as_ref()
+    )?;
+    let basis_points = metadata.data.seller_fee_basis_points;
+    let (fees, remaining_amount) = get_creator_fees(
+        amount,
+        basis_points,
+        mint,
+        metadata_info,
+        remaining_accounts,
+    )?;
+
+    for creator_fee in fees {
+        invoke_signed(
+            &transfer(
+                &fee_payer.key(),
+                &creator_fee.address,
+                creator_fee.amount,
+            ),
+            &[
+                fee_payer.to_account_info(),
+                creator_fee.account_info,
+            ],
+            signer_seeds,
+        )?;
+    }
 
     Ok(remaining_amount)
 }

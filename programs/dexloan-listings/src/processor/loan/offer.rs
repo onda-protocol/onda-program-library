@@ -1,4 +1,4 @@
-use anchor_lang::{prelude::*};
+use anchor_lang::{system_program, prelude::*};
 use crate::state::{LoanOffer, Collection};
 use crate::constants::*;
 
@@ -32,6 +32,7 @@ pub struct OfferLoan<'info> {
             loan_offer.key().as_ref()
         ],
         payer = lender,
+        owner = system_program::ID,
         space = 0,
         bump,
     )]

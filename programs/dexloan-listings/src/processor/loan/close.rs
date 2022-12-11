@@ -1,5 +1,13 @@
-use anchor_lang::{prelude::*};
-use anchor_spl::token::{Mint, Token, TokenAccount};
+use {
+    anchor_lang::{
+        prelude::*,
+        solana_program::{
+            program::{invoke_signed},
+            system_instruction::{transfer}
+        },
+    },
+    anchor_spl::token::{Mint, Token, TokenAccount}
+};
 use crate::state::{Collection, Loan, LoanState, LoanOffer, TokenManager};
 use crate::utils::*;
 use crate::constants::*;
@@ -121,10 +129,28 @@ pub struct CloseLoanOffer<'info> {
 }
 
 pub fn handle_close_loan_offer(ctx: Context<CloseLoanOffer>, _id: u8) -> Result<()> {
-    transfer_from_escrow(
-        &mut ctx.accounts.escrow_payment_account.to_account_info(),
-        &mut ctx.accounts.lender.to_account_info(),
-        ctx.accounts.escrow_payment_account.lamports()
+    let loan_offer = &ctx.accounts.loan_offer;
+    let escrow_payment_account = &ctx.accounts.escrow_payment_account;
+
+    let loan_offer_pubkey = loan_offer.key();
+    let signer_bump = &[loan_offer.escrow_bump];
+    let signer_seeds = &[&[
+        LoanOffer::VAULT_PREFIX,
+        loan_offer_pubkey.as_ref(),
+        signer_bump
+    ][..]];
+
+    invoke_signed(
+        &transfer(
+            &escrow_payment_account.key(),
+            &loan_offer.lender,
+            loan_offer.amount.unwrap(),
+        ),
+        &[
+            escrow_payment_account.to_account_info(),
+            ctx.accounts.lender.to_account_info(),
+        ],
+        signer_seeds
     )?;
 
     Ok(())

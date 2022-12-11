@@ -683,27 +683,29 @@ describe("Rentals", () => {
       );
 
       try {
+        const accounts = {
+          signer: signer.publicKey,
+          rental: rentalAddress,
+          rentalEscrow: rentalEscrowAddress,
+          borrower: borrower.keypair.publicKey,
+          lender: lender.keypair.publicKey,
+          lenderTokenAccount: lenderTokenAccount.address,
+          tokenAccount: rentalTokenAccount.address,
+          loan: borrower.loan,
+          tokenManager: borrower.tokenManager,
+          mint: borrower.mint,
+          metadata: borrower.metadata,
+          edition: borrower.edition,
+          metadataProgram: METADATA_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+          tokenProgram: splToken.TOKEN_PROGRAM_ID,
+          clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+        };
+
         await lender.program.methods
           .repossessWithRental()
-          .accounts({
-            signer: signer.publicKey,
-            rental: rentalAddress,
-            rentalEscrow: rentalEscrowAddress,
-            borrower: borrower.keypair.publicKey,
-            lender: lender.keypair.publicKey,
-            lenderTokenAccount: lenderTokenAccount.address,
-            tokenAccount: rentalTokenAccount.address,
-            loan: borrower.loan,
-            tokenManager: borrower.tokenManager,
-            mint: borrower.mint,
-            metadata: borrower.metadata,
-            edition: borrower.edition,
-            metadataProgram: METADATA_PROGRAM_ID,
-            systemProgram: anchor.web3.SystemProgram.programId,
-            tokenProgram: splToken.TOKEN_PROGRAM_ID,
-            clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-          })
+          .accounts(accounts)
           .remainingAccounts([
             ...metadata.data.creators.map((creator) => ({
               pubkey: creator.address,

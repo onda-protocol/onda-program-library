@@ -1,5 +1,13 @@
-use anchor_lang::{prelude::*};
-use anchor_spl::token::{Mint, Token, TokenAccount};
+use {
+    anchor_lang::{
+        prelude::*,
+        solana_program::{
+            program::{invoke_signed},
+            system_instruction::{transfer}
+        },
+    },
+    anchor_spl::token::{Mint, Token, TokenAccount}
+};
 use crate::state::{Loan, LoanOffer, Collection, TokenManager};
 use crate::utils::*;
 use crate::error::*;
@@ -118,7 +126,13 @@ pub fn handle_take_loan_offer(
     loan.lender = Some(ctx.accounts.lender.key());
     loan.bump = *ctx.bumps.get("loan").unwrap();
     //
-    Loan::init_ask_state(loan, offer.amount.unwrap(), collection.config.loan_basis_points, offer.basis_points, offer.duration)?;
+    Loan::init_ask_state(
+        loan,
+        offer.amount.unwrap(),
+        collection.config.loan_basis_points,
+        offer.basis_points,
+        offer.duration
+    )?;
     Loan::set_active(loan, ctx.accounts.clock.unix_timestamp)?;
     //
     token_manager.accounts.loan = true;
@@ -134,10 +148,25 @@ pub fn handle_take_loan_offer(
         ctx.accounts.token_program.to_account_info(),
     )?;
 
-    transfer_from_escrow(
-        &mut escrow_payment_account.to_account_info(),
-        &mut ctx.accounts.borrower.to_account_info(),
-        loan.amount.unwrap(),
+    let loan_offer_pubkey = offer.key();
+    let signer_bump = &[offer.escrow_bump];
+    let signer_seeds = &[&[
+        LoanOffer::VAULT_PREFIX,
+        loan_offer_pubkey.as_ref(),
+        signer_bump
+    ][..]];
+
+    invoke_signed(
+        &transfer(
+            &escrow_payment_account.key(),
+            &loan.borrower,
+            offer.amount.unwrap(),
+        ),
+        &[
+            escrow_payment_account.to_account_info(),
+            ctx.accounts.borrower.to_account_info(),
+        ],
+        signer_seeds
     )?;
 
     Ok(())

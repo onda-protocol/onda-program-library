@@ -1,5 +1,13 @@
-use anchor_lang::{prelude::*};
-use anchor_spl::token::{Mint, Token, TokenAccount};
+use {
+    anchor_lang::{
+        prelude::*,
+        solana_program::{
+            program::{invoke_signed},
+            system_instruction::{transfer}
+        },
+    },
+    anchor_spl::token::{Mint, Token, TokenAccount}
+};
 use crate::state::{CallOption, CallOptionBid, Collection, TokenManager};
 use crate::utils::*;
 use crate::error::*;
@@ -136,22 +144,38 @@ pub fn handle_sell_call_option<'info>(
         ctx.accounts.token_program.to_account_info(),
     )?;
 
+    let call_option_bid_pubkey = bid.key();
+    let signer_bump = &[bid.escrow_bump];
+    let signer_seeds = &[&[
+        CallOptionBid::VAULT_PREFIX,
+        call_option_bid_pubkey.as_ref(),
+        signer_bump
+    ][..]];
 
     let fee_basis_points = collection.config.option_basis_points;
-    let remaining_amount = pay_creator_fees(
+    pay_creator_fees_with_signer(
         call_option.amount,
         fee_basis_points, 
         &ctx.accounts.mint.to_account_info(),
         &ctx.accounts.metadata.to_account_info(),
         &mut ctx.accounts.buyer.to_account_info(),
-        remaining_accounts
+        remaining_accounts,
+        signer_seeds
     )?;
 
-    transfer_from_escrow(
-        &mut escrow_payment_account.to_account_info(),
-        &mut ctx.accounts.seller.to_account_info(),
-        remaining_amount,
+    invoke_signed(
+        &transfer(
+            &escrow_payment_account.key(),
+            &call_option.seller,
+            bid.amount,
+        ),
+        &[
+            escrow_payment_account.to_account_info(),
+            ctx.accounts.seller.to_account_info(),
+        ],
+        signer_seeds
     )?;
+
 
     Ok(())
 }

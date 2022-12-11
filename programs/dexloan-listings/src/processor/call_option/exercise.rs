@@ -221,6 +221,26 @@ pub fn handle_exercise_call_option_with_rental<'info>(ctx: Context<'_, '_, '_, '
         return Err(DexloanError::OptionExpired.into())
     }
 
+    pay_creator_royalties(
+        call_option.strike_price,
+        &ctx.accounts.mint.to_account_info(),
+        &ctx.accounts.metadata.to_account_info(),
+        &mut ctx.accounts.buyer.to_account_info(),
+        remaining_accounts,
+    )?;
+
+    anchor_lang::solana_program::program::invoke(
+        &anchor_lang::solana_program::system_instruction::transfer(
+            &call_option.buyer.unwrap(),
+            &call_option.seller,
+            call_option.strike_price,
+        ),
+        &[
+            ctx.accounts.buyer.to_account_info(),
+            ctx.accounts.seller.to_account_info(),
+        ]
+    )?;
+
     call_option.state = CallOptionState::Exercised;
     token_manager.accounts.call_option = false;
     token_manager.accounts.rental = false;
@@ -233,29 +253,6 @@ pub fn handle_exercise_call_option_with_rental<'info>(ctx: Context<'_, '_, '_, '
         ctx.accounts.buyer_token_account.to_account_info(),
         ctx.accounts.mint.to_account_info(),
         ctx.accounts.edition.to_account_info(),
-    )?;
-
-    let remaining_amount = pay_creator_royalties(
-        call_option.strike_price,
-        &ctx.accounts.mint.to_account_info(),
-        &ctx.accounts.metadata.to_account_info(),
-        &mut ctx.accounts.buyer.to_account_info(),
-        remaining_accounts,
-    )?;
-
-    msg!("remaining_amount {}", remaining_amount);
-    msg!("paid to creators {}", call_option.strike_price - remaining_amount);
-
-    anchor_lang::solana_program::program::invoke(
-        &anchor_lang::solana_program::system_instruction::transfer(
-            &call_option.buyer.unwrap(),
-            &call_option.seller,
-            remaining_amount,
-        ),
-        &[
-            ctx.accounts.buyer.to_account_info(),
-            ctx.accounts.seller.to_account_info(),
-        ]
     )?;
 
     if rental.borrower.is_some() {

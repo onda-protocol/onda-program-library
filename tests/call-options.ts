@@ -15,7 +15,7 @@ const connection = new anchor.web3.Connection(
   anchor.AnchorProvider.defaultOptions().preflightCommitment
 );
 
-describe("Call Options", () => {
+describe.only("Call Options", () => {
   describe("Bids", () => {
     let buyer: helpers.CallOptionBidBuyer;
     let seller: helpers.CallOptionBidSeller;
@@ -288,7 +288,7 @@ describe("Call Options", () => {
     });
   });
 
-  describe("Call option expiry", () => {
+  describe.only("Call option expiry", () => {
     let options;
     let seller: Awaited<ReturnType<typeof helpers.askCallOption>>;
     let buyer: Awaited<ReturnType<typeof helpers.buyCallOption>>;

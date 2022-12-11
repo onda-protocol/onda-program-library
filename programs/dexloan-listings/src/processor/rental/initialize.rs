@@ -80,6 +80,7 @@ pub fn handle_init_rental(
 ) -> Result<()> {
     let rental = &mut ctx.accounts.rental;
     let token_manager = &mut ctx.accounts.token_manager;
+    let collection = &ctx.accounts.collection;
     let deposit_token_account = &mut ctx.accounts.deposit_token_account;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
@@ -104,6 +105,7 @@ pub fn handle_init_rental(
     rental.bump = *ctx.bumps.get("rental").unwrap();
     //
     rental.amount = args.amount;
+    rental.creator_basis_points = collection.config.rental_basis_points;
     rental.escrow_balance = 0;
     rental.expiry = args.expiry;
     rental.state = RentalState::Listed;
@@ -114,41 +116,15 @@ pub fn handle_init_rental(
     token_manager.accounts.rental = true;
     token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
 
-    if deposit_token_account.delegate.is_some() {
-        if !deposit_token_account.is_frozen() && deposit_token_account.delegate.unwrap() != token_manager.key()  {
-            anchor_spl::token::revoke(
-                CpiContext::new(
-                    ctx.accounts.token_program.to_account_info(),
-                    anchor_spl::token::Revoke {
-                        source: deposit_token_account.to_account_info(),
-                        authority: ctx.accounts.lender.to_account_info(),
-                    }
-                )
-            )?;
-
-            delegate_and_freeze_token_account(
-                token_manager,
-                ctx.accounts.token_program.to_account_info(),
-                deposit_token_account.to_account_info(),
-                ctx.accounts.lender.to_account_info(),
-                ctx.accounts.mint.to_account_info(),
-                ctx.accounts.edition.to_account_info(),
-                ctx.accounts.lender.to_account_info(),
-            )?;
-        } else if deposit_token_account.delegate.unwrap() != token_manager.key() {
-            return err!(DexloanError::InvalidDelegate);
-        }
-    } else {
-        delegate_and_freeze_token_account(
-            token_manager,
-            ctx.accounts.token_program.to_account_info(),
-            deposit_token_account.to_account_info(),
-            ctx.accounts.lender.to_account_info(),
-            ctx.accounts.mint.to_account_info(),
-            ctx.accounts.edition.to_account_info(),
-            ctx.accounts.lender.to_account_info(),
-        )?;
-    }
+    maybe_delegate_and_freeze_token_account(
+        token_manager,
+        deposit_token_account,
+        ctx.accounts.lender.to_account_info(),
+        ctx.accounts.mint.to_account_info(),
+        ctx.accounts.edition.to_account_info(),
+        ctx.accounts.lender.to_account_info(),
+        ctx.accounts.token_program.to_account_info(),
+    )?;
 
     Ok(())
 }

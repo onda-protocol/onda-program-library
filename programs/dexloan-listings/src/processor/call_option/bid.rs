@@ -1,4 +1,4 @@
-use anchor_lang::{prelude::*};
+use anchor_lang::{system_program, prelude::*};
 use crate::state::{CallOptionBid, Collection};
 use crate::constants::*;
 
@@ -31,6 +31,7 @@ pub struct BidCallOption<'info> {
             call_option_bid.key().as_ref()
         ],
         payer = buyer,
+        owner = system_program::ID,
         space = 0,
         bump,
     )]

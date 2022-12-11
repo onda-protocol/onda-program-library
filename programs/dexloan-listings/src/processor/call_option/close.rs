@@ -1,5 +1,13 @@
-use anchor_lang::prelude::*;
-use anchor_spl::token::{Mint, Token, TokenAccount};
+use {
+    anchor_lang::{
+        prelude::*,
+        solana_program::{
+            program::{invoke_signed},
+            system_instruction::{transfer}
+        },
+    },
+    anchor_spl::token::{Mint, Token, TokenAccount}
+};
 use crate::state::{CallOption, CallOptionBid, CallOptionState, Collection, TokenManager};
 use crate::error::{DexloanError};
 use crate::utils::*;
@@ -118,13 +126,11 @@ pub struct CloseCallOptionBid<'info> {
     )]
     pub call_option_bid: Box<Account<'info, CallOptionBid>>,
     #[account(
-        init_if_needed,
+        mut,
         seeds=[
             CallOptionBid::VAULT_PREFIX,
             call_option_bid.key().as_ref()
         ],
-        payer = buyer,
-        space = 0,
         bump,
     )]
     /// CHECK: seeds
@@ -143,10 +149,28 @@ pub struct CloseCallOptionBid<'info> {
 }
 
 pub fn handle_close_call_option_bid(ctx: Context<CloseCallOptionBid>, _id: u8) -> Result<()> {
-    transfer_from_escrow(
-        &mut ctx.accounts.escrow_payment_account.to_account_info(),
-        &mut ctx.accounts.buyer.to_account_info(),
-        ctx.accounts.escrow_payment_account.lamports()
+    let call_option_bid = &ctx.accounts.call_option_bid;
+    let escrow_payment_account = &ctx.accounts.escrow_payment_account;
+
+    let call_option_bid_pubkey = call_option_bid.key();
+    let signer_bump = &[call_option_bid.escrow_bump];
+    let signer_seeds = &[&[
+        CallOptionBid::VAULT_PREFIX,
+        call_option_bid_pubkey.as_ref(),
+        signer_bump
+    ][..]];
+
+    invoke_signed(
+        &transfer(
+            &escrow_payment_account.key(),
+            &call_option_bid.buyer,
+            call_option_bid.amount,
+        ),
+        &[
+            escrow_payment_account.to_account_info(),
+            ctx.accounts.buyer.to_account_info(),
+        ],
+        signer_seeds
     )?;
 
     Ok(())

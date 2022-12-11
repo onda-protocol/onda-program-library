@@ -98,7 +98,13 @@ pub fn handle_ask_call_option(
     call_option.mint = ctx.accounts.mint.key();
     call_option.bump = *ctx.bumps.get("call_option").unwrap();
     //
-    CallOption::init_ask_state(call_option, amount, collection.config.option_basis_points, strike_price, expiry)?;
+    CallOption::init_ask_state(
+        call_option,
+        amount,
+        collection.config.option_basis_points,
+        strike_price,
+        expiry
+    )?;
     //
     token_manager.accounts.call_option = true;
     token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
