@@ -15,7 +15,7 @@ const connection = new anchor.web3.Connection(
   anchor.AnchorProvider.defaultOptions().preflightCommitment
 );
 
-describe("Loans", () => {
+describe.only("Loans", () => {
   describe("Offers", () => {
     let lender: helpers.LoanOfferLender;
     let borrower: helpers.LoanOfferBorrower;
@@ -322,7 +322,7 @@ describe("Loans", () => {
     });
   });
 
-  describe("Loan repayments", () => {
+  describe.only("Loan repayments", () => {
     let borrower: Awaited<ReturnType<typeof helpers.askLoan>>;
     let lender: Awaited<ReturnType<typeof helpers.giveLoan>>;
     let options;
@@ -330,7 +330,7 @@ describe("Loans", () => {
     it("Creates a dexloan loan", async () => {
       options = {
         amount: anchor.web3.LAMPORTS_PER_SOL / 10,
-        basisPoints: 700,
+        basisPoints: 5000,
         duration: 30 * 24 * 60 * 60, // 30 days
       };
 
@@ -562,8 +562,10 @@ describe("Loans", () => {
         connection,
         borrower.metadata
       );
+      const loan = await borrower.program.account.loan.fetch(borrower.loan);
+      await helpers.wait(10);
 
-      await borrower.program.methods
+      const signature = await borrower.program.methods
         .repayLoan()
         .accounts({
           signer: signer.publicKey,
@@ -588,11 +590,20 @@ describe("Loans", () => {
           }))
         )
         .signers([signer])
-        .rpc();
-
+        .rpc({ commitment: "confirmed" });
+      const tx = await connection.getTransaction(signature, {
+        commitment: "confirmed",
+      });
       const lenderPostRepaymentBalance = await connection.getBalance(
         lender.keypair.publicKey
       );
+      const estimatedInterest = Math.floor(
+        (((loan.basisPoints * loan.amount.toNumber()) / 10_000) *
+          (tx.blockTime - loan.startDate)) /
+          31_536_000
+      );
+      const estimatedLenderBalance =
+        lenderPreRepaymentBalance + loan.amount.toNumber() + estimatedInterest;
       const borrowerTokenAccount = await splToken.getAccount(
         connection,
         borrower.depositTokenAccount
@@ -608,7 +619,11 @@ describe("Loans", () => {
       });
       assert.equal(borrowerTokenAccount.amount, BigInt(1));
       assert.equal(borrowerTokenAccount.delegate, null);
-      assert(lenderPostRepaymentBalance > lenderPreRepaymentBalance);
+      assert.equal(
+        lenderPostRepaymentBalance,
+        estimatedLenderBalance,
+        "Lender Balance"
+      );
     });
   });
 });

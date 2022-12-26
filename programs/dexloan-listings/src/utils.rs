@@ -723,28 +723,28 @@ pub fn pay_creator_royalties_with_signer<'a>(
     Ok(remaining_amount)
 }
 
-pub fn calculate_loan_repayment(
+pub fn calculate_loan_repayment_fee(
     amount: u64,
-    basis_points: u32,
+    basis_points: u16,
     duration: i64,
     is_overdue: bool,
 ) -> Result<u64> {
     let annual_fee = calculate_fee_from_basis_points(amount as u128, basis_points as u128)?;
 
-    let interest_due = annual_fee.checked_mul(duration as u64)
+    let mut interest_due = annual_fee.checked_mul(duration as u64)
         .ok_or(DexloanError::NumericalOverflow)?
         .checked_div(SECONDS_PER_YEAR as u64)
         .ok_or(DexloanError::NumericalOverflow)?;
 
-    let mut amount_due = amount.checked_add(interest_due).ok_or(DexloanError::NumericalOverflow)?;
+    // let mut amount_due = amount.checked_add(interest_due).ok_or(DexloanError::NumericalOverflow)?;
     msg!("interest_due {}", interest_due);
 
     if is_overdue {
         let late_repayment_fee = calculate_fee_from_basis_points(amount as u128, LATE_REPAYMENT_FEE_BASIS_POINTS)?;
         msg!("late_repayment_fee {}", late_repayment_fee);
-        amount_due = amount_due.checked_add(late_repayment_fee).ok_or(DexloanError::NumericalOverflow)?;
+        interest_due = interest_due.checked_add(late_repayment_fee).ok_or(DexloanError::NumericalOverflow)?;
     }
     
     
-    Ok(amount_due)
+    Ok(interest_due)
 }

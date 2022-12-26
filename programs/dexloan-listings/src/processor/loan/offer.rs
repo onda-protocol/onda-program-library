@@ -3,7 +3,7 @@ use crate::state::{LoanOffer, Collection};
 use crate::constants::*;
 
 #[derive(Accounts)]
-#[instruction(amount: u64, basis_points: u32, duration: u64, id: u8)]
+#[instruction(amount: u64, basis_points: u16, duration: u64, id: u8)]
 pub struct OfferLoan<'info> {
     #[account(
         constraint = signer.key() == SIGNER_PUBKEY
@@ -54,7 +54,7 @@ pub struct OfferLoan<'info> {
 pub fn handle_offer_loan(
   ctx: Context<OfferLoan>,
   amount: u64,
-  basis_points: u32,
+  basis_points: u16,
   duration: i64,
   offer_id: u8,
 ) -> Result<()> {

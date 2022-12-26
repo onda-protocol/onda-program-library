@@ -6,7 +6,7 @@ use crate::error::*;
 use crate::constants::*;
 
 #[derive(Accounts)]
-#[instruction(amount: u64, basis_points: u32, duration: u64)]
+#[instruction(amount: u64, basis_points: u16, duration: u64)]
 pub struct AskLoan<'info> {
     #[account(
         constraint = signer.key() == SIGNER_PUBKEY
@@ -70,7 +70,7 @@ pub struct AskLoan<'info> {
 pub fn handle_ask_loan(
   ctx: Context<AskLoan>,
   amount: u64,
-  basis_points: u32,
+  basis_points: u16,
   duration: i64
 ) -> Result<()> {
     let loan = &mut ctx.accounts.loan;

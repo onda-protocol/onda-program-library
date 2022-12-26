@@ -14,20 +14,20 @@ pub enum LoanState {
 pub struct Loan {
     /// Whether the loan is active
     pub state: LoanState,
+    /// The NFT holder
+    pub borrower: Pubkey,
+    /// The issuer of the loan
+    pub lender: Option<Pubkey>,
     /// The amount of the loan
     pub amount: Option<u64>,
+    /// Annual percentage yield
+    pub basis_points: u16,
     /// The creator fee
     pub creator_basis_points: u16,
     /// The amount outstanding
     pub outstanding: u64,
     /// The liquidation threshold in basis points
     pub threshold: Option<u32>,
-    /// The NFT holder
-    pub borrower: Pubkey,
-    /// The issuer of the loan
-    pub lender: Option<Pubkey>,
-    /// Annual percentage yield
-    pub basis_points: u32,
     /// Number of installments
     pub installments: u8,
     /// Current installment
@@ -51,15 +51,15 @@ impl Loan {
         loan: &mut Account<'info, Loan>,
         amount: u64,
         creator_basis_points: u16,
-        basis_points: u32,
+        basis_points: u16,
         duration: i64
     ) -> Result<()> {
         loan.amount = Some(amount);
+        loan.basis_points = basis_points;
         loan.creator_basis_points = creator_basis_points;
         loan.outstanding = amount;
         loan.threshold = None;
         loan.installments = 1;
-        loan.basis_points = basis_points;
         loan.duration = duration;
         loan.state = LoanState::Listed;
     
@@ -90,13 +90,13 @@ impl Loan {
     pub fn space() -> usize {
         8 + // key
         1 + // state
+        32 + // borrower
+        (1 + 32) + // lender
         (1 + 8) + // amount
+        2 + // basis_points
         2 + // creator_basis_points
         8 + // outstanding
         (1 + 4) + // threshold
-        32 + // borrower
-        (1 + 32) + // lender
-        4 + // basis_points
         1 + // installments
         1 + // current_installment
         (1 + 8) + // notice_issued
@@ -120,7 +120,7 @@ pub struct LoanOffer {
     /// The amount of the loan
     pub amount: Option<u64>,
     /// Annual percentage yield
-    pub basis_points: u32,
+    pub basis_points: u16,
     /// Duration of the loan in seconds
     pub duration: i64,
     /// The collection
@@ -140,7 +140,7 @@ impl LoanOffer {
         1 + // id
         32 + // lender
         (1 + 8) + // amount
-        4 + // basis_points
+        2 + // basis_points
         8 + // duration
         32 + // collection
         (1 + 4) + // ltv

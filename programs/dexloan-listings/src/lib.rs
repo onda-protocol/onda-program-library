@@ -21,7 +21,7 @@ pub mod dexloan_listings {
     pub fn offer_loan<'info>(
         ctx: Context<'_, '_, '_, 'info, OfferLoan<'info>>,
         amount: u64,
-        basis_points: u32,
+        basis_points: u16,
         duration: i64,
         id: u8
     ) -> Result<()> {
@@ -45,7 +45,7 @@ pub mod dexloan_listings {
     pub fn ask_loan<'info>(
         ctx: Context<'_, '_, '_, 'info, AskLoan<'info>>,
         amount: u64,
-        basis_points: u32,
+        basis_points: u16,
         duration: i64
     ) -> Result<()> {
         handle_ask_loan(ctx, amount, basis_points, duration)

@@ -77,12 +77,13 @@ pub fn handle_repay_loan<'info>(ctx: Context<'_, '_, '_, 'info, RepayLoan<'info>
     let expiry = loan.start_date.unwrap().checked_add(loan.duration).ok_or(DexloanError::NumericalOverflow)?;
     let is_overdue = ctx.accounts.clock.unix_timestamp > expiry;
     
-    let amount_due = calculate_loan_repayment(
+    let interest_due = calculate_loan_repayment_fee(
         loan.amount.unwrap(),
         loan.basis_points,
         duration,
         is_overdue
     )?;
+    let amount_due = loan.amount.unwrap().checked_add(interest_due).ok_or(DexloanError::NumericalOverflow)?;
 
     invoke(
         &anchor_lang::solana_program::system_instruction::transfer(
@@ -96,9 +97,9 @@ pub fn handle_repay_loan<'info>(ctx: Context<'_, '_, '_, 'info, RepayLoan<'info>
         ]
     )?;
 
-    let creator_fee = calculate_loan_repayment(
+    let creator_fee = calculate_loan_repayment_fee(
         loan.amount.unwrap(),
-        u32::from(loan.creator_basis_points),
+        loan.creator_basis_points,
         duration,
         false
     )?;
