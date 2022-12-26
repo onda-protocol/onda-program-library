@@ -15,7 +15,7 @@ const connection = new anchor.web3.Connection(
   anchor.AnchorProvider.defaultOptions().preflightCommitment
 );
 
-describe.only("Call Options", () => {
+describe("Call Options", () => {
   describe("Bids", () => {
     let buyer: helpers.CallOptionBidBuyer;
     let seller: helpers.CallOptionBidSeller;
@@ -288,7 +288,7 @@ describe.only("Call Options", () => {
     });
   });
 
-  describe.only("Call option expiry", () => {
+  describe("Call option expiry", () => {
     let options;
     let seller: Awaited<ReturnType<typeof helpers.askCallOption>>;
     let buyer: Awaited<ReturnType<typeof helpers.buyCallOption>>;
@@ -337,8 +337,7 @@ describe.only("Call Options", () => {
       const sellerAfterBalance = await connection.getBalance(
         seller.keypair.publicKey
       );
-      const estimatedSellerBalance =
-        sellerBeforeBalance + options.amount * 0.98;
+      const estimatedSellerBalance = sellerBeforeBalance + options.amount;
       assert.equal(
         sellerAfterBalance,
         estimatedSellerBalance,

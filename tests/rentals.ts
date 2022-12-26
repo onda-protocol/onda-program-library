@@ -897,7 +897,7 @@ describe("Rentals", () => {
     });
   });
 
-  describe("exercise option with active rental", () => {
+  describe("Exercise option with active rental", () => {
     let seller: helpers.CallOptionSeller;
     let buyer: helpers.CallOptionBuyer;
     let rentalTokenAccount: anchor.web3.PublicKey;
@@ -1163,9 +1163,12 @@ describe("Rentals", () => {
         callOption.strikePrice.toNumber();
 
       const estimatedBuyerBalance =
-        beforeBuyerBalance - callOptionOptions.strikePrice - txFee;
+        beforeBuyerBalance -
+        callOptionOptions.strikePrice -
+        creatorFees -
+        txFee;
       const estimatedSellerBalance =
-        beforeSellerBalance + (callOptionOptions.strikePrice - creatorFees);
+        beforeSellerBalance + callOptionOptions.strikePrice;
 
       assert.equal(estimatedBuyerBalance, afterBuyerBalance, "buyer balance");
       assert.ok(afterSellerBalance >= estimatedSellerBalance, "seller balance");
