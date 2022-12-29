@@ -71,7 +71,7 @@ pub fn handle_buy_call_option<'info>(ctx: Context<'_, '_, '_, 'info, BuyCallOpti
     CallOption::set_active(call_option, ctx.accounts.clock.unix_timestamp)?;
 
     let fee_basis_points = collection.config.option_basis_points;
-    pay_creator_fees(
+    let remaining_amount = pay_creator_fees(
         call_option.amount,
         fee_basis_points, 
         &ctx.accounts.mint.to_account_info(),
@@ -85,7 +85,7 @@ pub fn handle_buy_call_option<'info>(ctx: Context<'_, '_, '_, 'info, BuyCallOpti
         &anchor_lang::solana_program::system_instruction::transfer(
             &call_option.buyer.unwrap(),
             &call_option.seller,
-            call_option.amount,
+            remaining_amount,
         ),
         &[
             ctx.accounts.seller.to_account_info(),
