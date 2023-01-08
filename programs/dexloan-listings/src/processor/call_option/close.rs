@@ -113,15 +113,14 @@ pub struct CloseCallOptionBid<'info> {
     #[account(mut)]
     pub buyer: Signer<'info>,
     #[account(
-        init,
+        mut,
         seeds = [
             CallOptionBid::PREFIX,
             collection.mint.as_ref(),
             buyer.key().as_ref(),
             &[id],
         ],
-        payer = buyer,
-        space = CallOptionBid::space(),
+        close = buyer,
         bump,
     )]
     pub call_option_bid: Box<Account<'info, CallOptionBid>>,

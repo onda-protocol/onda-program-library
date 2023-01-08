@@ -10,7 +10,7 @@ import {
 import { IDL, DexloanListings } from "../target/types/dexloan_listings";
 
 const PROGRAM_ID = new anchor.web3.PublicKey(
-  "GDNxgyEcP6b2FtTtCGrGhmoy5AQEiwuv26hV1CLmL1yu"
+  "F2BTn5cmYkTzo52teXhG6jyLS3y2BujdE56yZaGyvxwC"
 );
 
 async function fromMnemomic(mnemomic: string) {
