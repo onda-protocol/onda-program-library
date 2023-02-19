@@ -422,11 +422,17 @@ describe("Call Options", () => {
       } catch (error) {
         assert.ok(error.message.includes("Account does not exist"));
       }
+
+      try {
+        await seller.program.account.tokenManager.fetch(seller.tokenManager);
+      } catch (error) {
+        assert.ok(error.message.includes("Account does not exist"));
+      }
+
       const sellerTokenAccount = await splToken.getAccount(
         connection,
         seller.depositTokenAccount
       );
-
       assert.equal(sellerTokenAccount.amount, BigInt(1));
       assert.equal(sellerTokenAccount.delegate, null);
     });
