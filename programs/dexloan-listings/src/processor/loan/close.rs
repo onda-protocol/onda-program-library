@@ -5,6 +5,7 @@ use {
             program::{invoke_signed},
             system_instruction::{transfer}
         },
+        AccountsClose
     },
     anchor_spl::token::{Mint, Token, TokenAccount}
 };
@@ -35,7 +36,7 @@ pub struct CloseLoan<'info> {
         has_one = mint,
         has_one = borrower,
         constraint = loan.state == LoanState::Listed || loan.state == LoanState::Defaulted,
-        close = borrower
+        close = borrower,
     )]
     pub loan: Box<Account<'info, Loan>>,
     #[account(
@@ -61,26 +62,57 @@ pub struct CloseLoan<'info> {
 
 
 pub fn handle_close_loan(ctx: Context<CloseLoan>) -> Result<()> {
-    let loan = &ctx.accounts.loan;
+    let borrower = &ctx.accounts.borrower;
+    let deposit_token_account = &ctx.accounts.deposit_token_account;
     let token_manager = &mut ctx.accounts.token_manager;
 
+    process_close_loan(
+        token_manager,
+        borrower,
+        deposit_token_account,
+        &ctx.accounts.mint,
+        &ctx.accounts.edition,
+        &ctx.accounts.token_program,
+    )?;
+  
+    Ok(())
+}
+
+pub fn process_close_loan<'info>(
+    token_manager: &mut Account<'info, TokenManager>,
+    borrower: &Signer<'info>,
+    deposit_token_account: &Account<'info, TokenAccount>,
+    mint: &Account<'info, Mint>,
+    edition: &UncheckedAccount<'info>,
+    token_program: &Program<'info, Token>,
+) -> Result<()> {
     token_manager.accounts.loan = false;
     // IMPORTANT CHECK!
-    if token_manager.accounts.rental == true {
-        return Ok(());
+    if token_manager.accounts.rental == false {
+        if deposit_token_account.is_frozen() {
+            thaw_and_revoke_token_account(
+                token_manager,
+                token_program.to_account_info(),
+                deposit_token_account.to_account_info(),
+                borrower.to_account_info(),
+                mint.to_account_info(),
+                edition.to_account_info()
+            )?;
+        } else if deposit_token_account.delegate.is_some() {
+            anchor_spl::token::revoke(
+                CpiContext::new(
+                    token_program.to_account_info(),
+                    anchor_spl::token::Revoke {
+                        source: deposit_token_account.to_account_info(),
+                        authority: borrower.to_account_info(),
+                    }
+                )
+            )?;
+        }
+    
+        token_manager.close(borrower.to_account_info())?;    
     }
 
-    if loan.state != LoanState::Defaulted {
-        thaw_and_revoke_token_account(
-            token_manager,
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.deposit_token_account.to_account_info(),
-            ctx.accounts.borrower.to_account_info(),
-            ctx.accounts.mint.to_account_info(),
-            ctx.accounts.edition.to_account_info(),
-        )?;
-    }
-  
     Ok(())
 }
 

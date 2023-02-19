@@ -304,6 +304,7 @@ describe("Rentals", () => {
   describe("Loan repayment with active rental", () => {
     let borrower: helpers.LoanBorrower;
     let lender: helpers.LoanLender;
+    let rentalTokenAccount: anchor.web3.PublicKey;
     let thirdPartyKeypair = anchor.web3.Keypair.generate();
     let options = {
       amount: anchor.web3.LAMPORTS_PER_SOL,
@@ -426,7 +427,6 @@ describe("Rentals", () => {
         connection,
         rentalTokenAccount.address
       );
-
       assert.deepEqual(tokenManager.accounts, {
         loan: true,
         rental: true,
@@ -445,14 +445,16 @@ describe("Rentals", () => {
 
     it("Allows loans to be repaid", async () => {
       const signer = await helpers.getSigner();
-      const borrower = await helpers.askLoan(connection, options);
-      const lender = await helpers.giveLoan(connection, borrower);
       const metadata = await Metadata.fromAccountAddress(
         connection,
         borrower.metadata
       );
       const lenderPreRepaymentBalance = await connection.getBalance(
         lender.keypair.publicKey
+      );
+
+      const preTokenManager = await borrower.program.account.tokenManager.fetch(
+        borrower.tokenManager
       );
 
       await borrower.program.methods
@@ -489,17 +491,28 @@ describe("Rentals", () => {
         connection,
         borrower.depositTokenAccount
       );
+      const rentalTokenAccount =
+        await splToken.getOrCreateAssociatedTokenAccount(
+          connection,
+          thirdPartyKeypair,
+          borrower.mint,
+          thirdPartyKeypair.publicKey
+        );
       const tokenManager = await borrower.program.account.tokenManager.fetch(
         borrower.tokenManager
       );
-
       assert.deepEqual(tokenManager.accounts, {
-        rental: false,
+        rental: true,
         callOption: false,
         loan: false,
       });
-      assert.equal(borrowerTokenAccount.amount, BigInt(1));
-      assert.equal(borrowerTokenAccount.delegate, null);
+      assert.equal(
+        borrowerTokenAccount.amount,
+        BigInt(0),
+        "borrower token amount"
+      );
+      assert.equal(rentalTokenAccount.amount, BigInt(1), "rental token amount");
+      assert.ok(rentalTokenAccount.isFrozen, "rental token frozen");
       assert.ok(
         lenderPostRepaymentBalance > lenderPreRepaymentBalance,
         "balance"

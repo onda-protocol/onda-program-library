@@ -5,10 +5,11 @@ use anchor_lang::{
   }
 };
 use anchor_spl::token::{Mint, Token, TokenAccount};
+use crate::utils::*;
 use crate::constants::*;
 use crate::error::*;
 use crate::state::{Loan, LoanState, TokenManager};
-use crate::utils::*;
+use crate::processor::loan::close::{process_close_loan};
 
 #[derive(Accounts)]
 pub struct RepayLoan<'info> {
@@ -39,7 +40,7 @@ pub struct RepayLoan<'info> {
         has_one = mint,
         constraint = loan.lender.unwrap() == lender.key(), 
         constraint = loan.state == LoanState::Active,
-        close = borrower
+        close = borrower,
     )]
     pub loan: Box<Account<'info, Loan>>,
     #[account(
@@ -66,9 +67,11 @@ pub struct RepayLoan<'info> {
 
 pub fn handle_repay_loan<'info>(ctx: Context<'_, '_, '_, 'info, RepayLoan<'info>>) -> Result<()> {
     let loan = &mut ctx.accounts.loan;
+    let borrower = &ctx.accounts.borrower;
+    let deposit_token_account = &ctx.accounts.deposit_token_account;
     let token_manager = &mut ctx.accounts.token_manager;
-
-    token_manager.accounts.loan = false;
+    let mint = &ctx.accounts.mint;
+    let edition = &ctx.accounts.edition;
 
     let duration = ctx.accounts.clock.unix_timestamp.checked_sub(
         loan.start_date.unwrap()
@@ -92,7 +95,7 @@ pub fn handle_repay_loan<'info>(ctx: Context<'_, '_, '_, 'info, RepayLoan<'info>
             amount_due,
         ),
         &[
-            ctx.accounts.borrower.to_account_info(),
+            borrower.to_account_info(),
             ctx.accounts.lender.to_account_info(),
         ]
     )?;
@@ -107,22 +110,20 @@ pub fn handle_repay_loan<'info>(ctx: Context<'_, '_, '_, 'info, RepayLoan<'info>
     pay_creator_fees(
         creator_fee,
         10_000, // 100%
-        &ctx.accounts.mint.to_account_info(),
+        &mint.to_account_info(),
         &ctx.accounts.metadata.to_account_info(),
-        &mut ctx.accounts.borrower.to_account_info(),
+        &mut borrower.to_account_info(),
         &mut ctx.remaining_accounts.iter(),
     )?;
 
-    if token_manager.accounts.rental == false {
-        thaw_and_revoke_token_account(
-            token_manager,
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.deposit_token_account.to_account_info(),
-            ctx.accounts.borrower.to_account_info(),
-            ctx.accounts.mint.to_account_info(),
-            ctx.accounts.edition.to_account_info()
-        )?;
-    }
+    process_close_loan(
+        token_manager,
+        borrower,
+        deposit_token_account,
+        mint,
+        edition,
+        &ctx.accounts.token_program
+    )?;
 
     Ok(())
 }

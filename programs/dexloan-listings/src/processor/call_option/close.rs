@@ -5,6 +5,7 @@ use {
             program::{invoke_signed},
             system_instruction::{transfer}
         },
+        AccountsClose
     },
     anchor_spl::token::{Mint, Token, TokenAccount}
 };
@@ -64,7 +65,12 @@ pub struct CloseCallOption<'info> {
 
 pub fn handle_close_call_option(ctx: Context<CloseCallOption>) -> Result<()> {
     let call_option = &ctx.accounts.call_option;
+    let seller = &ctx.accounts.seller;
+    let deposit_token_account = &ctx.accounts.deposit_token_account;
     let token_manager = &mut ctx.accounts.token_manager;
+    let mint = &ctx.accounts.mint;
+    let edition = &ctx.accounts.edition;
+    let token_program = &ctx.accounts.token_program;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
     if call_option.state == CallOptionState::Active {
@@ -74,30 +80,31 @@ pub fn handle_close_call_option(ctx: Context<CloseCallOption>) -> Result<()> {
     }
 
     token_manager.accounts.call_option = false;
-    // IMPORTANT CHECK!
-    if token_manager.accounts.rental == true {
-        return Ok(());
-    }
 
-    if ctx.accounts.deposit_token_account.is_frozen() {
-        thaw_and_revoke_token_account(
-            token_manager,
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.deposit_token_account.to_account_info(),
-            ctx.accounts.seller.to_account_info(),
-            ctx.accounts.mint.to_account_info(),
-            ctx.accounts.edition.to_account_info()
-        )?;
-    } else {
-        anchor_spl::token::revoke(
-            CpiContext::new(
-                ctx.accounts.token_program.to_account_info(),
-                anchor_spl::token::Revoke {
-                    source: ctx.accounts.deposit_token_account.to_account_info(),
-                    authority: ctx.accounts.seller.to_account_info(),
-                }
-            )
-        )?;
+    // IMPORTANT CHECK!
+    if token_manager.accounts.rental == false {
+        if deposit_token_account.is_frozen() {
+            thaw_and_revoke_token_account(
+                token_manager,
+                token_program.to_account_info(),
+                deposit_token_account.to_account_info(),
+                seller.to_account_info(),
+                mint.to_account_info(),
+                edition.to_account_info()
+            )?;
+        } else if deposit_token_account.delegate.is_some() {
+            anchor_spl::token::revoke(
+                CpiContext::new(
+                    token_program.to_account_info(),
+                    anchor_spl::token::Revoke {
+                        source: deposit_token_account.to_account_info(),
+                        authority: seller.to_account_info(),
+                    }
+                )
+            )?;
+        }
+    
+        token_manager.close(seller.to_account_info())?;
     }
 
     Ok(())

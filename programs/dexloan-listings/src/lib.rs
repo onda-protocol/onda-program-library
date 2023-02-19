@@ -14,7 +14,7 @@ pub use utils::*;
 declare_id!("F2BTn5cmYkTzo52teXhG6jyLS3y2BujdE56yZaGyvxwC");
 
 #[program]
-pub mod dexloan_listings {
+pub mod onda_listings {
     use super::*;
 
     // Loans

@@ -337,7 +337,9 @@ describe("Call Options", () => {
       const sellerAfterBalance = await connection.getBalance(
         seller.keypair.publicKey
       );
-      const estimatedSellerBalance = sellerBeforeBalance + options.amount;
+      const estimatedSellerBalance =
+        sellerBeforeBalance + options.amount - options.amount * 0.02;
+
       assert.equal(
         sellerAfterBalance,
         estimatedSellerBalance,

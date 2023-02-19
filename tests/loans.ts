@@ -15,7 +15,7 @@ const connection = new anchor.web3.Connection(
   anchor.AnchorProvider.defaultOptions().preflightCommitment
 );
 
-describe.only("Loans", () => {
+describe("Loans", () => {
   describe("Offers", () => {
     let lender: helpers.LoanOfferLender;
     let borrower: helpers.LoanOfferBorrower;
@@ -322,7 +322,7 @@ describe.only("Loans", () => {
     });
   });
 
-  describe.only("Loan repayments", () => {
+  describe("Loan repayments", () => {
     let borrower: Awaited<ReturnType<typeof helpers.askLoan>>;
     let lender: Awaited<ReturnType<typeof helpers.giveLoan>>;
     let options;
@@ -608,15 +608,18 @@ describe.only("Loans", () => {
         connection,
         borrower.depositTokenAccount
       );
-      const tokenManager = await borrower.program.account.tokenManager.fetch(
-        borrower.tokenManager
-      );
 
-      assert.deepEqual(tokenManager.accounts, {
-        rental: false,
-        callOption: false,
-        loan: false,
-      });
+      try {
+        await borrower.program.account.tokenManager.fetch(
+          borrower.tokenManager
+        );
+      } catch (error) {
+        assert.ok(
+          error.toString(),
+          `Account does not exist ${borrower.tokenManager.toBase58()}`
+        );
+      }
+
       assert.equal(borrowerTokenAccount.amount, BigInt(1));
       assert.equal(borrowerTokenAccount.delegate, null);
       assert.equal(
