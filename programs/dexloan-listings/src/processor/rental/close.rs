@@ -1,4 +1,4 @@
-use anchor_lang::{prelude::*};
+use anchor_lang::{prelude::*, AccountsClose};
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{Rental, RentalState, TokenManager};
 use crate::utils::*;
@@ -62,18 +62,19 @@ pub fn handle_close_rental(ctx: Context<CloseRental>) -> Result<()> {
 
     token_manager.accounts.rental = false;
     // IMPORTANT CHECKS!
-    if token_manager.accounts.call_option == true || token_manager.accounts.loan == true {
-        return Ok(());
+    if token_manager.accounts.call_option == false && token_manager.accounts.loan == false {
+        thaw_and_revoke_token_account(
+            token_manager,
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.deposit_token_account.to_account_info(),
+            ctx.accounts.lender.to_account_info(),
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.edition.to_account_info(),
+        )?;
+
+        token_manager.close(&mut ctx.accounts.lender.to_account_info())?;
     }
 
-    thaw_and_revoke_token_account(
-        token_manager,
-        ctx.accounts.token_program.to_account_info(),
-        ctx.accounts.deposit_token_account.to_account_info(),
-        ctx.accounts.lender.to_account_info(),
-        ctx.accounts.mint.to_account_info(),
-        ctx.accounts.edition.to_account_info(),
-    )?;
 
     Ok(())
 }
