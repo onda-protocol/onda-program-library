@@ -1,12 +1,12 @@
 [package]
-name = "dexloan_listings"
+name = "onda_listings"
 version = "1.0.0"
 description = "Created with Anchor"
 edition = "2018"
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "dexloan_listings"
+name = "onda_listings"
 
 [features]
 no-entrypoint = []

@@ -72,7 +72,7 @@ pub fn handle_close_rental(ctx: Context<CloseRental>) -> Result<()> {
             ctx.accounts.edition.to_account_info(),
         )?;
 
-        token_manager.close(&mut ctx.accounts.lender.to_account_info())?;
+        token_manager.close(ctx.accounts.lender.to_account_info())?;
     }
 
 

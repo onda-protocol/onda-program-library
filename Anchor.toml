@@ -7,13 +7,13 @@ url = "https://anchor.projectserum.com"
 seeds = false
 
 [programs.localnet]
-dexloan_listings = "F2BTn5cmYkTzo52teXhG6jyLS3y2BujdE56yZaGyvxwC"
+onda_listings = "F2BTn5cmYkTzo52teXhG6jyLS3y2BujdE56yZaGyvxwC"
 
 [programs.devnet]
-dexloan_listings = "F2BTn5cmYkTzo52teXhG6jyLS3y2BujdE56yZaGyvxwC"
+onda_listings = "F2BTn5cmYkTzo52teXhG6jyLS3y2BujdE56yZaGyvxwC"
 
 [programs.mainnet]
-dexloan_listings = "F2BTn5cmYkTzo52teXhG6jyLS3y2BujdE56yZaGyvxwC"
+onda_listings = "F2BTn5cmYkTzo52teXhG6jyLS3y2BujdE56yZaGyvxwC"
 
 [provider]
 cluster = "localnet"
