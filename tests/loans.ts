@@ -316,7 +316,7 @@ describe("Loans", () => {
       } catch (err) {
         assert.equal(
           err.message,
-          `Account does not exist ${borrower.loan.toBase58()}`
+          `Account does not exist or has no data ${borrower.loan.toBase58()}`
         );
       }
     });

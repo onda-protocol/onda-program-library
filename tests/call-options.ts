@@ -205,12 +205,16 @@ describe("Call Options", () => {
           .rpc();
 
         const latestBlockhash = await connection.getLatestBlockhash();
-        await connection.confirmTransaction({
-          signature,
-          ...latestBlockhash,
-        });
+        await connection.confirmTransaction(
+          {
+            signature,
+            ...latestBlockhash,
+          },
+          "confirmed"
+        );
         const tx = await connection.getTransaction(signature, {
           commitment: "confirmed",
+          maxSupportedTransactionVersion: 0,
         });
         txFee = tx.meta.fee;
       } catch (err) {

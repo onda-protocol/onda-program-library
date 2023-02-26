@@ -7,7 +7,7 @@ import {
   Metadata,
   PROGRAM_ID as METADATA_PROGRAM_ID,
 } from "@metaplex-foundation/mpl-token-metadata";
-import { IDL, DexloanListings } from "../target/types/dexloan_listings";
+import { IDL, OndaListings } from "../target/types/onda_listings";
 
 const PROGRAM_ID = new anchor.web3.PublicKey(
   "F2BTn5cmYkTzo52teXhG6jyLS3y2BujdE56yZaGyvxwC"
@@ -33,8 +33,8 @@ export async function getAuthority() {
 
 export function getProgram(
   provider: anchor.AnchorProvider
-): anchor.Program<DexloanListings> {
-  return new anchor.Program(IDL, PROGRAM_ID, provider);
+): anchor.Program<OndaListings> {
+  return new anchor.Program<OndaListings>(IDL, PROGRAM_ID, provider);
 }
 
 export function getProvider(
@@ -452,17 +452,22 @@ export async function offerLoan(
     collection.mint.address
   );
 
-  await program.methods
-    .offerLoan(amount, basisPoints, duration, id)
-    .accounts({
-      loanOffer,
-      escrowPaymentAccount,
-      collection: collectionAddress,
-      signer: signer.publicKey,
-      lender: keypair.publicKey,
-    })
-    .signers([signer])
-    .rpc();
+  try {
+    await program.methods
+      .offerLoan(amount, basisPoints, duration, id)
+      .accounts({
+        loanOffer,
+        escrowPaymentAccount,
+        collection: collectionAddress,
+        signer: signer.publicKey,
+        lender: keypair.publicKey,
+      })
+      .signers([signer])
+      .rpc();
+  } catch (err) {
+    console.log(err.logs);
+    throw err;
+  }
 
   return {
     keypair,

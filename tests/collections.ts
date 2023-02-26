@@ -4,7 +4,7 @@ import assert from "assert";
 import * as anchor from "@project-serum/anchor";
 import * as helpers from "./helpers";
 import { NftWithToken } from "@metaplex-foundation/js";
-import { DexloanListings } from "../target/types/dexloan_listings";
+import { OndaListings } from "../target/types/onda_listings";
 
 // Configure the client to use the local cluster.
 const connection = new anchor.web3.Connection(
@@ -15,7 +15,7 @@ const connection = new anchor.web3.Connection(
 describe("Collections", async () => {
   let authority: anchor.web3.Keypair;
   let provider: anchor.AnchorProvider;
-  let program: anchor.Program<DexloanListings>;
+  let program: anchor.Program<OndaListings>;
 
   let collectionPda: anchor.web3.PublicKey;
   let collectionMint: NftWithToken;
