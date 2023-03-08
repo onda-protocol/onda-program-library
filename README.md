@@ -1,10 +1,10 @@
-# Dexloan Listings
+# Onda Listings
 
-Dexloan's P2P listings smart-contract for escrowless NFT lending, options trading and rentals.
+Onda's P2P listings smart-contract for escrowless NFT lending, options trading and rentals.
 
 ### Background
 
-Dexloan's listings protocol makes use of SPL Token delegation and freezing to secure fully collateralized NFTs without the use of escrow accounts. Through this mechanism we are able offer a variety of fiancial contracts including fully secured loans, exercisable call options and rentals. Users can borrow against the market value of their NFT without ever needing to transfer ownership, offering the possibility to raise liquidity and open short/long positions while maintaining access to NFT gated features. In addition, users can rent out their NFTs to earn passive income while also borrowing against their market value.
+Onda's listings protocol makes use of SPL Token delegation and freezing to secure fully collateralized NFTs without the use of escrow accounts. Through this mechanism we are able offer a variety of fiancial contracts including fully secured loans, exercisable call options and rentals. Users can borrow against the market value of their NFT without ever needing to transfer ownership, offering the possibility to raise liquidity and open short/long positions while maintaining access to NFT gated features. In addition, users can rent out their NFTs to earn passive income while also borrowing against their market value.
 
 ### Loans
 
@@ -42,7 +42,7 @@ Rental listings can be created with the following arguments:
 
 A listed NFT can be rented by specifying a number of days (total amount = days \* amount). The fees from rentals are paid into an escrow account where they can be withdrawn by the lender. Once a rental has finished the lender can choose to recover the NFT, withdrawing any outstanding fees from escrow. Borrowers can optionally choose to extend a rental.
 
-Any NFT with a listed or active loan or call option can also be listed for rental. Just as we can borrow money from a bank against the value of a property and also earn passive income by renting out that property, the same can be done for NFTs on Dexloan.
+Any NFT with a listed or active loan or call option can also be listed for rental. Just as we can borrow money from a bank against the value of a property and also earn passive income by renting out that property, the same can be done for NFTs on Onda.
 
 #### Settlement
 
