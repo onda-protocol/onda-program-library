@@ -120,7 +120,7 @@ pub fn handle_sell_call_option<'info>(
         ctx.program_id.clone(),
     )?;
 
-    require_eq!(token_manager.accounts.loan, false, DexloanError::InvalidState);
+    require_eq!(token_manager.accounts.loan, false, ErrorCodes::InvalidState);
 
     // Init
     call_option.seller = ctx.accounts.seller.key();

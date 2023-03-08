@@ -10,7 +10,7 @@ use {
     anchor_spl::token::{Mint, Token, TokenAccount}
 };
 use crate::state::{CallOption, CallOptionBid, CallOptionState, Collection, TokenManager};
-use crate::error::{DexloanError};
+use crate::error::{ErrorCodes};
 use crate::utils::*;
 use crate::constants::*;
 
@@ -75,7 +75,7 @@ pub fn handle_close_call_option(ctx: Context<CloseCallOption>) -> Result<()> {
 
     if call_option.state == CallOptionState::Active {
         if call_option.expiry > unix_timestamp {
-            return Err(DexloanError::OptionNotExpired.into())
+            return Err(ErrorCodes::OptionNotExpired.into())
         }
     }
 

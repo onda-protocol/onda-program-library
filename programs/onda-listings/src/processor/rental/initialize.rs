@@ -1,7 +1,7 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{Rental, RentalState, Collection, TokenManager};
-use crate::error::{DexloanError};
+use crate::error::{ErrorCodes};
 use crate::utils::*;
 use crate::constants::*;
 
@@ -92,11 +92,11 @@ pub fn handle_init_rental(
     )?;
 
     if unix_timestamp > args.expiry {
-        return err!(DexloanError::InvalidExpiry)
+        return err!(ErrorCodes::InvalidExpiry)
     }
 
     if args.amount == 0 && args.borrower.is_none() {
-        return err!(DexloanError::BorrowerNotSpecified)
+        return err!(ErrorCodes::BorrowerNotSpecified)
     }
 
     // Init

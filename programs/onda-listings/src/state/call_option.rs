@@ -52,14 +52,14 @@ impl CallOption {
     
     pub fn set_active<'info>(call_option: &mut Account<'info, CallOption>, unix_timestamp: i64) -> Result<()> {
         if call_option.state != CallOptionState::Listed {
-            return err!(DexloanError::InvalidState);
+            return err!(ErrorCodes::InvalidState);
         }
         
-        require!(call_option.buyer.is_some(), DexloanError::InvalidState);
-        require_keys_neq!(call_option.seller, SYSTEM_ACCOUNT, DexloanError::InvalidState);
-        require_gt!(call_option.amount, 0, DexloanError::InvalidState);
-        require_gt!(call_option.expiry, unix_timestamp, DexloanError::InvalidExpiry);
-        require_gt!(call_option.strike_price, 0, DexloanError::InvalidState);
+        require!(call_option.buyer.is_some(), ErrorCodes::InvalidState);
+        require_keys_neq!(call_option.seller, SYSTEM_ACCOUNT, ErrorCodes::InvalidState);
+        require_gt!(call_option.amount, 0, ErrorCodes::InvalidState);
+        require_gt!(call_option.expiry, unix_timestamp, ErrorCodes::InvalidExpiry);
+        require_gt!(call_option.strike_price, 0, ErrorCodes::InvalidState);
     
         call_option.state = CallOptionState::Active;
     

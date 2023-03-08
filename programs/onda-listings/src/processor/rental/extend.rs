@@ -63,8 +63,8 @@ pub struct ExtendRental<'info> {
 pub fn handle_extend_rental<'info>(ctx: Context<'_, '_, '_, 'info, ExtendRental<'info>>, days: u16) -> Result<()> {
     let rental = &mut ctx.accounts.rental;
 
-    require!(rental.current_start.is_some(), DexloanError::InvalidState);
-    require!(rental.current_expiry.is_some(), DexloanError::InvalidState);
+    require!(rental.current_start.is_some(), ErrorCodes::InvalidState);
+    require!(rental.current_expiry.is_some(), ErrorCodes::InvalidState);
 
     let duration = i64::from(days) * SECONDS_PER_DAY;
     let current_expiry = rental.current_expiry.unwrap();

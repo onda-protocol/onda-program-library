@@ -3,7 +3,7 @@ use anchor_lang::{
 };
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{CallOption, CallOptionState, Rental, TokenManager};
-use crate::error::{DexloanError};
+use crate::error::{ErrorCodes};
 use crate::utils::*;
 use crate::constants::*;
 
@@ -79,7 +79,7 @@ pub fn handle_exercise_call_option<'info>(ctx: Context<'_, '_, '_, 'info, Exerci
     msg!("Exercise with strike price: {} lamports", call_option.strike_price);
 
     if unix_timestamp > call_option.expiry {
-        return Err(DexloanError::OptionExpired.into())
+        return Err(ErrorCodes::OptionExpired.into())
     }
 
     call_option.state = CallOptionState::Exercised;
@@ -218,7 +218,7 @@ pub fn handle_exercise_call_option_with_rental<'info>(ctx: Context<'_, '_, '_, '
     msg!("Exercise with strike price: {} lamports", call_option.strike_price);
 
     if unix_timestamp > call_option.expiry {
-        return Err(DexloanError::OptionExpired.into())
+        return Err(ErrorCodes::OptionExpired.into())
     }
 
     pay_creator_royalties(

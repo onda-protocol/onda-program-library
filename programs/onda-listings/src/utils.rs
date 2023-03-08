@@ -162,7 +162,7 @@ pub fn maybe_delegate_and_freeze_token_account<'info>(
                 issuer,
             )?;
         } else if token_account.delegate.unwrap() != token_manager.key() || token_account.delegated_amount != 1 {
-            return err!(DexloanError::InvalidDelegate);
+            return err!(ErrorCodes::InvalidDelegate);
         }
     } else {
         delegate_and_freeze_token_account(
@@ -286,8 +286,8 @@ pub fn thaw_and_transfer_from_token_account<'info>(
 }
 
 pub fn calculate_widthdawl_amount<'info>(rental: &mut Account<'info, Rental>, unix_timestamp: i64) -> Result<u64> {
-    require!(rental.current_start.is_some(), DexloanError::InvalidState);
-    require!(rental.current_expiry.is_some(), DexloanError::InvalidState);
+    require!(rental.current_start.is_some(), ErrorCodes::InvalidState);
+    require!(rental.current_expiry.is_some(), ErrorCodes::InvalidState);
 
     let start = rental.current_start.unwrap() as f64;
     let end = rental.current_expiry.unwrap() as f64;
@@ -424,9 +424,9 @@ pub fn process_payment_to_rental_escrow<'info>(
     borrower: AccountInfo<'info>,
     days: u16,
 ) -> Result<()> {
-    let amount = u64::from(days).checked_mul(rental.amount).ok_or(DexloanError::NumericalOverflow)?;
+    let amount = u64::from(days).checked_mul(rental.amount).ok_or(ErrorCodes::NumericalOverflow)?;
     let creator_fee = calculate_fee_from_basis_points(amount as u128, rental.creator_basis_points as u128)?;
-    let total_amount = amount.checked_add(creator_fee).ok_or(DexloanError::NumericalOverflow)?;
+    let total_amount = amount.checked_add(creator_fee).ok_or(ErrorCodes::NumericalOverflow)?;
 
     msg!("Paying {} lamports to rental escrow", amount);
 
@@ -456,11 +456,11 @@ pub fn assert_metadata_valid<'a>(
     );
   
     if key != metadata.to_account_info().key() {
-      return err!(DexloanError::DerivedKeyInvalid);
+      return err!(ErrorCodes::DerivedKeyInvalid);
     }
   
     if metadata.data_is_empty() {
-      return err!(DexloanError::MetadataDoesntExist);
+      return err!(ErrorCodes::MetadataDoesntExist);
     }
   
     Ok(())
@@ -476,7 +476,7 @@ pub fn assert_collection_valid<'a>(
         &mut metadata.data.borrow_mut().as_ref()
     )?;
 
-    require_keys_eq!(metadata.mint, mint.key(), DexloanError::InvalidMint);
+    require_keys_eq!(metadata.mint, mint.key(), ErrorCodes::InvalidMint);
 
     match metadata.collection {
         Some(collection) => {
@@ -489,10 +489,10 @@ pub fn assert_collection_valid<'a>(
                 &program_id
             );
 
-            require_keys_eq!(address, collection_pda, DexloanError::InvalidCollection);
+            require_keys_eq!(address, collection_pda, ErrorCodes::InvalidCollection);
         }
         None => {
-            return err!(DexloanError::InvalidCollection);
+            return err!(ErrorCodes::InvalidCollection);
         }
     }
 
@@ -504,9 +504,9 @@ pub fn calculate_fee_from_basis_points(
     basis_points: u128,
 ) -> Result<u64> {
     let total_fee = basis_points.checked_mul(amount)
-        .ok_or(DexloanError::NumericalOverflow)?
+        .ok_or(ErrorCodes::NumericalOverflow)?
         .checked_div(10_000)
-        .ok_or(DexloanError::NumericalOverflow)? as u64;
+        .ok_or(ErrorCodes::NumericalOverflow)? as u64;
     
     Ok(total_fee)
 }
@@ -530,7 +530,7 @@ pub fn get_creator_fees<'a>(
     )?;
 
     if metadata.mint != mint.key() {
-        return  err!(DexloanError::InvalidMint);
+        return  err!(ErrorCodes::InvalidMint);
     }
 
     assert_metadata_valid(
@@ -542,7 +542,7 @@ pub fn get_creator_fees<'a>(
     let mut remaining_fee = total_fee;
     let remaining_amount = amount
             .checked_sub(total_fee)
-            .ok_or(DexloanError::NumericalOverflow)?;
+            .ok_or(ErrorCodes::NumericalOverflow)?;
     
     let mut fees: Vec<CreatorFee> = Vec::new();
 
@@ -553,12 +553,12 @@ pub fn get_creator_fees<'a>(
             for creator in creators {
                 let pct = creator.share as u128;
                 let amount = pct.checked_mul(total_fee as u128)
-                        .ok_or(DexloanError::NumericalOverflow)?
+                        .ok_or(ErrorCodes::NumericalOverflow)?
                         .checked_div(100)
-                        .ok_or(DexloanError::NumericalOverflow)? as u64;
+                        .ok_or(ErrorCodes::NumericalOverflow)? as u64;
                 remaining_fee = remaining_fee
                         .checked_sub(amount)
-                        .ok_or(DexloanError::NumericalOverflow)?;
+                        .ok_or(ErrorCodes::NumericalOverflow)?;
 
                 let current_creator_info = next_account_info(remaining_accounts)?;
                 let address = current_creator_info.key();
@@ -576,7 +576,7 @@ pub fn get_creator_fees<'a>(
         }
     }
 
-    let remaining = remaining_amount.checked_add(remaining_fee).ok_or(DexloanError::NumericalOverflow)?;
+    let remaining = remaining_amount.checked_add(remaining_fee).ok_or(ErrorCodes::NumericalOverflow)?;
 
     Ok((fees, remaining))
 }
@@ -732,17 +732,17 @@ pub fn calculate_loan_repayment_fee(
     let annual_fee = calculate_fee_from_basis_points(amount as u128, basis_points as u128)?;
 
     let mut interest_due = annual_fee.checked_mul(duration as u64)
-        .ok_or(DexloanError::NumericalOverflow)?
+        .ok_or(ErrorCodes::NumericalOverflow)?
         .checked_div(SECONDS_PER_YEAR as u64)
-        .ok_or(DexloanError::NumericalOverflow)?;
+        .ok_or(ErrorCodes::NumericalOverflow)?;
 
-    // let mut amount_due = amount.checked_add(interest_due).ok_or(DexloanError::NumericalOverflow)?;
+    // let mut amount_due = amount.checked_add(interest_due).ok_or(ErrorCodes::NumericalOverflow)?;
     msg!("interest_due {}", interest_due);
 
     if is_overdue {
         let late_repayment_fee = calculate_fee_from_basis_points(amount as u128, LATE_REPAYMENT_FEE_BASIS_POINTS)?;
         msg!("late_repayment_fee {}", late_repayment_fee);
-        interest_due = interest_due.checked_add(late_repayment_fee).ok_or(DexloanError::NumericalOverflow)?;
+        interest_due = interest_due.checked_add(late_repayment_fee).ok_or(ErrorCodes::NumericalOverflow)?;
     }
     
     

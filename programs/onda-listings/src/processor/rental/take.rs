@@ -1,7 +1,7 @@
 use anchor_lang::{system_program,prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{Rental, RentalState, TokenManager};
-use crate::error::{DexloanError};
+use crate::error::{ErrorCodes};
 use crate::constants::*;
 use crate::utils::*;
 
@@ -112,7 +112,7 @@ pub fn handle_take_rental<'info>(ctx: Context<'_, '_, '_, 'info, TakeRental<'inf
     let current_expiry = unix_timestamp + duration;
 
     if current_expiry > rental.expiry {
-        return err!(DexloanError::InvalidExpiry)
+        return err!(ErrorCodes::InvalidExpiry)
     }
 
     rental.current_start = Some(unix_timestamp);

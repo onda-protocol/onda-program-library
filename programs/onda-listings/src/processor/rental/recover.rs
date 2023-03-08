@@ -1,7 +1,7 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{Rental, RentalState, TokenManager};
-use crate::error::{DexloanError};
+use crate::error::{ErrorCodes};
 use crate::utils::*;
 use crate::constants::*;
 
@@ -82,13 +82,13 @@ pub fn handle_recover_rental<'info>(ctx: Context<'_, '_, '_, 'info, RecoverRenta
     let token_manager = &mut ctx.accounts.token_manager;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
-    require!(rental.current_start.is_some(), DexloanError::InvalidState);
-    require!(rental.current_expiry.is_some(), DexloanError::InvalidState);
+    require!(rental.current_start.is_some(), ErrorCodes::InvalidState);
+    require!(rental.current_expiry.is_some(), ErrorCodes::InvalidState);
 
     let current_expiry = rental.current_expiry.unwrap();
 
     if current_expiry > unix_timestamp {
-        return Err(DexloanError::NotExpired.into());
+        return Err(ErrorCodes::NotExpired.into());
     }
 
     thaw_and_transfer_from_token_account(

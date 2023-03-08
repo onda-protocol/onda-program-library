@@ -68,21 +68,21 @@ impl Loan {
     
     pub fn set_active<'info>(loan: &mut Account<'info, Loan>, unix_timestamp: i64) -> Result<()> {
         if loan.state != LoanState::Listed {
-            return err!(DexloanError::InvalidState);
+            return err!(ErrorCodes::InvalidState);
         }
     
-        require!(loan.lender.is_some(), DexloanError::InvalidState);
-        require!(loan.amount.is_some(), DexloanError::InvalidState);
-        require_keys_neq!(loan.borrower, SYSTEM_ACCOUNT, DexloanError::InvalidState);
-        require_eq!(loan.outstanding, loan.amount.unwrap(), DexloanError::InvalidState);
-        require_gt!(loan.installments, 0, DexloanError::InvalidState);
-        require_gt!(loan.duration, 0, DexloanError::InvalidState);
-        require_gte!(loan.basis_points, 0, DexloanError::InvalidState);
+        require!(loan.lender.is_some(), ErrorCodes::InvalidState);
+        require!(loan.amount.is_some(), ErrorCodes::InvalidState);
+        require_keys_neq!(loan.borrower, SYSTEM_ACCOUNT, ErrorCodes::InvalidState);
+        require_eq!(loan.outstanding, loan.amount.unwrap(), ErrorCodes::InvalidState);
+        require_gt!(loan.installments, 0, ErrorCodes::InvalidState);
+        require_gt!(loan.duration, 0, ErrorCodes::InvalidState);
+        require_gte!(loan.basis_points, 0, ErrorCodes::InvalidState);
     
         loan.state = LoanState::Active;
         loan.start_date = Some(unix_timestamp);
     
-        require!(loan.start_date.is_some(), DexloanError::InvalidState);
+        require!(loan.start_date.is_some(), ErrorCodes::InvalidState);
     
         Ok(())
     }

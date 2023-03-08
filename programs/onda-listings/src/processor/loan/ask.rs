@@ -85,7 +85,7 @@ pub fn handle_ask_loan(
         ctx.program_id.clone(),
     )?;
 
-    require_eq!(token_manager.accounts.call_option, false, DexloanError::InvalidState);
+    require_eq!(token_manager.accounts.call_option, false, ErrorCodes::InvalidState);
 
     // Init
     loan.mint = ctx.accounts.mint.key();

@@ -1,7 +1,7 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{CallOption, Collection, TokenManager};
-use crate::error::{DexloanError};
+use crate::error::{ErrorCodes};
 use crate::utils::*;
 use crate::constants::*;
 
@@ -88,10 +88,10 @@ pub fn handle_ask_call_option(
     )?;
 
     if unix_timestamp > expiry {
-        return Err(DexloanError::InvalidExpiry.into())
+        return Err(ErrorCodes::InvalidExpiry.into())
     }
 
-    require_eq!(token_manager.accounts.loan, false, DexloanError::InvalidState);
+    require_eq!(token_manager.accounts.loan, false, ErrorCodes::InvalidState);
 
     // Init
     call_option.seller = ctx.accounts.seller.key();

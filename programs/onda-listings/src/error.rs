@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 #[error_code]
-pub enum DexloanError {
+pub enum ErrorCodes {
     #[msg("This loan is not overdue")]
     NotOverdue,
     #[msg("Not expired")]

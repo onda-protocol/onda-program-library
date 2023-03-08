@@ -1,7 +1,7 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Token, TokenAccount, Mint};
 use crate::state::{Loan, LoanState, Rental, TokenManager};
-use crate::error::{DexloanError};
+use crate::error::{ErrorCodes};
 use crate::utils::*;
 use crate::constants::*;
 
@@ -74,7 +74,7 @@ pub fn handle_repossess(ctx: Context<Repossess>) -> Result<()> {
   let duration = unix_timestamp - start_date;
 
   if loan.duration > duration  {
-      return Err(DexloanError::NotOverdue.into())
+      return Err(ErrorCodes::NotOverdue.into())
   }
   
   loan.state = LoanState::Defaulted;
@@ -185,7 +185,7 @@ pub fn handle_repossess_with_rental<'info>(ctx: Context<'_, '_, '_, 'info, Repos
     let duration = unix_timestamp - start_date;
 
     if loan.duration > duration  {
-        return err!(DexloanError::NotOverdue);
+        return err!(ErrorCodes::NotOverdue);
     }
 
     loan.state = LoanState::Defaulted;

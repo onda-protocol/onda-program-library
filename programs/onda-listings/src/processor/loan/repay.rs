@@ -75,9 +75,9 @@ pub fn handle_repay_loan<'info>(ctx: Context<'_, '_, '_, 'info, RepayLoan<'info>
 
     let duration = ctx.accounts.clock.unix_timestamp.checked_sub(
         loan.start_date.unwrap()
-    ).ok_or(DexloanError::NumericalOverflow)?;
+    ).ok_or(ErrorCodes::NumericalOverflow)?;
 
-    let expiry = loan.start_date.unwrap().checked_add(loan.duration).ok_or(DexloanError::NumericalOverflow)?;
+    let expiry = loan.start_date.unwrap().checked_add(loan.duration).ok_or(ErrorCodes::NumericalOverflow)?;
     let is_overdue = ctx.accounts.clock.unix_timestamp > expiry;
     
     let interest_due = calculate_loan_repayment_fee(
@@ -86,7 +86,7 @@ pub fn handle_repay_loan<'info>(ctx: Context<'_, '_, '_, 'info, RepayLoan<'info>
         duration,
         is_overdue
     )?;
-    let amount_due = loan.amount.unwrap().checked_add(interest_due).ok_or(DexloanError::NumericalOverflow)?;
+    let amount_due = loan.amount.unwrap().checked_add(interest_due).ok_or(ErrorCodes::NumericalOverflow)?;
 
     invoke(
         &anchor_lang::solana_program::system_instruction::transfer(
