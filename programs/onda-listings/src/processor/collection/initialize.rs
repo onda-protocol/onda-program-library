@@ -35,7 +35,7 @@ pub struct InitCollection<'info> {
     )]
     pub collection: Box<Account<'info, Collection>>,
     pub mint: Box<Account<'info, Mint>>,
-    // CHECK: deserialized
+    /// CHECK: deserialized and checked
     pub metadata: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
