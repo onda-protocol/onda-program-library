@@ -3,15 +3,10 @@ use {
         prelude::*,
     },
     anchor_spl::token::{Mint},
-    mpl_token_metadata::{
-        state::Metadata,
-    },
 };
 
 use crate::constants::*;
-use crate::utils::{assert_metadata_valid};
 use crate::state::{Collection, Config};
-use crate::error::ErrorCodes;
 
 
 #[derive(Accounts)]
@@ -35,8 +30,6 @@ pub struct InitCollection<'info> {
     )]
     pub collection: Box<Account<'info, Collection>>,
     pub mint: Box<Account<'info, Mint>>,
-    /// CHECK: deserialized and checked
-    pub metadata: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
 }
@@ -48,21 +41,6 @@ pub fn handle_init_collection(
     let collection = &mut ctx.accounts.collection;
     
     require_keys_eq!(ctx.accounts.authority.key(), ADMIN_PUBKEY);
-
-    assert_metadata_valid(&ctx.accounts.metadata, &ctx.accounts.mint.to_account_info())?;
-
-    let metadata = Metadata::deserialize(
-        &mut ctx.accounts.metadata.data.borrow_mut().as_ref()
-    )?;
-
-    match metadata.collection {
-        Some(collection) => {
-            if collection.verified != true {
-                return err!(ErrorCodes::InvalidCollection);
-            }
-        },
-        None => return err!(ErrorCodes::InvalidCollection),
-    }
     
     collection.authority = ctx.accounts.authority.key();
     collection.mint = ctx.accounts.mint.key();

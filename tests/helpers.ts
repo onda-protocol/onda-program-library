@@ -213,22 +213,19 @@ export async function mintNFT(
 
   const metaplex = Metaplex.make(connection).use(keypairIdentity(authority));
 
-  const { nft: collection } = await metaplex
-    .nfts()
-    .create({
-      uri: "https://arweave.net/123",
-      name: "My Collection",
-      sellerFeeBasisPoints: 500,
-      creators: [
-        {
-          address: authority.publicKey,
-          share: 100,
-        },
-      ],
-      isCollection: true,
-      collectionIsSized: true,
-    })
-    .run();
+  const { nft: collection } = await metaplex.nfts().create({
+    uri: "https://arweave.net/123",
+    name: "My Collection",
+    sellerFeeBasisPoints: 500,
+    creators: [
+      {
+        address: authority.publicKey,
+        share: 100,
+      },
+    ],
+    isCollection: true,
+    collectionIsSized: true,
+  });
 
   const collectionAddress = await findCollectionAddress(
     collection.mint.address
@@ -252,31 +249,24 @@ export async function mintNFT(
     .signers([signer])
     .rpc();
 
-  const { nft } = await metaplex
-    .nfts()
-    .create({
-      uri: "https://arweave.net/123",
-      name: "My NFT",
-      sellerFeeBasisPoints: 500,
-      creators: [
-        {
-          address: authority.publicKey,
-          share: 100,
-        },
-      ],
-      collection: collection.mint.address,
-    })
-    .run();
+  const { nft } = await metaplex.nfts().create({
+    uri: "https://arweave.net/123",
+    name: "My NFT",
+    sellerFeeBasisPoints: 500,
+    creators: [
+      {
+        address: authority.publicKey,
+        share: 100,
+      },
+    ],
+    collection: collection.mint.address,
+  });
 
-  const verifyResult = await metaplex
-    .nfts()
-    .verifyCollection({
-      mintAddress: nft.mint.address,
-      collectionMintAddress: nft.collection.address,
-      collectionAuthority: authority,
-      payer: keypair,
-    })
-    .run();
+  const verifyResult = await metaplex.nfts().verifyCollection({
+    mintAddress: nft.mint.address,
+    collectionMintAddress: nft.collection.address,
+    collectionAuthority: authority,
+  });
 
   await connection.confirmTransaction({
     signature: verifyResult.response.signature,
@@ -285,13 +275,10 @@ export async function mintNFT(
 
   // Transfer nft to provided keypair
   if (!keypair.publicKey.equals(authority.publicKey)) {
-    const sendResult = await metaplex
-      .nfts()
-      .send({
-        mintAddress: nft.mint.address,
-        toOwner: keypair.publicKey,
-      })
-      .run();
+    const sendResult = await metaplex.nfts().transfer({
+      nftOrSft: nft,
+      toOwner: keypair.publicKey,
+    });
 
     await connection.confirmTransaction({
       signature: sendResult.response.signature,
@@ -338,7 +325,7 @@ export async function askLoan(
   const depositTokenAccount = largestAccounts.value[0].address;
 
   const amount = new anchor.BN(options.amount);
-  const basisPoints = new anchor.BN(options.basisPoints);
+  const basisPoints = options.basisPoints;
   const duration = new anchor.BN(options.duration);
 
   try {
@@ -495,13 +482,10 @@ export async function takeLoan(
   const metaplex = await Metaplex.make(connection).use(
     keypairIdentity(lender.keypair)
   );
-  await metaplex
-    .nfts()
-    .send({
-      mintAddress: lender.nft.mint.address,
-      toOwner: keypair.publicKey,
-    })
-    .run();
+  await metaplex.nfts().transfer({
+    nftOrSft: lender.nft,
+    toOwner: keypair.publicKey,
+  });
 
   const depositTokenAccount = (
     await connection.getTokenLargestAccounts(lender.nft.mint.address)
@@ -518,7 +502,7 @@ export async function takeLoan(
 
   try {
     await program.methods
-      .takeLoanOffer(new anchor.BN(0))
+      .takeLoanOffer(0)
       .accounts({
         signer: signer.publicKey,
         tokenManager,
@@ -631,13 +615,10 @@ export async function sellCallOption(
     keypairIdentity(authority)
   );
 
-  await metaplex
-    .nfts()
-    .send({
-      mintAddress: buyer.nft.mint.address,
-      toOwner: keypair.publicKey,
-    })
-    .run();
+  await metaplex.nfts().transfer({
+    nftOrSft: buyer.nft,
+    toOwner: keypair.publicKey,
+  });
 
   const depositTokenAccount = (
     await connection.getTokenLargestAccounts(buyer.nft.mint.address)
@@ -654,7 +635,7 @@ export async function sellCallOption(
 
   try {
     await program.methods
-      .sellCallOption(new anchor.BN(0))
+      .sellCallOption(0)
       .accounts({
         signer: signer.publicKey,
         tokenManager,

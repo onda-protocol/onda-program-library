@@ -490,6 +490,7 @@ pub fn assert_collection_valid<'a>(
             );
 
             require_keys_eq!(address, collection_pda, ErrorCodes::InvalidCollection);
+            require(collection.verified, ErrorCodes::InvalidCollection);
         }
         None => {
             return err!(ErrorCodes::InvalidCollection);
