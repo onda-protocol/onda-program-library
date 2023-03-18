@@ -13,9 +13,8 @@ use {
         state::{Metadata, TokenStandard}
     },
 };
-use anchor_spl::token;
 
-use crate::{constants::*, token_manager};
+use crate::constants::*;
 use crate::state::{Rental, Collection, TokenManager};
 use crate::error::*;
 
@@ -158,6 +157,10 @@ pub fn handle_delegate_and_freeze<'info>(
     let token_program_key = token_program.key();
     let authorization_rules_program_key = authorization_rules_program.key();
 
+    let metadata = Metadata::deserialize(
+        &mut metadata_info.data.borrow_mut().as_ref()
+    )?;
+
     let mut delegate_builder = builders::DelegateBuilder::new();
     
     delegate_builder.delegate(token_manager_key)
@@ -198,15 +201,17 @@ pub fn handle_delegate_and_freeze<'info>(
         delegate_builder.token_record(token_record.clone().unwrap().key());
     }
 
-    /*
-        DelegateArgs::LockedTransferV1 {
-        amount: 1,
-        locked_address: token_manager.key(),
-        authorization_data: None,
-    }
-     */
-
-    let delegate_ix = delegate_builder.build(DelegateArgs::StandardV1 { amount: 1 })
+    let delegate_ix = delegate_builder.build(
+        match metadata.token_standard {
+            Some(TokenStandard::ProgrammableNonFungible) => {
+                DelegateArgs::LockedTransferV1 {
+                    amount: 1,
+                    locked_address: token_manager.key(),
+                    authorization_data: None,
+                }
+            }, 
+            _ => DelegateArgs::StandardV1 { amount: 1 }
+        })
         .unwrap()
         .instruction();
 

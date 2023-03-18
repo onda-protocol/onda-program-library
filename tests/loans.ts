@@ -45,6 +45,10 @@ describe.only("Loans", () => {
         assert.ok(err.message.includes("Account does not exist"));
       }
       const loan = await lender.program.account.loan.fetch(borrower.loan);
+      const tokenAccount = await splToken.getAccount(
+        connection,
+        borrower.depositTokenAccount
+      );
       const borrowerLamportsAfter = (
         await connection.getAccountInfo(borrower.keypair.publicKey)
       ).lamports;
@@ -53,6 +57,11 @@ describe.only("Loans", () => {
       assert.equal(loan.amount.toNumber(), options.amount, "amount");
       assert.equal(loan.duration.toNumber(), options.duration, "duration");
       assert.ok(loan.startDate.toNumber() > 0, "startDate");
+      assert.ok(tokenAccount.isFrozen, "isFrozen");
+      assert.ok(
+        tokenAccount.delegate.equals(borrower.tokenManager),
+        "delegate"
+      );
       assert.ok(
         borrowerLamportsAfter > anchor.web3.LAMPORTS_PER_SOL * 3 - 9_000_000,
         "lamports"

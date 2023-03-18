@@ -4,7 +4,10 @@ import * as bip39 from "bip39";
 import { derivePath } from "ed25519-hd-key";
 import { Metaplex, keypairIdentity } from "@metaplex-foundation/js";
 import {
+  createVerifyInstruction,
   Metadata,
+  TokenStandard,
+  VerificationArgs,
   PROGRAM_ID as METADATA_PROGRAM_ID,
 } from "@metaplex-foundation/mpl-token-metadata";
 import { PROGRAM_ID as AUTHORIZATION_RULES_PROGRAM_ID } from "@metaplex-foundation/mpl-token-auth-rules";
@@ -226,6 +229,7 @@ export async function mintNFT(
     ],
     isCollection: true,
     collectionIsSized: true,
+    tokenStandard: TokenStandard.ProgrammableNonFungible,
   });
 
   const collectionAddress = await findCollectionAddress(
@@ -261,17 +265,37 @@ export async function mintNFT(
       },
     ],
     collection: collection.mint.address,
+    tokenStandard: TokenStandard.ProgrammableNonFungible,
   });
 
-  const verifyResult = await metaplex.nfts().verifyCollection({
-    mintAddress: nft.mint.address,
-    collectionMintAddress: nft.collection.address,
-    collectionAuthority: authority,
-  });
+  let latestBlockhash = await connection.getLatestBlockhash();
+  const verifyIx = createVerifyInstruction(
+    {
+      authority: authority.publicKey,
+      metadata: nft.metadataAddress,
+      collectionMint: nft.collection.address,
+      collectionMetadata: collection.metadataAddress,
+      collectionMasterEdition: collection.edition.address,
+      systemProgram: anchor.web3.SystemProgram.programId,
+      sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
+    },
+    {
+      verificationArgs: VerificationArgs.CollectionV1,
+    }
+  );
+  const messageV0 = new anchor.web3.TransactionMessage({
+    payerKey: authority.publicKey,
+    recentBlockhash: latestBlockhash.blockhash,
+    instructions: [verifyIx],
+  }).compileToV0Message();
 
+  const transaction = new anchor.web3.VersionedTransaction(messageV0);
+  transaction.sign([authority]);
+
+  const verifySignature = await connection.sendTransaction(transaction);
   await connection.confirmTransaction({
-    signature: verifyResult.response.signature,
-    ...(await connection.getLatestBlockhash()),
+    signature: verifySignature,
+    ...latestBlockhash,
   });
 
   // Transfer nft to provided keypair
@@ -280,6 +304,7 @@ export async function mintNFT(
       nftOrSft: nft,
       toOwner: keypair.publicKey,
     });
+    console.log("here...");
 
     await connection.confirmTransaction({
       signature: sendResult.response.signature,
@@ -523,10 +548,6 @@ export async function takeLoan(
     sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
   };
 
-  for (const [key, value] of Object.entries(accounts)) {
-    console.log(key, value?.toBase58());
-  }
-
   try {
     await program.methods
       .takeLoanOffer(0)
@@ -543,6 +564,8 @@ export async function takeLoan(
     keypair,
     provider,
     program,
+    depositTokenAccount,
+    tokenManager,
     loan: loanAddress,
     loanOffer: lender.loanOffer,
     collection: lender.collection,
