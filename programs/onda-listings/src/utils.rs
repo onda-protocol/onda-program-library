@@ -9,11 +9,13 @@ use {
     },
     anchor_spl::token::{TokenAccount},
     mpl_token_metadata::{
-        instruction::{freeze_delegated_account, thaw_delegated_account},
-        state::{Metadata}
+        instruction::{freeze_delegated_account, thaw_delegated_account, builders, InstructionBuilder, TransferArgs, DelegateArgs, LockArgs},
+        state::{Metadata, TokenStandard}
     },
 };
-use crate::constants::*;
+use anchor_spl::token;
+
+use crate::{constants::*, token_manager};
 use crate::state::{Rental, Collection, TokenManager};
 use crate::error::*;
 
@@ -131,6 +133,143 @@ pub fn delegate_and_freeze_token_account<'info>(
     Ok(())
 }
 
+pub fn handle_delegate_and_freeze<'info>(
+    token_manager: &mut Account<'info, TokenManager>,
+    owner: AccountInfo<'info>,
+    token_account: AccountInfo<'info>,
+    token_record: AccountInfo<'info>,
+    mint: AccountInfo<'info>,
+    metadata_info: AccountInfo<'info>,
+    edition: AccountInfo<'info>,
+    token_program: AccountInfo<'info>,
+    system_program: AccountInfo<'info>,
+    sysvar_instructions: AccountInfo<'info>,
+    authorization_rules_program: AccountInfo<'info>,
+    authorization_rules: Option<AccountInfo<'info>>,
+) -> Result<()> {
+    let token_manager_key = token_manager.key();
+    let owner_key = owner.key();
+    let token_account_key = token_account.key();
+    let mint_key = mint.key();
+    let metadata_key = metadata_info.key();
+    let edition_key = edition.key();
+    let token_record_key = token_record.key();
+    let system_program_key = system_program.key(); 
+    let sysvar_instructions_key = sysvar_instructions.key();
+    let token_program_key = token_program.key();
+    let authorization_rules_program_key = authorization_rules_program.key();
+
+    let mut delegate_builder = builders::DelegateBuilder::new();
+    
+    delegate_builder.delegate(token_manager_key)
+        .metadata(metadata_key)
+        .master_edition(edition_key)
+        .token_record(token_record_key)
+        .mint(mint.key())
+        .token(token_account_key)
+        .authority(owner_key)
+        .payer(owner_key)
+        .system_program(system_program_key)
+        .sysvar_instructions(sysvar_instructions_key)
+        .spl_token_program(token_program_key);
+
+    let mut delegate_accounts = vec![
+        token_manager.to_account_info(),
+        metadata_info.to_account_info(),
+        edition.to_account_info(),
+        token_record.to_account_info(),
+        mint.to_account_info(),
+        token_account.to_account_info(),
+        owner.to_account_info(),
+        system_program.to_account_info(),
+        sysvar_instructions.to_account_info(),
+        token_program.to_account_info(),
+    ];
+
+    // Conidtionally add authorization rules account
+    if authorization_rules.is_some() {
+        delegate_accounts.push(authorization_rules.clone().unwrap().to_account_info());
+        delegate_accounts.push(authorization_rules_program.to_account_info());
+
+        delegate_builder
+            .authorization_rules_program(authorization_rules_program_key)
+            .authorization_rules(authorization_rules.clone().unwrap().key());
+    }
+
+    let delegate_ix = delegate_builder.build(DelegateArgs::LockedTransferV1 {
+        amount: 1,
+        locked_address: token_manager.key(),
+        authorization_data: None,
+    })
+    .unwrap()
+    .instruction();
+
+    invoke(
+        &delegate_ix,
+        &delegate_accounts[..],
+    )?;
+
+    let mut lock_builder = builders::LockBuilder::new();
+
+    lock_builder
+        .authority(token_manager_key)
+        .token_owner(owner_key)
+        .token(token_account_key)
+        .mint(mint_key)
+        .metadata(metadata_key)
+        .edition(edition_key)
+        .token_record(token_record_key)
+        .payer(owner_key)
+        .system_program(system_program_key)
+        .sysvar_instructions(sysvar_instructions_key)
+        .spl_token_program(token_program_key);
+
+    let signer_bump = &[token_manager.bump];
+    let signer_seeds = &[&[
+        TokenManager::PREFIX,
+        mint_key.as_ref(),
+        owner_key.as_ref(),
+        signer_bump
+    ][..]];
+
+    let mut lock_accounts = vec![
+        token_manager.to_account_info(),
+        owner.to_account_info(),
+        token_account.to_account_info(),
+        mint.to_account_info(),
+        metadata_info.to_account_info(),
+        edition.to_account_info(),
+        token_record.to_account_info(),
+        system_program.to_account_info(),
+        sysvar_instructions.to_account_info(),
+        token_program.to_account_info(),
+    ];
+
+    // Conidtionally add authorization rules account
+    if authorization_rules.is_some() {
+        let authorization_rules = authorization_rules.unwrap();
+        lock_accounts.push(authorization_rules.to_account_info());
+        lock_accounts.push(authorization_rules_program.to_account_info());
+
+        lock_builder
+            .authorization_rules_program(authorization_rules_program_key)
+            .authorization_rules(authorization_rules.key());
+    }
+
+    let lock_ix = lock_builder.build(LockArgs::V1 { authorization_data: None })
+        .unwrap()
+        .instruction();
+
+    invoke_signed(
+        &lock_ix,
+        &lock_accounts[..],
+        signer_seeds
+    )?;
+
+    Ok(())
+}
+
+
 pub fn maybe_delegate_and_freeze_token_account<'info>(
     token_manager: &mut Account<'info, TokenManager>,
     token_account: &mut Account<'info, TokenAccount>,
@@ -241,14 +380,15 @@ pub fn thaw_and_revoke_token_account<'info>(
 pub fn thaw_and_transfer_from_token_account<'info>(
     token_manager: &mut Account<'info, TokenManager>,
     token_program: AccountInfo<'info>,
-    authority: AccountInfo<'info>,
+    owner: AccountInfo<'info>,
     from_token_account: AccountInfo<'info>,
     to_token_account: AccountInfo<'info>,
     mint: AccountInfo<'info>,
+    metadata: AccountInfo<'info>,
     edition: AccountInfo<'info>,
 ) -> Result<()> {
     let mint_pubkey = mint.key();
-    let issuer_pubkey = authority.key();
+    let issuer_pubkey = owner.key();
     let signer_bump = &[token_manager.bump];
     let signer_seeds = &[&[
         TokenManager::PREFIX,
@@ -267,19 +407,143 @@ pub fn thaw_and_transfer_from_token_account<'info>(
         }
     )?;
 
-    if from_token_account.key() != to_token_account.key() {
-        anchor_spl::token::transfer(
-            CpiContext::new_with_signer(
-                token_program.to_account_info(),
-                anchor_spl::token::Transfer {
-                    from: from_token_account,
-                    to: to_token_account,
-                    authority: token_manager.to_account_info(),
-                },
-                signer_seeds
-            ),
-            1
-        )?;
+    anchor_spl::token::transfer(
+        CpiContext::new_with_signer(
+            token_program.to_account_info(),
+            anchor_spl::token::Transfer {
+                from: from_token_account,
+                to: to_token_account,
+                authority: token_manager.to_account_info(),
+            },
+            signer_seeds
+        ),
+        1
+    )?;
+
+    Ok(())
+}
+
+pub fn thaw_and_transfer_programmable_nft<'info>(
+    token_manager: &mut Account<'info, TokenManager>,
+    owner: AccountInfo<'info>,
+    new_owner: AccountInfo<'info>,
+    from_token_account: AccountInfo<'info>,
+    to_token_account: AccountInfo<'info>,
+    owner_token_record: AccountInfo<'info>,
+    mint: AccountInfo<'info>,
+    metadata_info: AccountInfo<'info>,
+    edition: AccountInfo<'info>,
+    token_program: AccountInfo<'info>,
+    associated_token_program: AccountInfo<'info>,
+    system_program: AccountInfo<'info>,
+    sysvar_instructions: AccountInfo<'info>
+) -> Result<()> {
+    let transfer_ix = builders::TransferBuilder::new()
+        .token(from_token_account.key())
+        .token_owner(owner.key())
+        .destination(to_token_account.key())
+        .destination_owner(new_owner.key())
+        .mint(mint.key())
+        .metadata(metadata_info.key())
+        .edition(edition.key())
+        .owner_token_record(owner_token_record.key())
+        .payer(new_owner.key())
+        .authority(token_manager.key())
+        .spl_token_program(token_program.key())
+        .spl_ata_program(associated_token_program.key())
+        .system_program(system_program.key())
+        .sysvar_instructions(sysvar_instructions.key())
+        .build(TransferArgs::V1 { 
+            amount: 1,
+            authorization_data: None
+        })
+        .unwrap()
+        .instruction();
+
+    let mint_pubkey = mint.key();
+    let issuer_pubkey = owner.key();
+    let signer_bump = &[token_manager.bump];
+    let signer_seeds = &[&[
+        TokenManager::PREFIX,
+        mint_pubkey.as_ref(),
+        issuer_pubkey.as_ref(),
+        signer_bump
+    ][..]];
+
+    invoke_signed(
+        &transfer_ix,
+        &[
+            token_manager.to_account_info(),
+            owner,
+            new_owner,
+            from_token_account,
+            to_token_account,
+            owner_token_record,
+            mint,
+            metadata_info,
+            edition,
+            token_program,
+            associated_token_program,
+            system_program,
+            sysvar_instructions,
+        ],
+        signer_seeds,
+    )?;
+
+    Ok(())
+}
+
+pub fn handle_thaw_and_transfer<'info>(
+    token_manager: &mut Account<'info, TokenManager>,
+    owner: AccountInfo<'info>,
+    new_owner: AccountInfo<'info>,
+    from_token_account: AccountInfo<'info>,
+    to_token_account: AccountInfo<'info>,
+    mint: AccountInfo<'info>,
+    metadata_info: AccountInfo<'info>,
+    edition: AccountInfo<'info>,
+    token_program: AccountInfo<'info>,
+    associated_token_program: AccountInfo<'info>,
+    system_program: AccountInfo<'info>,
+    sysvar_instructions: AccountInfo<'info>,
+    remaining_accounts: &mut Iter<AccountInfo<'info>>,
+) -> Result<()> {
+    let data = Metadata::deserialize(
+        &mut metadata_info.data.borrow_mut().as_ref()
+    )?;
+
+    match data.token_standard.unwrap_or(TokenStandard::NonFungible) {
+        TokenStandard::ProgrammableNonFungible => {
+            let owner_token_record = next_account_info(remaining_accounts)?;
+
+            thaw_and_transfer_programmable_nft(
+                token_manager,
+                owner,
+                new_owner,
+                from_token_account,
+                to_token_account,
+                owner_token_record.to_account_info(),
+                mint,
+                metadata_info,
+                edition,
+                token_program,
+                associated_token_program,
+                system_program,
+                sysvar_instructions,
+            )?;
+        },
+        _ => {
+            thaw_and_transfer_from_token_account(
+                token_manager,
+                token_program,
+                owner,
+                from_token_account,
+                to_token_account,
+                mint,
+                metadata_info,
+                edition,
+            )?;
+        }
     }
 
     Ok(())
@@ -490,7 +754,7 @@ pub fn assert_collection_valid<'a>(
             );
 
             require_keys_eq!(address, collection_pda, ErrorCodes::InvalidCollection);
-            require(collection.verified, ErrorCodes::InvalidCollection);
+            require!(collection.verified, ErrorCodes::InvalidCollection);
         }
         None => {
             return err!(ErrorCodes::InvalidCollection);

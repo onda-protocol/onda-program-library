@@ -7,6 +7,7 @@ import {
   Metadata,
   PROGRAM_ID as METADATA_PROGRAM_ID,
 } from "@metaplex-foundation/mpl-token-metadata";
+import { PROGRAM_ID as AUTHORIZATION_RULES_PROGRAM_ID } from "@metaplex-foundation/mpl-token-auth-rules";
 import { IDL, OndaListings } from "../target/types/onda_listings";
 
 const PROGRAM_ID = new anchor.web3.PublicKey(
@@ -517,8 +518,10 @@ export async function takeLoan(
         metadata: lender.nft.metadataAddress,
         edition: lender.nft.edition.address,
         metadataProgram: METADATA_PROGRAM_ID,
+        authorizationRulesProgram: AUTHORIZATION_RULES_PROGRAM_ID,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+        sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
       })
       .signers([signer])
       .rpc();

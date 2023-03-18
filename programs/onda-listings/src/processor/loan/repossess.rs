@@ -1,5 +1,10 @@
-use anchor_lang::{prelude::*};
-use anchor_spl::token::{Token, TokenAccount, Mint};
+use {
+    anchor_lang::{prelude::*},
+    anchor_spl::{
+        associated_token::{AssociatedToken},
+        token::{Token, TokenAccount, Mint}
+    }
+};
 use crate::state::{Loan, LoanState, Rental, TokenManager};
 use crate::error::{ErrorCodes};
 use crate::utils::*;
@@ -56,41 +61,66 @@ pub struct Repossess<'info> {
     /// CHECK: contrained on loan_account
     pub mint: Box<Account<'info, Mint>>,
     /// CHECK: validated in cpi
+    pub metadata: UncheckedAccount<'info>,
+    /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
     pub metadata_program: UncheckedAccount<'info>, 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    /// CHECK: not supported by anchor? used in cpi
+    pub sysvar_instructions: UncheckedAccount<'info>,
     pub clock: Sysvar<'info, Clock>,
     pub rent: Sysvar<'info, Rent>,
 }
 
 pub fn handle_repossess(ctx: Context<Repossess>) -> Result<()> {
-  let loan = &mut ctx.accounts.loan;
-  let token_manager = &mut ctx.accounts.token_manager;
+    let loan = &mut ctx.accounts.loan;
+    let token_manager = &mut ctx.accounts.token_manager;
+    let borrower = &mut ctx.accounts.borrower;
+    let deposit_token_account = &mut ctx.accounts.deposit_token_account;
+    let lender = &mut ctx.accounts.lender;
+    let lender_token_account = &mut ctx.accounts.lender_token_account;
+    let borrower = &mut ctx.accounts.borrower;
+    let mint = &ctx.accounts.mint;
+    let edition = &ctx.accounts.edition;
+    let metadata_info = &mut ctx.accounts.metadata;
+    let token_program = &ctx.accounts.token_program;
+    let associated_token_program = &ctx.accounts.associated_token_program;
+    let system_program = &ctx.accounts.system_program;
+    let sysvar_instructions = &ctx.accounts.sysvar_instructions;
+    let remaining_accounts = &mut ctx.remaining_accounts.iter();
+
   
-  let unix_timestamp = ctx.accounts.clock.unix_timestamp;
-  let start_date = loan.start_date.unwrap();
-  let duration = unix_timestamp - start_date;
+    let unix_timestamp = ctx.accounts.clock.unix_timestamp;
+    let start_date = loan.start_date.unwrap();
+    let duration = unix_timestamp - start_date;
 
-  if loan.duration > duration  {
-      return Err(ErrorCodes::NotOverdue.into())
-  }
-  
-  loan.state = LoanState::Defaulted;
-  token_manager.accounts.loan = false;
+    if loan.duration > duration  {
+        return Err(ErrorCodes::NotOverdue.into())
+    }
 
-  thaw_and_transfer_from_token_account(
-    token_manager,
-    ctx.accounts.token_program.to_account_info(),
-    ctx.accounts.borrower.to_account_info(),
-    ctx.accounts.deposit_token_account.to_account_info(),
-    ctx.accounts.lender_token_account.to_account_info(),
-    ctx.accounts.mint.to_account_info(),
-    ctx.accounts.edition.to_account_info()
-  )?;
+    handle_thaw_and_transfer(
+        token_manager,
+        lender.to_account_info(),
+        borrower.to_account_info(),
+        deposit_token_account.to_account_info(),
+        lender_token_account.to_account_info(),
+        mint.to_account_info(),
+        metadata_info.to_account_info(),
+        edition.to_account_info(),
+        token_program.to_account_info(),
+        associated_token_program.to_account_info(),
+        system_program.to_account_info(),
+        sysvar_instructions.to_account_info(),
+        remaining_accounts
+    )?;
 
-  Ok(())
+    loan.state = LoanState::Defaulted;
+    token_manager.accounts.loan = false; 
+
+    Ok(())
 }
 
 #[derive(Accounts)]
@@ -204,15 +234,15 @@ pub fn handle_repossess_with_rental<'info>(ctx: Context<'_, '_, '_, 'info, Repos
         )?;
     }
 
-    thaw_and_transfer_from_token_account(
-        token_manager,
-        ctx.accounts.token_program.to_account_info(),
-        ctx.accounts.borrower.to_account_info(),
-        ctx.accounts.token_account.to_account_info(),
-        ctx.accounts.lender_token_account.to_account_info(),
-        ctx.accounts.mint.to_account_info(),
-        ctx.accounts.edition.to_account_info(),
-    )?;
+    // thaw_and_transfer_from_token_account(
+    //     token_manager,
+    //     ctx.accounts.token_program.to_account_info(),
+    //     ctx.accounts.borrower.to_account_info(),
+    //     ctx.accounts.token_account.to_account_info(),
+    //     ctx.accounts.lender_token_account.to_account_info(),
+    //     ctx.accounts.mint.to_account_info(),
+    //     ctx.accounts.edition.to_account_info(),
+    // )?;
 
     Ok(())
 }

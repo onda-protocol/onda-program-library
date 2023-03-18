@@ -91,9 +91,18 @@ pub struct TakeLoanOffer<'info> {
     pub metadata: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
+    #[account(mut)]
+    /// CHECK: validated in cpi
+    pub token_record: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
     pub metadata_program: UncheckedAccount<'info>,
+    /// CHECK: validated in cpi
+    pub authorization_rules_program: UncheckedAccount<'info>,
+    /// CHECK: validated in cpi
+    pub authorization_rules: Option<AccountInfo<'info>>, 
     /// Misc
+    /// CHECK: not supported by anchor? used in cpi
+    pub sysvar_instructions: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub rent: Sysvar<'info, Rent>,
@@ -106,24 +115,35 @@ pub fn handle_take_loan_offer(
 ) -> Result<()> {
     let loan = &mut ctx.accounts.loan;
     let offer = &mut ctx.accounts.loan_offer;
+    let borrower = &mut ctx.accounts.borrower;
+    let lender = &mut ctx.accounts.lender;
     let escrow_payment_account = &mut ctx.accounts.escrow_payment_account;
     let token_manager = &mut ctx.accounts.token_manager;
+    let mint = &ctx.accounts.mint;
+    let metadata = &ctx.accounts.metadata;
+    let edition = &ctx.accounts.edition;
     let collection = &ctx.accounts.collection;
     let deposit_token_account = &mut ctx.accounts.deposit_token_account;
+    let token_record = &ctx.accounts.token_record;
+    let token_program = &ctx.accounts.token_program;
+    let system_program = &ctx.accounts.system_program;
+    let sysvar_instructions = &ctx.accounts.sysvar_instructions;
+    let authorization_rules_program = &ctx.accounts.authorization_rules_program;
+    let authorization_rules = &ctx.accounts.authorization_rules;
 
     assert_collection_valid(
-        &ctx.accounts.metadata,
-        ctx.accounts.mint.key(),
-        ctx.accounts.collection.key(),
+        &metadata,
+        mint.key(),
+        collection.key(),
         ctx.program_id.clone(),
     )?;
 
     require_eq!(token_manager.accounts.call_option, false, ErrorCodes::InvalidState);
 
     // Init
-    loan.mint = ctx.accounts.mint.key();
-    loan.borrower = ctx.accounts.borrower.key();
-    loan.lender = Some(ctx.accounts.lender.key());
+    loan.mint = mint.key();
+    loan.borrower = borrower.key();
+    loan.lender = Some(lender.key());
     loan.bump = *ctx.bumps.get("loan").unwrap();
     //
     Loan::init_ask_state(
@@ -138,16 +158,26 @@ pub fn handle_take_loan_offer(
     token_manager.accounts.loan = true;
     token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
 
-    maybe_delegate_and_freeze_token_account(
+    handle_delegate_and_freeze(
         token_manager,
-        deposit_token_account,
-        ctx.accounts.borrower.to_account_info(),
-        ctx.accounts.mint.to_account_info(),
-        ctx.accounts.edition.to_account_info(),
-        ctx.accounts.borrower.to_account_info(),
-        ctx.accounts.token_program.to_account_info(),
+        borrower.to_account_info(),
+        deposit_token_account.to_account_info(),
+        token_record.to_account_info(),
+        mint.to_account_info(),
+        metadata.to_account_info(),
+        edition.to_account_info(),
+        token_program.to_account_info(),
+        system_program.to_account_info(),
+        sysvar_instructions.to_account_info(),
+        authorization_rules_program.to_account_info(),
+        if let Some(authorization_rules) = authorization_rules {
+            Some(authorization_rules.to_account_info())
+        } else {
+            None
+        },
     )?;
 
+    // Transfer loan amount from offer escrow
     let loan_offer_pubkey = offer.key();
     let signer_bump = &[offer.escrow_bump];
     let signer_seeds = &[&[
