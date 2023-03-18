@@ -137,7 +137,7 @@ pub fn handle_delegate_and_freeze<'info>(
     token_manager: &mut Account<'info, TokenManager>,
     owner: AccountInfo<'info>,
     token_account: AccountInfo<'info>,
-    token_record: AccountInfo<'info>,
+    token_record: Option<AccountInfo<'info>>,
     mint: AccountInfo<'info>,
     metadata_info: AccountInfo<'info>,
     edition: AccountInfo<'info>,
@@ -153,7 +153,6 @@ pub fn handle_delegate_and_freeze<'info>(
     let mint_key = mint.key();
     let metadata_key = metadata_info.key();
     let edition_key = edition.key();
-    let token_record_key = token_record.key();
     let system_program_key = system_program.key(); 
     let sysvar_instructions_key = sysvar_instructions.key();
     let token_program_key = token_program.key();
@@ -164,7 +163,6 @@ pub fn handle_delegate_and_freeze<'info>(
     delegate_builder.delegate(token_manager_key)
         .metadata(metadata_key)
         .master_edition(edition_key)
-        .token_record(token_record_key)
         .mint(mint.key())
         .token(token_account_key)
         .authority(owner_key)
@@ -177,7 +175,6 @@ pub fn handle_delegate_and_freeze<'info>(
         token_manager.to_account_info(),
         metadata_info.to_account_info(),
         edition.to_account_info(),
-        token_record.to_account_info(),
         mint.to_account_info(),
         token_account.to_account_info(),
         owner.to_account_info(),
@@ -196,13 +193,22 @@ pub fn handle_delegate_and_freeze<'info>(
             .authorization_rules(authorization_rules.clone().unwrap().key());
     }
 
-    let delegate_ix = delegate_builder.build(DelegateArgs::LockedTransferV1 {
+    if token_record.is_some() {
+        delegate_accounts.push(token_record.clone().unwrap().to_account_info());
+        delegate_builder.token_record(token_record.clone().unwrap().key());
+    }
+
+    /*
+        DelegateArgs::LockedTransferV1 {
         amount: 1,
         locked_address: token_manager.key(),
         authorization_data: None,
-    })
-    .unwrap()
-    .instruction();
+    }
+     */
+
+    let delegate_ix = delegate_builder.build(DelegateArgs::StandardV1 { amount: 1 })
+        .unwrap()
+        .instruction();
 
     invoke(
         &delegate_ix,
@@ -218,7 +224,6 @@ pub fn handle_delegate_and_freeze<'info>(
         .mint(mint_key)
         .metadata(metadata_key)
         .edition(edition_key)
-        .token_record(token_record_key)
         .payer(owner_key)
         .system_program(system_program_key)
         .sysvar_instructions(sysvar_instructions_key)
@@ -239,7 +244,6 @@ pub fn handle_delegate_and_freeze<'info>(
         mint.to_account_info(),
         metadata_info.to_account_info(),
         edition.to_account_info(),
-        token_record.to_account_info(),
         system_program.to_account_info(),
         sysvar_instructions.to_account_info(),
         token_program.to_account_info(),
@@ -254,6 +258,11 @@ pub fn handle_delegate_and_freeze<'info>(
         lock_builder
             .authorization_rules_program(authorization_rules_program_key)
             .authorization_rules(authorization_rules.key());
+    }
+
+    if token_record.is_some() {
+        lock_accounts.push(token_record.clone().unwrap().to_account_info());
+        lock_builder.token_record(token_record.clone().unwrap().key());
     }
 
     let lock_ix = lock_builder.build(LockArgs::V1 { authorization_data: None })

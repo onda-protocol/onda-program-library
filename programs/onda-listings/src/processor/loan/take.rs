@@ -87,19 +87,20 @@ pub struct TakeLoanOffer<'info> {
     pub collection: Box<Account<'info, Collection>>,
     #[account(constraint = mint.supply == 1)]
     pub mint: Box<Account<'info, Mint>>,
+    #[account(mut)]
     /// CHECK: deserialized and checked
     pub metadata: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
     #[account(mut)]
     /// CHECK: validated in cpi
-    pub token_record: UncheckedAccount<'info>,
+    pub token_record: Option<UncheckedAccount<'info>>,
     /// CHECK: validated in cpi
     pub metadata_program: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
     pub authorization_rules_program: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
-    pub authorization_rules: Option<AccountInfo<'info>>, 
+    pub authorization_rules: Option<UncheckedAccount<'info>>, 
     /// Misc
     /// CHECK: not supported by anchor? used in cpi
     pub sysvar_instructions: UncheckedAccount<'info>,
@@ -162,7 +163,11 @@ pub fn handle_take_loan_offer(
         token_manager,
         borrower.to_account_info(),
         deposit_token_account.to_account_info(),
-        token_record.to_account_info(),
+        if let Some(token_record) = token_record {
+            Some(token_record.to_account_info())
+        } else {
+            None
+        },
         mint.to_account_info(),
         metadata.to_account_info(),
         edition.to_account_info(),

@@ -501,28 +501,36 @@ export async function takeLoan(
     keypair.publicKey
   );
 
+  const accounts = {
+    signer: signer.publicKey,
+    tokenManager,
+    depositTokenAccount,
+    loan: loanAddress,
+    loanOffer: lender.loanOffer,
+    collection: lender.collection,
+    escrowPaymentAccount: lender.escrowPaymentAccount,
+    lender: lender.keypair.publicKey,
+    borrower: keypair.publicKey,
+    mint: lender.nft.mint.address,
+    metadata: lender.nft.metadataAddress,
+    edition: lender.nft.edition.address,
+    tokenRecord: null,
+    metadataProgram: METADATA_PROGRAM_ID,
+    authorizationRules: null,
+    authorizationRulesProgram: AUTHORIZATION_RULES_PROGRAM_ID,
+    tokenProgram: splToken.TOKEN_PROGRAM_ID,
+    clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+    sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
+  };
+
+  for (const [key, value] of Object.entries(accounts)) {
+    console.log(key, value?.toBase58());
+  }
+
   try {
     await program.methods
       .takeLoanOffer(0)
-      .accounts({
-        signer: signer.publicKey,
-        tokenManager,
-        depositTokenAccount,
-        loan: loanAddress,
-        loanOffer: lender.loanOffer,
-        collection: lender.collection,
-        escrowPaymentAccount: lender.escrowPaymentAccount,
-        lender: lender.keypair.publicKey,
-        borrower: keypair.publicKey,
-        mint: lender.nft.mint.address,
-        metadata: lender.nft.metadataAddress,
-        edition: lender.nft.edition.address,
-        metadataProgram: METADATA_PROGRAM_ID,
-        authorizationRulesProgram: AUTHORIZATION_RULES_PROGRAM_ID,
-        tokenProgram: splToken.TOKEN_PROGRAM_ID,
-        clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-        sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
-      })
+      .accounts(accounts)
       .signers([signer])
       .rpc();
   } catch (err) {
