@@ -2,7 +2,7 @@ import * as anchor from "@project-serum/anchor";
 import * as splToken from "@solana/spl-token";
 import * as bip39 from "bip39";
 import { derivePath } from "ed25519-hd-key";
-import { Metaplex, keypairIdentity } from "@metaplex-foundation/js";
+import { Metaplex, keypairIdentity, Token } from "@metaplex-foundation/js";
 import {
   createVerifyInstruction,
   Metadata,
@@ -205,9 +205,28 @@ export async function findMetadataAddress(mint: anchor.web3.PublicKey) {
   );
 }
 
+export function findTokenRecordAddress(
+  mint: anchor.web3.PublicKey,
+  tokenAccount: anchor.web3.PublicKey
+) {
+  const [tokenRecordAddress] = anchor.web3.PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("metadata"),
+      METADATA_PROGRAM_ID.toBuffer(),
+      mint.toBuffer(),
+      Buffer.from("token_record"),
+      tokenAccount.toBuffer(),
+    ],
+    METADATA_PROGRAM_ID
+  );
+
+  return tokenRecordAddress;
+}
+
 export async function mintNFT(
   connection: anchor.web3.Connection,
-  keypair: anchor.web3.Keypair
+  keypair: anchor.web3.Keypair,
+  tokenStandard: TokenStandard = TokenStandard.ProgrammableNonFungible
 ) {
   const authority = await getAuthority();
   const signer = await getSigner();
@@ -255,6 +274,7 @@ export async function mintNFT(
     .rpc();
 
   const { nft } = await metaplex.nfts().create({
+    tokenStandard,
     uri: "https://arweave.net/123",
     name: "My NFT",
     sellerFeeBasisPoints: 500,
@@ -265,7 +285,6 @@ export async function mintNFT(
       },
     ],
     collection: collection.mint.address,
-    tokenStandard: TokenStandard.ProgrammableNonFungible,
   });
 
   let latestBlockhash = await connection.getLatestBlockhash();
@@ -304,7 +323,6 @@ export async function mintNFT(
       nftOrSft: nft,
       toOwner: keypair.publicKey,
     });
-    console.log("here...");
 
     await connection.confirmTransaction({
       signature: sendResult.response.signature,
@@ -440,6 +458,7 @@ export async function offerLoan(
     amount: number;
     basisPoints: number;
     duration: number;
+    tokenStandard?: TokenStandard;
   }
 ) {
   const keypair = anchor.web3.Keypair.generate();
@@ -448,7 +467,11 @@ export async function offerLoan(
   const program = getProgram(provider);
   await requestAirdrop(connection, keypair.publicKey);
 
-  const { nft, collection } = await mintNFT(connection, keypair);
+  const { nft, collection } = await mintNFT(
+    connection,
+    keypair,
+    options.tokenStandard
+  );
 
   const amount = new anchor.BN(options.amount);
   const basisPoints = options.basisPoints;
@@ -548,6 +571,13 @@ export async function takeLoan(
     sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
   };
 
+  if (lender.nft.tokenStandard === TokenStandard.ProgrammableNonFungible) {
+    accounts.tokenRecord = await findTokenRecordAddress(
+      lender.nft.mint.address,
+      depositTokenAccount
+    );
+  }
+
   try {
     await program.methods
       .takeLoanOffer(0)
@@ -566,6 +596,7 @@ export async function takeLoan(
     program,
     depositTokenAccount,
     tokenManager,
+    tokenRecord: accounts.tokenRecord,
     loan: loanAddress,
     loanOffer: lender.loanOffer,
     collection: lender.collection,

@@ -9,7 +9,10 @@ use {
     },
     anchor_spl::token::{TokenAccount},
     mpl_token_metadata::{
-        instruction::{freeze_delegated_account, thaw_delegated_account, builders, InstructionBuilder, TransferArgs, DelegateArgs, LockArgs},
+        instruction::{
+            freeze_delegated_account, thaw_delegated_account, builders, 
+            InstructionBuilder, TransferArgs, DelegateArgs, UnlockArgs, LockArgs, RevokeArgs
+        },
         state::{Metadata, TokenStandard}
     },
 };
@@ -278,6 +281,148 @@ pub fn handle_delegate_and_freeze<'info>(
         &lock_ix,
         &lock_accounts[..],
         signer_seeds
+    )?;
+
+    Ok(())
+}
+
+pub fn handle_thaw_and_revoke<'info>(
+    token_manager: &mut Account<'info, TokenManager>,
+    owner: AccountInfo<'info>,
+    token_account: AccountInfo<'info>,
+    token_record: Option<AccountInfo<'info>>,
+    mint: AccountInfo<'info>,
+    metadata_info: AccountInfo<'info>,
+    edition: AccountInfo<'info>,
+    token_program: AccountInfo<'info>,
+    system_program: AccountInfo<'info>,
+    sysvar_instructions: AccountInfo<'info>,
+    authorization_rules_program: AccountInfo<'info>,
+    authorization_rules: Option<AccountInfo<'info>>,
+) -> Result<()> {
+    let token_manager_key = token_manager.key();
+    let owner_key = owner.key();
+    let token_account_key = token_account.key();
+    let mint_key = mint.key();
+    let metadata_key = metadata_info.key();
+    let edition_key = edition.key();
+    let system_program_key = system_program.key(); 
+    let sysvar_instructions_key = sysvar_instructions.key();
+    let token_program_key = token_program.key();
+    let authorization_rules_program_key = authorization_rules_program.key();
+
+    let metadata = Metadata::deserialize(
+        &mut metadata_info.data.borrow_mut().as_ref()
+    )?;
+
+    let mut unlock_builder = builders::UnlockBuilder::new();
+
+    unlock_builder.authority(token_manager_key)
+        .token_owner(owner_key)
+        .token(token_account_key)
+        .mint(mint_key)
+        .metadata(metadata_key)
+        .edition(edition_key)
+        .payer(owner_key)
+        .system_program(system_program_key)
+        .sysvar_instructions(sysvar_instructions_key)
+        .spl_token_program(token_program_key);
+
+
+    let mut unlock_accounts = vec![
+        token_manager.to_account_info(),
+        owner.to_account_info(),
+        token_account.to_account_info(),
+        mint.to_account_info(),
+        metadata_info.to_account_info(),
+        edition.to_account_info(),
+        system_program.to_account_info(),
+        sysvar_instructions.to_account_info(),
+        token_program.to_account_info(),
+    ];
+
+    // Conidtionally add authorization rules account
+    if authorization_rules.is_some() {
+        let authorization_rules = authorization_rules.clone().unwrap();
+        unlock_accounts.push(authorization_rules.to_account_info());
+        unlock_accounts.push(authorization_rules_program.to_account_info());
+
+        unlock_builder
+            .authorization_rules_program(authorization_rules_program_key)
+            .authorization_rules(authorization_rules.key());
+    }
+
+    if token_record.is_some() {
+        unlock_accounts.push(token_record.clone().unwrap().to_account_info());
+        unlock_builder.token_record(token_record.clone().unwrap().key());
+    }
+
+    let signer_bump = &[token_manager.bump];
+    let signer_seeds = &[&[
+        TokenManager::PREFIX,
+        mint_key.as_ref(),
+        owner_key.as_ref(),
+        signer_bump
+    ][..]];
+
+    let lock_ix = unlock_builder.build(UnlockArgs::V1 { authorization_data: None })
+        .unwrap()
+        .instruction();
+
+    invoke_signed(
+        &lock_ix,
+        &unlock_accounts[..],
+        signer_seeds
+    )?;
+
+    let mut revoke_builder = builders::RevokeBuilder::new();
+
+    revoke_builder.delegate(token_manager_key)
+        .metadata(metadata_key)
+        .master_edition(edition_key)
+        .mint(mint_key)
+        .token(token_account_key)
+        .authority(owner_key)
+        .payer(owner_key)
+        .system_program(system_program_key)
+        .sysvar_instructions(sysvar_instructions_key)
+        .spl_token_program(token_program_key);
+
+    let mut revoke_accounts = vec![
+        token_manager.to_account_info(),
+        metadata_info.to_account_info(),
+        edition.to_account_info(),
+        mint.to_account_info(),
+        token_account.to_account_info(),
+        owner.to_account_info(),
+        system_program.to_account_info(),
+        sysvar_instructions.to_account_info(),
+        token_program.to_account_info(),
+    ];
+
+    // Conidtionally add authorization rules account
+    if authorization_rules.is_some() {
+        let authorization_rules = authorization_rules.unwrap();
+        revoke_accounts.push(authorization_rules.to_account_info());
+        revoke_accounts.push(authorization_rules_program.to_account_info());
+
+        revoke_builder
+            .authorization_rules_program(authorization_rules_program_key)
+            .authorization_rules(authorization_rules.key());
+    }
+
+    if token_record.is_some() {
+        revoke_accounts.push(token_record.clone().unwrap().to_account_info());
+        revoke_builder.token_record(token_record.clone().unwrap().key());
+    }
+
+    let revoke_ix = &revoke_builder.build(RevokeArgs::LockedTransferV1)
+        .unwrap()
+        .instruction();
+
+    invoke(
+        revoke_ix,
+        &revoke_accounts[..]
     )?;
 
     Ok(())

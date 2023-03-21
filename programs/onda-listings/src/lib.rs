@@ -35,12 +35,12 @@ pub mod onda_listings {
         handle_take_loan_offer(ctx, id)
     }
 
-    // pub fn close_loan_offer<'info>(
-    //     ctx: Context<'_, '_, '_, 'info, CloseLoanOffer<'info>>,
-    //     id: u8,
-    // ) -> Result<()> {
-    //     handle_close_loan_offer(ctx, id)
-    // }
+    pub fn close_loan_offer<'info>(
+        ctx: Context<'_, '_, '_, 'info, CloseLoanOffer<'info>>,
+        id: u8,
+    ) -> Result<()> {
+        handle_close_loan_offer(ctx, id)
+    }
 
     // pub fn ask_loan<'info>(
     //     ctx: Context<'_, '_, '_, 'info, AskLoan<'info>>,

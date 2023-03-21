@@ -3,6 +3,7 @@ require("dotenv").config();
 import assert from "assert";
 import {
   Metadata,
+  TokenRecord,
   PROGRAM_ID as METADATA_PROGRAM_ID,
 } from "@metaplex-foundation/mpl-token-metadata";
 import * as anchor from "@project-serum/anchor";
@@ -25,7 +26,8 @@ describe.only("Loans", () => {
       options = {
         amount: anchor.web3.LAMPORTS_PER_SOL,
         basisPoints: 500,
-        duration: 86_400,
+        // Duration of 1 second so we can repossess the nft collateral
+        duration: 1,
       };
 
       lender = await helpers.offerLoan(connection, options);
@@ -45,6 +47,10 @@ describe.only("Loans", () => {
         assert.ok(err.message.includes("Account does not exist"));
       }
       const loan = await lender.program.account.loan.fetch(borrower.loan);
+      const tokenRecord = await TokenRecord.fromAccountAddress(
+        connection,
+        borrower.tokenRecord
+      );
       const tokenAccount = await splToken.getAccount(
         connection,
         borrower.depositTokenAccount
@@ -52,6 +58,10 @@ describe.only("Loans", () => {
       const borrowerLamportsAfter = (
         await connection.getAccountInfo(borrower.keypair.publicKey)
       ).lamports;
+      assert.ok(
+        tokenRecord.lockedTransfer.equals(borrower.tokenManager),
+        "lockedTransfer"
+      );
       assert.ok(loan.borrower.equals(borrower.keypair.publicKey), "borrower");
       assert.ok(loan.lender.equals(lender.keypair.publicKey), "lender");
       assert.equal(loan.amount.toNumber(), options.amount, "amount");
@@ -68,96 +78,96 @@ describe.only("Loans", () => {
       );
     });
 
-    // it("Closes an offer", async () => {
-    //   const signer = await helpers.getSigner();
-    //   const offer = await helpers.offerLoan(connection, {
-    //     amount: anchor.web3.LAMPORTS_PER_SOL,
-    //     basisPoints: 500,
-    //     duration: 86_400,
-    //   });
+    it("Closes an offer", async () => {
+      const signer = await helpers.getSigner();
+      const offer = await helpers.offerLoan(connection, {
+        amount: anchor.web3.LAMPORTS_PER_SOL,
+        basisPoints: 500,
+        duration: 86_400,
+      });
 
-    //   await offer.program.methods
-    //     .closeLoanOffer(offer.id)
-    //     .accounts({
-    //       signer: signer.publicKey,
-    //       lender: offer.keypair.publicKey,
-    //       loanOffer: offer.loanOffer,
-    //       escrowPaymentAccount: offer.escrowPaymentAccount,
-    //       collection: offer.collection,
-    //     })
-    //     .signers([signer])
-    //     .rpc();
-    // });
+      await offer.program.methods
+        .closeLoanOffer(offer.id)
+        .accounts({
+          signer: signer.publicKey,
+          lender: offer.keypair.publicKey,
+          loanOffer: offer.loanOffer,
+          escrowPaymentAccount: offer.escrowPaymentAccount,
+          collection: offer.collection,
+        })
+        .signers([signer])
+        .rpc();
+    });
   });
 
-  // describe("Loan repossessions", () => {
-  //   let borrower: helpers.LoanBorrower;
-  //   let lender: helpers.LoanLender;
-  //   let options;
+  describe("Loan repossessions", () => {
+    let borrower: helpers.LoanBorrower;
+    let lender: helpers.LoanLender;
+    let options;
 
-  //   it("Creates a dexloan loan", async () => {
-  //     options = {
-  //       amount: anchor.web3.LAMPORTS_PER_SOL / 100,
-  //       basisPoints: 500,
-  //       duration: 1, // 1 second
-  //     };
+    it("Creates a dexloan loan", async () => {
+      options = {
+        amount: anchor.web3.LAMPORTS_PER_SOL / 100,
+        basisPoints: 500,
+        duration: 1, // 1 second
+      };
 
-  //     borrower = await helpers.askLoan(connection, options);
+      borrower = await helpers.askLoan(connection, options);
 
-  //     const borrowerTokenAccount = await splToken.getAccount(
-  //       connection,
-  //       borrower.depositTokenAccount
-  //     );
-  //     const loan = await borrower.program.account.loan.fetch(borrower.loan);
-  //     const tokenManager = await borrower.program.account.tokenManager.fetch(
-  //       borrower.tokenManager
-  //     );
+      const borrowerTokenAccount = await splToken.getAccount(
+        connection,
+        borrower.depositTokenAccount
+      );
+      const loan = await borrower.program.account.loan.fetch(borrower.loan);
+      const tokenManager = await borrower.program.account.tokenManager.fetch(
+        borrower.tokenManager
+      );
 
-  //     assert.deepEqual(tokenManager.accounts, {
-  //       rental: false,
-  //       callOption: false,
-  //       loan: true,
-  //     });
-  //     assert.equal(
-  //       borrowerTokenAccount.delegate.toBase58(),
-  //       borrower.tokenManager.toBase58()
-  //     );
-  //     assert.equal(
-  //       loan.borrower.toBase58(),
-  //       borrower.keypair.publicKey.toBase58()
-  //     );
-  //     assert.equal(loan.basisPoints, options.basisPoints);
-  //     assert.equal(loan.duration.toNumber(), options.duration);
-  //     assert.equal(loan.mint.toBase58(), borrower.mint.toBase58());
-  //     assert.equal(borrowerTokenAccount.amount, BigInt(1));
-  //     assert.deepEqual(loan.state, { listed: {} });
-  //   });
+      assert.deepEqual(tokenManager.accounts, {
+        rental: false,
+        callOption: false,
+        loan: true,
+      });
+      assert.equal(
+        borrowerTokenAccount.delegate.toBase58(),
+        borrower.tokenManager.toBase58()
+      );
+      assert.equal(
+        loan.borrower.toBase58(),
+        borrower.keypair.publicKey.toBase58()
+      );
+      assert.equal(loan.basisPoints, options.basisPoints);
+      assert.equal(loan.duration.toNumber(), options.duration);
+      assert.equal(loan.mint.toBase58(), borrower.mint.toBase58());
+      assert.equal(borrowerTokenAccount.amount, BigInt(1));
+      assert.deepEqual(loan.state, { listed: {} });
+    });
 
-  //   it("Freezes tokens after initialization", async () => {
-  //     const receiver = anchor.web3.Keypair.generate();
-  //     await helpers.requestAirdrop(connection, receiver.publicKey);
+    it("Freezes tokens after initialization", async () => {
+      const receiver = anchor.web3.Keypair.generate();
+      await helpers.requestAirdrop(connection, receiver.publicKey);
 
-  //     const receiverTokenAccount = await splToken.createAccount(
-  //       connection,
-  //       receiver,
-  //       borrower.mint,
-  //       receiver.publicKey
-  //     );
+      const receiverTokenAccount = await splToken.createAccount(
+        connection,
+        receiver,
+        borrower.mint,
+        receiver.publicKey
+      );
 
-  //     try {
-  //       await splToken.transfer(
-  //         connection,
-  //         borrower.keypair,
-  //         borrower.depositTokenAccount,
-  //         receiverTokenAccount,
-  //         borrower.keypair.publicKey,
-  //         1
-  //       );
-  //       assert.ok(false);
-  //     } catch (err) {
-  //       assert.ok(err.logs.includes("Program log: Error: Account is frozen"));
-  //     }
-  //   });
+      try {
+        await splToken.transfer(
+          connection,
+          borrower.keypair,
+          borrower.depositTokenAccount,
+          receiverTokenAccount,
+          borrower.keypair.publicKey,
+          1
+        );
+        assert.ok(false);
+      } catch (err) {
+        assert.ok(err.logs.includes("Program log: Error: Account is frozen"));
+      }
+    });
 
   //   it("Allows loans to be given", async () => {
   //     const borrowerPreLoanBalance = await connection.getBalance(
