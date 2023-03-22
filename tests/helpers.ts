@@ -372,24 +372,37 @@ export async function askLoan(
   const basisPoints = options.basisPoints;
   const duration = new anchor.BN(options.duration);
 
+  const accounts = {
+    signer: signer.publicKey,
+    tokenManager,
+    depositTokenAccount,
+    tokenRecord: null,
+    loan: loanAddress,
+    collection: collectionAddress,
+    mint: nft.mint.address,
+    borrower: keypair.publicKey,
+    edition: nft.edition.address,
+    metadata: nft.metadataAddress,
+    metadataProgram: METADATA_PROGRAM_ID,
+    authorizationRules: null,
+    authorizationRulesProgram: AUTHORIZATION_RULES_PROGRAM_ID,
+    tokenProgram: splToken.TOKEN_PROGRAM_ID,
+    rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+    systemProgram: anchor.web3.SystemProgram.programId,
+    sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
+  };
+
+  if (nft.tokenStandard === TokenStandard.ProgrammableNonFungible) {
+    accounts.tokenRecord = findTokenRecordAddress(
+      nft.mint.address,
+      depositTokenAccount
+    );
+  }
+
   try {
     await program.methods
       .askLoan(amount, basisPoints, duration)
-      .accounts({
-        signer: signer.publicKey,
-        tokenManager,
-        depositTokenAccount,
-        loan: loanAddress,
-        collection: collectionAddress,
-        mint: nft.mint.address,
-        borrower: keypair.publicKey,
-        edition: nft.edition.address,
-        metadata: nft.metadataAddress,
-        metadataProgram: METADATA_PROGRAM_ID,
-        tokenProgram: splToken.TOKEN_PROGRAM_ID,
-        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      })
+      .accounts(accounts)
       .signers([signer])
       .rpc();
   } catch (error) {

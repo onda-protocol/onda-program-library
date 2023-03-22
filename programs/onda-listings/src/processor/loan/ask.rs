@@ -55,13 +55,23 @@ pub struct AskLoan<'info> {
     pub collection: Box<Account<'info, Collection>>,
     #[account(constraint = mint.supply == 1)]
     pub mint: Box<Account<'info, Mint>>,
+    #[account(mut)]
     /// CHECK: deserialized and checked
     pub metadata: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
+    #[account(mut)]
+    /// CHECK: validated in cpi
+    pub token_record: Option<UncheckedAccount<'info>>,
     /// CHECK: validated in cpi
     pub metadata_program: UncheckedAccount<'info>,
+    /// CHECK: validated in cpi
+    pub authorization_rules_program: UncheckedAccount<'info>,
+    /// CHECK: validated in cpi
+    pub authorization_rules: Option<UncheckedAccount<'info>>, 
     /// Misc
+    /// CHECK: not supported by anchor? used in cpi
+    pub sysvar_instructions: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub rent: Sysvar<'info, Rent>,
@@ -74,9 +84,19 @@ pub fn handle_ask_loan(
   duration: i64
 ) -> Result<()> {
     let loan = &mut ctx.accounts.loan;
+    let borrower = &ctx.accounts.borrower;
     let token_manager = &mut ctx.accounts.token_manager;
     let collection = &ctx.accounts.collection;
     let deposit_token_account = &mut ctx.accounts.deposit_token_account;
+    let token_record = &ctx.accounts.token_record;
+    let mint = &ctx.accounts.mint;
+    let metadata = &ctx.accounts.metadata;
+    let edition = &ctx.accounts.edition;
+    let token_program = &ctx.accounts.token_program;
+    let system_program = &ctx.accounts.system_program;
+    let sysvar_instructions = &ctx.accounts.sysvar_instructions;
+    let authorization_rules_program = &ctx.accounts.authorization_rules_program;
+    let authorization_rules = &ctx.accounts.authorization_rules;
 
     assert_collection_valid(
         &ctx.accounts.metadata,
@@ -97,15 +117,33 @@ pub fn handle_ask_loan(
     token_manager.accounts.loan = true;
     token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
 
-    maybe_delegate_and_freeze_token_account(
-        token_manager,
-        deposit_token_account,
-        ctx.accounts.borrower.to_account_info(),
-        ctx.accounts.mint.to_account_info(),
-        ctx.accounts.edition.to_account_info(),
-        ctx.accounts.borrower.to_account_info(),
-        ctx.accounts.token_program.to_account_info(),
-    )?;
+    // Freeze deposit token account
+    if deposit_token_account.delegate.is_some() {
+        if deposit_token_account.delegate.unwrap() != token_manager.key() {
+            return err!(ErrorCodes::InvalidState);
+        }
+    } else {
+        handle_delegate_and_freeze(
+            token_manager,
+            borrower.to_account_info(),
+            deposit_token_account.to_account_info(),
+            match token_record {
+                Some(token_record) => Some(token_record.to_account_info()),
+                None => None,
+            },
+            mint.to_account_info(),
+            metadata.to_account_info(),
+            edition.to_account_info(),
+            token_program.to_account_info(),
+            system_program.to_account_info(),
+            sysvar_instructions.to_account_info(),
+            authorization_rules_program.to_account_info(),
+            match authorization_rules {
+                Some(authorization_rules) => Some(authorization_rules.to_account_info()),
+                None => None,
+            }
+        )?;
+    }
 
     Ok(())
 }

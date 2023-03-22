@@ -42,22 +42,22 @@ pub mod onda_listings {
         handle_close_loan_offer(ctx, id)
     }
 
-    // pub fn ask_loan<'info>(
-    //     ctx: Context<'_, '_, '_, 'info, AskLoan<'info>>,
-    //     amount: u64,
-    //     basis_points: u16,
-    //     duration: i64
-    // ) -> Result<()> {
-    //     handle_ask_loan(ctx, amount, basis_points, duration)
-    // }
+    pub fn ask_loan<'info>(
+        ctx: Context<'_, '_, '_, 'info, AskLoan<'info>>,
+        amount: u64,
+        basis_points: u16,
+        duration: i64
+    ) -> Result<()> {
+        handle_ask_loan(ctx, amount, basis_points, duration)
+    }
 
     // pub fn give_loan<'info>(ctx: Context<'_, '_, '_, 'info, GiveLoan<'info>>) -> Result<()> {
     //     handle_give_loan(ctx)
     // }
 
-    // pub fn close_loan<'info>(ctx: Context<'_, '_, '_, 'info, CloseLoan<'info>>) -> Result<()> {
-    //     handle_close_loan(ctx)
-    // }
+    pub fn close_loan<'info>(ctx: Context<'_, '_, '_, 'info, CloseLoan<'info>>) -> Result<()> {
+        handle_close_loan(ctx)
+    }
 
     // pub fn repay_loan<'info>(ctx: Context<'_, '_, '_, 'info, RepayLoan<'info>>) -> Result<()> {
     //     handle_repay_loan(ctx)
