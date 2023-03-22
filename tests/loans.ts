@@ -168,40 +168,40 @@ describe.only("Loans", () => {
       }
     });
 
-    //   it("Allows loans to be given", async () => {
-    //     const borrowerPreLoanBalance = await connection.getBalance(
-    //       borrower.keypair.publicKey
-    //     );
+    it("Allows loans to be given", async () => {
+      const borrowerPreLoanBalance = await connection.getBalance(
+        borrower.keypair.publicKey
+      );
 
-    //     lender = await helpers.giveLoan(connection, borrower);
-    //     const loan = await borrower.program.account.loan.fetch(borrower.loan);
-    //     const tokenManager = await borrower.program.account.tokenManager.fetch(
-    //       borrower.tokenManager
-    //     );
-    //     const borrowerPostLoanBalance = await connection.getBalance(
-    //       borrower.keypair.publicKey
-    //     );
-    //     const borrowerTokenAccount = await splToken.getAccount(
-    //       connection,
-    //       borrower.depositTokenAccount
-    //     );
+      lender = await helpers.giveLoan(connection, borrower);
+      const loan = await borrower.program.account.loan.fetch(borrower.loan);
+      const tokenManager = await borrower.program.account.tokenManager.fetch(
+        borrower.tokenManager
+      );
+      const borrowerPostLoanBalance = await connection.getBalance(
+        borrower.keypair.publicKey
+      );
+      const borrowerTokenAccount = await splToken.getAccount(
+        connection,
+        borrower.depositTokenAccount
+      );
 
-    //     assert.deepEqual(tokenManager.accounts, {
-    //       rental: false,
-    //       callOption: false,
-    //       loan: true,
-    //     });
-    //     assert.equal(borrowerTokenAccount.amount, BigInt(1));
-    //     assert.equal(
-    //       borrowerPreLoanBalance + options.amount,
-    //       borrowerPostLoanBalance
-    //     );
-    //     assert.equal(loan.lender.toBase58(), lender.keypair.publicKey.toBase58());
-    //     assert.deepEqual(loan.state, { active: {} });
-    //     assert(
-    //       loan.startDate.toNumber() > 0 && loan.startDate.toNumber() < Date.now()
-    //     );
-    //   });
+      assert.deepEqual(tokenManager.accounts, {
+        rental: false,
+        callOption: false,
+        loan: true,
+      });
+      assert.equal(borrowerTokenAccount.amount, BigInt(1));
+      assert.equal(
+        borrowerPreLoanBalance + options.amount,
+        borrowerPostLoanBalance
+      );
+      assert.equal(loan.lender.toBase58(), lender.keypair.publicKey.toBase58());
+      assert.deepEqual(loan.state, { active: {} });
+      assert(
+        loan.startDate.toNumber() > 0 && loan.startDate.toNumber() < Date.now()
+      );
+    });
 
     //   it("Will only allow lender to repossess an overdue loan", async () => {
     //     // Creates another signer
