@@ -33,6 +33,9 @@ pub struct Repossess<'info> {
         associated_token::authority = borrower,
     )]
     pub deposit_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    /// CHECK: validated in cpi
+    pub deposit_token_record: Option<UncheckedAccount<'info>>,
     #[account(
         mut,
         seeds = [
@@ -58,6 +61,18 @@ pub struct Repossess<'info> {
         constraint = token_manager.accounts.rental == false,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
+    #[account(
+        init,
+        seeds = [b"escrow_token_account", token_manager.key().as_ref()],
+        bump,
+        payer = lender,
+        token::mint = mint,
+        token::authority = token_manager,
+    )]
+    pub escrow_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    /// CHECK: validated in cpi
+    pub escrow_token_record: Option<UncheckedAccount<'info>>,
     /// CHECK: contrained on loan_account
     pub mint: Box<Account<'info, Mint>>,
     /// CHECK: validated in cpi
@@ -65,7 +80,11 @@ pub struct Repossess<'info> {
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
-    pub metadata_program: UncheckedAccount<'info>, 
+    pub metadata_program: UncheckedAccount<'info>,
+    /// CHECK: validated in cpi
+    pub authorization_rules_program: UncheckedAccount<'info>,
+    /// CHECK: validated in cpi
+    pub authorization_rules: Option<UncheckedAccount<'info>>, 
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
@@ -80,12 +99,16 @@ pub fn handle_repossess(ctx: Context<Repossess>) -> Result<()> {
     let token_manager = &mut ctx.accounts.token_manager;
     let borrower = &mut ctx.accounts.borrower;
     let deposit_token_account = &mut ctx.accounts.deposit_token_account;
+    let deposit_token_record = &mut ctx.accounts.deposit_token_record;
     let lender = &mut ctx.accounts.lender;
     let lender_token_account = &mut ctx.accounts.lender_token_account;
-    let borrower = &mut ctx.accounts.borrower;
+    let escrow_token_account = &mut ctx.accounts.escrow_token_account;
+    let escrow_token_record = &mut ctx.accounts.escrow_token_record;
     let mint = &ctx.accounts.mint;
     let edition = &ctx.accounts.edition;
     let metadata_info = &mut ctx.accounts.metadata;
+    let authorization_rules_program = &mut ctx.accounts.authorization_rules_program;
+    let authorization_rules = &mut ctx.accounts.authorization_rules;
     let token_program = &ctx.accounts.token_program;
     let associated_token_program = &ctx.accounts.associated_token_program;
     let system_program = &ctx.accounts.system_program;
@@ -98,15 +121,23 @@ pub fn handle_repossess(ctx: Context<Repossess>) -> Result<()> {
     let duration = unix_timestamp - start_date;
 
     if loan.duration > duration  {
-        return Err(ErrorCodes::NotOverdue.into())
+        return err!(ErrorCodes::NotOverdue)
     }
 
     handle_thaw_and_transfer(
         token_manager,
-        lender.to_account_info(),
         borrower.to_account_info(),
         deposit_token_account.to_account_info(),
-        lender_token_account.to_account_info(),
+        match deposit_token_record {
+            Some(account) => Some(account.to_account_info()),
+            None => None,
+        },
+        escrow_token_account.to_account_info(),
+        token_manager.to_account_info(),
+        match escrow_token_record {
+            Some(account) => Some(account.to_account_info()),
+            None => None,
+        }, 
         mint.to_account_info(),
         metadata_info.to_account_info(),
         edition.to_account_info(),
@@ -114,7 +145,11 @@ pub fn handle_repossess(ctx: Context<Repossess>) -> Result<()> {
         associated_token_program.to_account_info(),
         system_program.to_account_info(),
         sysvar_instructions.to_account_info(),
-        remaining_accounts
+        authorization_rules_program.to_account_info(),
+        match authorization_rules {
+            Some(account) => Some(account.to_account_info()),
+            None => None,
+        },
     )?;
 
     loan.state = LoanState::Defaulted;

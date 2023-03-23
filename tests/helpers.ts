@@ -205,6 +205,15 @@ export async function findMetadataAddress(mint: anchor.web3.PublicKey) {
   );
 }
 
+export function findEscrowTokenAccount(tokenManager: anchor.web3.PublicKey) {
+  const [escrowTokenAccount] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("escrow_token_account"), tokenManager.toBuffer()],
+    PROGRAM_ID
+  );
+
+  return escrowTokenAccount;
+}
+
 export function findTokenRecordAddress(
   mint: anchor.web3.PublicKey,
   tokenAccount: anchor.web3.PublicKey
@@ -416,6 +425,7 @@ export async function askLoan(
     program,
     tokenManager,
     depositTokenAccount,
+    tokenRecord: accounts.tokenRecord,
     loan: loanAddress,
     collection: collectionAddress,
     metadata: nft.metadataAddress,

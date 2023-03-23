@@ -63,9 +63,9 @@ pub mod onda_listings {
     //     handle_repay_loan(ctx)
     // }
 
-    // pub fn repossess<'info>(ctx: Context<'_, '_, '_, 'info, Repossess<'info>>) -> Result<()> {
-    //     handle_repossess(ctx)
-    // }
+    pub fn repossess<'info>(ctx: Context<'_, '_, '_, 'info, Repossess<'info>>) -> Result<()> {
+        handle_repossess(ctx)
+    }
 
     // pub fn repossess_with_rental<'info>(ctx: Context<'_, '_, '_, 'info, RepossessWithRental<'info>>) -> Result<()> {
     //     handle_repossess_with_rental(ctx)

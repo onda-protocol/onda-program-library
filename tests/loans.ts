@@ -2,10 +2,10 @@ require("dotenv").config();
 
 import assert from "assert";
 import {
-  Metadata,
   TokenRecord,
   PROGRAM_ID as METADATA_PROGRAM_ID,
 } from "@metaplex-foundation/mpl-token-metadata";
+import { PROGRAM_ID as AUTHORIZATION_RULES_PROGRAM_ID } from "@metaplex-foundation/mpl-token-auth-rules";
 import * as anchor from "@project-serum/anchor";
 import * as splToken from "@solana/spl-token";
 import * as helpers from "./helpers";
@@ -203,106 +203,143 @@ describe.only("Loans", () => {
       );
     });
 
-    //   it("Will only allow lender to repossess an overdue loan", async () => {
-    //     // Creates another signer
-    //     const keypair = anchor.web3.Keypair.generate();
-    //     const signer = await helpers.getSigner();
-    //     const provider = helpers.getProvider(connection, keypair);
-    //     const program = helpers.getProgram(provider);
-    //     await helpers.requestAirdrop(connection, keypair.publicKey);
+    it("Will only allow lender to repossess an overdue loan", async () => {
+      // Creates another signer
+      const keypair = anchor.web3.Keypair.generate();
+      const signer = await helpers.getSigner();
+      const provider = helpers.getProvider(connection, keypair);
+      const program = helpers.getProgram(provider);
+      await helpers.requestAirdrop(connection, keypair.publicKey);
 
-    //     const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
-    //       connection,
-    //       keypair,
-    //       borrower.mint,
-    //       keypair.publicKey
-    //     );
+      const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
+        connection,
+        keypair,
+        borrower.mint,
+        keypair.publicKey
+      );
 
-    //     try {
-    //       await program.methods
-    //         .repossess()
-    //         .accounts({
-    //           signer: signer.publicKey,
-    //           borrower: borrower.keypair.publicKey,
-    //           depositTokenAccount: borrower.depositTokenAccount,
-    //           lender: lender.keypair.publicKey,
-    //           lenderTokenAccount: tokenAccount.address,
-    //           loan: borrower.loan,
-    //           tokenManager: borrower.tokenManager,
-    //           mint: borrower.mint,
-    //           edition: borrower.edition,
-    //           metadataProgram: METADATA_PROGRAM_ID,
-    //           systemProgram: anchor.web3.SystemProgram.programId,
-    //           tokenProgram: splToken.TOKEN_PROGRAM_ID,
-    //           clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-    //           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-    //         })
-    //         .signers([signer])
-    //         .rpc();
+      const escrowTokenAccount = helpers.findEscrowTokenAccount(
+        borrower.tokenManager
+      );
+      const escrowTokenRecord = helpers.findTokenRecordAddress(
+        borrower.mint,
+        escrowTokenAccount
+      );
 
-    //       assert.ok(false);
-    //     } catch (error) {
-    //       assert.ok(
-    //         error.toString().includes("Error: Signature verification failed")
-    //       );
-    //     }
-    //   });
+      try {
+        await program.methods
+          .repossess()
+          .accounts({
+            signer: signer.publicKey,
+            borrower: borrower.keypair.publicKey,
+            depositTokenAccount: borrower.depositTokenAccount,
+            depositTokenRecord: borrower.tokenRecord,
+            lender: lender.keypair.publicKey,
+            lenderTokenAccount: tokenAccount.address,
+            escrowTokenAccount,
+            escrowTokenRecord,
+            loan: borrower.loan,
+            tokenManager: borrower.tokenManager,
+            mint: borrower.mint,
+            metadata: borrower.metadata,
+            edition: borrower.edition,
+            metadataProgram: METADATA_PROGRAM_ID,
+            authorizationRules: null,
+            authorizationRulesProgram: AUTHORIZATION_RULES_PROGRAM_ID,
+            tokenProgram: splToken.TOKEN_PROGRAM_ID,
+            associatedTokenProgram: splToken.ASSOCIATED_TOKEN_PROGRAM_ID,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
+            clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          })
+          .signers([signer])
+          .rpc();
 
-    //   it("Allows an overdue loan to be repossessed by the lender", async () => {
-    //     const signer = await helpers.getSigner();
-    //     const loan = await borrower.program.account.loan.fetch(borrower.loan);
-    //     const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
-    //       connection,
-    //       lender.keypair,
-    //       loan.mint,
-    //       lender.keypair.publicKey
-    //     );
+        assert.fail("Should not have been able to repossess");
+      } catch (error) {
+        console.log(error);
+        assert.ok(
+          error.toString().includes("Error: Signature verification failed")
+        );
+      }
+    });
 
-    //     try {
-    //       await lender.program.methods
-    //         .repossess()
-    //         .accounts({
-    //           signer: signer.publicKey,
-    //           borrower: borrower.keypair.publicKey,
-    //           depositTokenAccount: borrower.depositTokenAccount,
-    //           lender: lender.keypair.publicKey,
-    //           lenderTokenAccount: tokenAccount.address,
-    //           loan: borrower.loan,
-    //           tokenManager: borrower.tokenManager,
-    //           mint: loan.mint,
-    //           edition: borrower.edition,
-    //           metadataProgram: METADATA_PROGRAM_ID,
-    //           systemProgram: anchor.web3.SystemProgram.programId,
-    //           tokenProgram: splToken.TOKEN_PROGRAM_ID,
-    //           clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-    //           rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-    //         })
-    //         .signers([signer])
-    //         .rpc();
-    //     } catch (err) {
-    //       console.log(err.logs);
-    //       throw err;
-    //     }
+    it("Allows an overdue loan to be repossessed by the lender", async () => {
+      const signer = await helpers.getSigner();
+      const loan = await borrower.program.account.loan.fetch(borrower.loan);
+      const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
+        connection,
+        lender.keypair,
+        loan.mint,
+        lender.keypair.publicKey
+      );
 
-    //     const lenderTokenAccount = await splToken.getAccount(
-    //       connection,
-    //       tokenAccount.address
-    //     );
-    //     const tokenManager = await borrower.program.account.tokenManager.fetch(
-    //       borrower.tokenManager
-    //     );
-    //     const defaultedListing = await borrower.program.account.loan.fetch(
-    //       borrower.loan
-    //     );
+      const escrowTokenAccount = helpers.findEscrowTokenAccount(
+        borrower.tokenManager
+      );
+      const escrowTokenRecord = helpers.findTokenRecordAddress(
+        borrower.mint,
+        escrowTokenAccount
+      );
 
-    //     assert.deepEqual(tokenManager.accounts, {
-    //       rental: false,
-    //       callOption: false,
-    //       loan: false,
-    //     });
-    //     assert.equal(lenderTokenAccount.amount, BigInt(1));
-    //     assert.deepEqual(defaultedListing.state, { defaulted: {} });
-    //   });
+      try {
+        await lender.program.methods
+          .repossess()
+          .accounts({
+            signer: signer.publicKey,
+            borrower: borrower.keypair.publicKey,
+            depositTokenAccount: borrower.depositTokenAccount,
+            depositTokenRecord: borrower.tokenRecord,
+            lender: lender.keypair.publicKey,
+            lenderTokenAccount: tokenAccount.address,
+            escrowTokenAccount,
+            escrowTokenRecord,
+            loan: borrower.loan,
+            tokenManager: borrower.tokenManager,
+            mint: borrower.mint,
+            metadata: borrower.metadata,
+            edition: borrower.edition,
+            metadataProgram: METADATA_PROGRAM_ID,
+            authorizationRules: null,
+            authorizationRulesProgram: AUTHORIZATION_RULES_PROGRAM_ID,
+            tokenProgram: splToken.TOKEN_PROGRAM_ID,
+            associatedTokenProgram: splToken.ASSOCIATED_TOKEN_PROGRAM_ID,
+            systemProgram: anchor.web3.SystemProgram.programId,
+            sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
+            clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+          })
+          .signers([signer])
+          .rpc();
+      } catch (err) {
+        console.log(err.logs);
+        throw err;
+      }
+
+      const lenderTokenAccount = await splToken.getAccount(
+        connection,
+        tokenAccount.address
+      );
+      const tokenManager = await borrower.program.account.tokenManager.fetch(
+        borrower.tokenManager
+      );
+      const defaultedListing = await borrower.program.account.loan.fetch(
+        borrower.loan
+      );
+
+      assert.deepEqual(
+        tokenManager.accounts,
+        {
+          rental: false,
+          callOption: false,
+          loan: false,
+        },
+        "tokenManager state"
+      );
+      assert.equal(lenderTokenAccount.amount, BigInt(1), "lenderTokenAccount");
+      assert.deepEqual(defaultedListing.state, { defaulted: {} }, "loan state");
+    });
 
     //   it("Will allow accounts to be closed once overdue loans are repossessed", async () => {
     //     const signer = await helpers.getSigner();
