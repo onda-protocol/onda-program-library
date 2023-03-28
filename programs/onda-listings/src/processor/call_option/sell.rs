@@ -70,11 +70,11 @@ pub struct SellCallOption<'info> {
         payer = seller,
         seeds = [
             TokenManager::PREFIX,
-            mint.key().as_ref(),
             seller.key().as_ref()
         ],
         space = TokenManager::space(),
         bump,
+        constraint = token_manager.authority == seller.key() @ ErrorCodes::Unauthorized,
     )]
     pub token_manager: Box<Account<'info, TokenManager>>,
     #[account(

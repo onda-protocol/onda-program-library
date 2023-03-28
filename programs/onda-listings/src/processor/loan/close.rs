@@ -11,6 +11,7 @@ use {
 };
 
 use crate::state::{Collection, Loan, LoanState, LoanOffer, TokenManager};
+use crate::error::{ErrorCodes};
 use crate::utils::*;
 use crate::constants::*;
 
@@ -45,9 +46,9 @@ pub struct CloseLoan<'info> {
         seeds = [
             TokenManager::PREFIX,
             mint.key().as_ref(),
-            borrower.key().as_ref()
         ],
         bump,
+        constraint = token_manager.authority == Some(borrower.key()) @ ErrorCodes::Unauthorized,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
     pub mint: Box<Account<'info, Mint>>,

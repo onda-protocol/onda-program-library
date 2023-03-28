@@ -46,6 +46,9 @@ describe.only("Loans", () => {
         assert.ok(err.message.includes("Account does not exist"));
       }
       const loan = await lender.program.account.loan.fetch(borrower.loan);
+      const tokenManager = await lender.program.account.tokenManager.fetch(
+        borrower.tokenManager
+      );
       const tokenRecord = await TokenRecord.fromAccountAddress(
         connection,
         borrower.tokenRecord
@@ -66,6 +69,10 @@ describe.only("Loans", () => {
       assert.equal(loan.amount.toNumber(), options.amount, "amount");
       assert.equal(loan.duration.toNumber(), options.duration, "duration");
       assert.ok(loan.startDate.toNumber() > 0, "startDate");
+      assert.ok(
+        tokenManager.authority.equals(borrower.keypair.publicKey),
+        "tokenManager authority"
+      );
       assert.ok(tokenAccount.isFrozen, "isFrozen");
       assert.ok(
         tokenAccount.delegate.equals(borrower.tokenManager),
@@ -96,10 +103,13 @@ describe.only("Loans", () => {
         })
         .signers([signer])
         .rpc();
+
+      const accountInfo = await connection.getAccountInfo(offer.loanOffer);
+      assert.equal(accountInfo, null, "Loan offer account should be null");
     });
   });
 
-  describe("Loan repossessions", () => {
+  describe.only("Loan repossessions", () => {
     let borrower: helpers.LoanBorrower;
     let lender: helpers.LoanLender;
     let options;
@@ -217,7 +227,10 @@ describe.only("Loans", () => {
         borrower.mint,
         keypair.publicKey
       );
-
+      const lenderTokenRecord = helpers.findTokenRecordAddress(
+        borrower.mint,
+        tokenAccount.address
+      );
       const escrowTokenAccount = helpers.findEscrowTokenAccount(
         borrower.tokenManager
       );
@@ -236,6 +249,7 @@ describe.only("Loans", () => {
             depositTokenRecord: borrower.tokenRecord,
             lender: lender.keypair.publicKey,
             lenderTokenAccount: tokenAccount.address,
+            lenderTokenRecord,
             escrowTokenAccount,
             escrowTokenRecord,
             loan: borrower.loan,
@@ -274,7 +288,15 @@ describe.only("Loans", () => {
         loan.mint,
         lender.keypair.publicKey
       );
-
+      const lenderTokenRecord = helpers.findTokenRecordAddress(
+        borrower.mint,
+        tokenAccount.address
+      );
+      // const escrowTokenAccount = await splToken.getAssociatedTokenAddress(
+      //   loan.mint,
+      //   borrower.tokenManager,
+      //   true
+      // );
       const escrowTokenAccount = helpers.findEscrowTokenAccount(
         borrower.tokenManager
       );
@@ -283,40 +305,53 @@ describe.only("Loans", () => {
         escrowTokenAccount
       );
 
+      const accounts = {
+        signer: signer.publicKey,
+        borrower: borrower.keypair.publicKey,
+        depositTokenAccount: borrower.depositTokenAccount,
+        depositTokenRecord: borrower.tokenRecord,
+        lender: lender.keypair.publicKey,
+        lenderTokenAccount: tokenAccount.address,
+        lenderTokenRecord,
+        escrowTokenAccount,
+        escrowTokenRecord,
+        loan: borrower.loan,
+        tokenManager: borrower.tokenManager,
+        mint: borrower.mint,
+        metadata: borrower.metadata,
+        edition: borrower.edition,
+        metadataProgram: METADATA_PROGRAM_ID,
+        authorizationRules: null,
+        authorizationRulesProgram: AUTHORIZATION_RULES_PROGRAM_ID,
+        tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        associatedTokenProgram: splToken.ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
+        clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+      };
+
+      for (const key in accounts) {
+        if (accounts[key]) {
+          console.log(key, accounts[key].toBase58());
+        }
+      }
+
       try {
         await lender.program.methods
           .repossess()
-          .accounts({
-            signer: signer.publicKey,
-            borrower: borrower.keypair.publicKey,
-            depositTokenAccount: borrower.depositTokenAccount,
-            depositTokenRecord: borrower.tokenRecord,
-            lender: lender.keypair.publicKey,
-            lenderTokenAccount: tokenAccount.address,
-            escrowTokenAccount,
-            escrowTokenRecord,
-            loan: borrower.loan,
-            tokenManager: borrower.tokenManager,
-            mint: borrower.mint,
-            metadata: borrower.metadata,
-            edition: borrower.edition,
-            metadataProgram: METADATA_PROGRAM_ID,
-            authorizationRules: null,
-            authorizationRulesProgram: AUTHORIZATION_RULES_PROGRAM_ID,
-            tokenProgram: splToken.TOKEN_PROGRAM_ID,
-            associatedTokenProgram: splToken.ASSOCIATED_TOKEN_PROGRAM_ID,
-            systemProgram: anchor.web3.SystemProgram.programId,
-            sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
-            clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-          })
+          .accounts(accounts)
           .signers([signer])
           .rpc();
       } catch (err) {
-        console.log(err.logs);
+        console.log(err);
         throw err;
       }
 
+      const borrowerTokenAccount = await splToken.getAccount(
+        connection,
+        borrower.depositTokenAccount
+      );
       const lenderTokenAccount = await splToken.getAccount(
         connection,
         tokenAccount.address
@@ -327,7 +362,7 @@ describe.only("Loans", () => {
       const defaultedListing = await borrower.program.account.loan.fetch(
         borrower.loan
       );
-
+      console.log(borrowerTokenAccount);
       assert.deepEqual(
         tokenManager.accounts,
         {

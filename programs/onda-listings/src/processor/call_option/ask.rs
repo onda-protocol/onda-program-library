@@ -38,10 +38,10 @@ pub struct AskCallOption<'info> {
         seeds = [
             TokenManager::PREFIX,
             mint.key().as_ref(),
-            seller.key().as_ref()
         ],
         space = TokenManager::space(),
         bump,
+        contract = token_manager.authority == seller.key() @ ErrorCodes::Unauthorized,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
     #[account(

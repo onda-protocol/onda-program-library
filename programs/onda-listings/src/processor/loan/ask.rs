@@ -38,10 +38,10 @@ pub struct AskLoan<'info> {
         seeds = [
             TokenManager::PREFIX,
             mint.key().as_ref(),
-            borrower.key().as_ref()
         ],
         space = TokenManager::space(),
         bump,
+        constraint = token_manager.authority == Some(borrower.key()) || token_manager.authority == None @ ErrorCodes::Unauthorized,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
     #[account(
@@ -115,6 +115,7 @@ pub fn handle_ask_loan(
     Loan::init_ask_state(loan, amount, collection.config.loan_basis_points, basis_points, duration)?;
     //
     token_manager.accounts.loan = true;
+    token_manager.authority = Some(borrower.key());
     token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
 
     // Freeze deposit token account

@@ -241,7 +241,6 @@ pub fn handle_delegate_and_freeze<'info>(
     let signer_seeds = &[&[
         TokenManager::PREFIX,
         mint_key.as_ref(),
-        owner_key.as_ref(),
         signer_bump
     ][..]];
 
@@ -361,7 +360,6 @@ pub fn handle_thaw_and_revoke<'info>(
     let signer_seeds = &[&[
         TokenManager::PREFIX,
         mint_key.as_ref(),
-        owner_key.as_ref(),
         signer_bump
     ][..]];
 
@@ -431,8 +429,169 @@ pub fn handle_thaw_and_revoke<'info>(
 pub fn handle_thaw_and_transfer<'info>(
     token_manager: &mut Account<'info, TokenManager>,
     owner: AccountInfo<'info>,
-    token_account: AccountInfo<'info>,
+    owner_token_account: AccountInfo<'info>,
     owner_token_record: Option<AccountInfo<'info>>,
+    escrow: AccountInfo<'info>,
+    escrow_token_record: Option<AccountInfo<'info>>,
+    new_authority: AccountInfo<'info>,
+    mint: AccountInfo<'info>,
+    metadata_info: AccountInfo<'info>,
+    edition: AccountInfo<'info>,
+    token_program: AccountInfo<'info>,
+    ata_program: AccountInfo<'info>,
+    system_program: AccountInfo<'info>,
+    sysvar_instructions: AccountInfo<'info>,
+    authorization_rules_program: AccountInfo<'info>,
+    authorization_rules: Option<AccountInfo<'info>>,
+) -> Result<()> {
+    let token_manager_key = token_manager.key();
+    let owner_key = owner.key();
+    let owner_token_account_key = owner_token_account.key();
+    let escrow_key = escrow.key();
+    let new_authority_key = new_authority.key();
+    let mint_key = mint.key();
+    let metadata_key = metadata_info.key();
+    let edition_key = edition.key();
+    let system_program_key = system_program.key(); 
+    let sysvar_instructions_key = sysvar_instructions.key();
+    let token_program_key = token_program.key();
+    let ata_program_key = ata_program.key();
+    let authorization_rules_program_key = authorization_rules_program.key();
+
+    let signer_bump = &[token_manager.bump];
+    let signers_seeds = &[&[
+        TokenManager::PREFIX,
+        mint_key.as_ref(),
+        signer_bump
+    ][..]];
+
+    let mut unlock_builder = builders::UnlockBuilder::new();
+
+    unlock_builder.authority(token_manager_key)
+        .token_owner(owner_key)
+        .token(owner_token_account_key)
+        .mint(mint_key)
+        .metadata(metadata_key)
+        .edition(edition_key)
+        .payer(new_authority_key)
+        .system_program(system_program_key)
+        .sysvar_instructions(sysvar_instructions_key)
+        .spl_token_program(token_program_key);
+
+
+    let mut unlock_accounts = vec![
+        token_manager.to_account_info(),
+        owner.to_account_info(),
+        owner_token_account.to_account_info(),
+        new_authority.to_account_info(),
+        mint.to_account_info(),
+        metadata_info.to_account_info(),
+        edition.to_account_info(),
+        system_program.to_account_info(),
+        sysvar_instructions.to_account_info(),
+        token_program.to_account_info(),
+    ];
+
+    // Conidtionally add authorization rules account
+    if authorization_rules.is_some() {
+        let authorization_rules = authorization_rules.clone().unwrap();
+        unlock_accounts.push(authorization_rules.to_account_info());
+        unlock_accounts.push(authorization_rules_program.to_account_info());
+
+        unlock_builder
+            .authorization_rules_program(authorization_rules_program_key)
+            .authorization_rules(authorization_rules.key());
+    }
+
+    if owner_token_record.is_some() {
+        unlock_accounts.push(owner_token_record.clone().unwrap().to_account_info());
+        unlock_builder.token_record(owner_token_record.clone().unwrap().key());
+    }
+
+    let lock_ix = unlock_builder.build(UnlockArgs::V1 { authorization_data: None })
+        .unwrap()
+        .instruction();
+
+    invoke_signed(
+        &lock_ix,
+        &unlock_accounts[..],
+        signers_seeds
+    )?;
+
+    let mut transfer_builder = builders::TransferBuilder::new();
+
+    transfer_builder
+        .token(owner_token_account_key)
+        .token_owner(owner_key)
+        .destination(escrow_key)
+        .destination_owner(token_manager_key)
+        .mint(mint_key)
+        .metadata(metadata_key)
+        .edition(edition_key)
+        .authority(token_manager_key)
+        .payer(new_authority_key)
+        .system_program(system_program_key)
+        .sysvar_instructions(sysvar_instructions_key)
+        .spl_token_program(token_program_key)
+        .spl_ata_program(ata_program_key);
+
+    let mut transfer_accounts = vec![
+        token_manager.to_account_info(),
+        owner.to_account_info(),
+        owner_token_account.to_account_info(),
+        escrow.to_account_info(),
+        new_authority.to_account_info(),
+        mint.to_account_info(),
+        metadata_info.to_account_info(),
+        edition.to_account_info(),
+        system_program.to_account_info(),
+        sysvar_instructions.to_account_info(),
+        token_program.to_account_info(),
+        ata_program.to_account_info(),
+    ];
+
+    if owner_token_record.is_some() {
+        let account = owner_token_record.unwrap();
+        transfer_builder.owner_token_record(account.key());
+        transfer_accounts.push(account.to_account_info());
+    }
+
+    if escrow_token_record.is_some() {
+        let account = escrow_token_record.unwrap();
+        transfer_builder.destination_token_record(account.key());
+        transfer_accounts.push(account.to_account_info());
+    }
+
+    if authorization_rules.is_some() {
+        let account = authorization_rules.unwrap();
+        transfer_builder
+            .authorization_rules_program(authorization_rules_program_key)
+            .authorization_rules(account.key());
+        transfer_accounts.push(authorization_rules_program.to_account_info());
+        transfer_accounts.push(account.to_account_info());
+    }
+
+    let transfer_ix = transfer_builder.build(TransferArgs::V1 { amount: 1, authorization_data: None })
+        .unwrap()
+        .instruction();
+
+    invoke_signed(
+        &transfer_ix,
+        &transfer_accounts[..],
+        signers_seeds
+    )?;
+
+    // Give control of the token manager escrow to the new owner
+    token_manager.authority = Some(new_authority_key);
+
+    Ok(())
+}
+
+pub fn claim_from_escrow<'info>(
+    token_manager: &mut Account<'info, TokenManager>,
+    owner: AccountInfo<'info>,
+    escrow: AccountInfo<'info>,
+    escrow_token_record: Option<AccountInfo<'info>>,
     destination: AccountInfo<'info>,
     destination_owner: AccountInfo<'info>,
     destination_token_record: Option<AccountInfo<'info>>,
@@ -448,7 +607,7 @@ pub fn handle_thaw_and_transfer<'info>(
 ) -> Result<()> {
     let token_manager_key = token_manager.key();
     let owner_key = owner.key();
-    let token_account_key = token_account.key();
+    let escrow_key = escrow.key();
     let destination_key = destination.key();
     let destination_owner_key = destination_owner.key();
     let mint_key = mint.key();
@@ -463,24 +622,23 @@ pub fn handle_thaw_and_transfer<'info>(
     let mut transfer_builder = builders::TransferBuilder::new();
 
     transfer_builder
-        .token(token_account_key)
-        .token_owner(owner_key)
+        .token(escrow_key)
+        .token_owner(token_manager_key)
         .destination(destination_key)
         .destination_owner(destination_owner_key)
         .mint(mint_key)
         .metadata(metadata_key)
         .edition(edition_key)
         .authority(token_manager_key)
-        .payer(destination_key)
+        .payer(destination_owner_key)
         .system_program(system_program_key)
         .sysvar_instructions(sysvar_instructions_key)
         .spl_token_program(token_program_key)
         .spl_ata_program(ata_program_key);
 
     let mut transfer_accounts = vec![
+        escrow.to_account_info(),
         token_manager.to_account_info(),
-        owner.to_account_info(),
-        token_account.to_account_info(),
         destination.to_account_info(),
         destination_owner.to_account_info(),
         mint.to_account_info(),
@@ -492,8 +650,8 @@ pub fn handle_thaw_and_transfer<'info>(
         ata_program.to_account_info(),
     ];
 
-    if owner_token_record.is_some() {
-        let account = owner_token_record.unwrap();
+    if escrow_token_record.is_some() {
+        let account = escrow_token_record.unwrap();
         transfer_builder.owner_token_record(account.key());
         transfer_accounts.push(account.to_account_info());
     }
@@ -512,6 +670,24 @@ pub fn handle_thaw_and_transfer<'info>(
         transfer_accounts.push(authorization_rules_program.to_account_info());
         transfer_accounts.push(account.to_account_info());
     }
+
+    let transfer_ix = transfer_builder.build(TransferArgs::V1 { amount: 1, authorization_data: None })
+        .unwrap()
+        .instruction();
+
+    let signer_bump = &[token_manager.bump];
+    let signers_seeds = &[&[
+        TokenManager::PREFIX,
+        mint_key.as_ref(),
+        owner_key.as_ref(),
+        signer_bump
+    ][..]];
+
+    invoke_signed(
+        &transfer_ix,
+        &transfer_accounts[..],
+        signers_seeds
+    )?;
 
     Ok(())
 }

@@ -70,8 +70,7 @@ pub struct TakeLoanOffer<'info> {
         payer = borrower,
         seeds = [
             TokenManager::PREFIX,
-            mint.key().as_ref(),
-            borrower.key().as_ref()
+            mint.key().as_ref()
         ],
         space = TokenManager::space(),
         bump,
@@ -156,6 +155,7 @@ pub fn handle_take_loan_offer(
     )?;
     Loan::set_active(loan, ctx.accounts.clock.unix_timestamp)?;
     //
+    token_manager.authority = Some(loan.borrower);
     token_manager.accounts.loan = true;
     token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
 

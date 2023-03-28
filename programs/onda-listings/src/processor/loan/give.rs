@@ -33,7 +33,6 @@ pub struct GiveLoan<'info> {
         seeds = [
             TokenManager::PREFIX,
             mint.key().as_ref(),
-            borrower.key().as_ref()
         ],
         bump,
     )]   

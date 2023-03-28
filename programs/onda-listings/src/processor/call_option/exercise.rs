@@ -40,7 +40,8 @@ pub struct ExerciseCallOption<'info> {
             seller.key().as_ref()
         ],
         bump,
-        constraint = token_manager.accounts.rental != true,
+        constraint = token_manager.accounts.rental != true @ ErrorCodes::InvalidState,
+        constraint = token_manager.authority === seller.key() @ ErrorCodes::Unauthorized,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
     #[account(
@@ -186,6 +187,7 @@ pub struct ExerciseCallOptionWithRental<'info> {
         bump,
         constraint = token_manager.accounts.rental == true,
         constraint = token_manager.accounts.call_option == true,
+        constraint = token_manager.authority == seller.key() @ ErrorCodes::Unauthorized,
     )]
     pub token_manager: Box<Account<'info, TokenManager>>,
     #[account(

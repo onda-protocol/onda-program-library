@@ -68,10 +68,10 @@ export async function requestAirdrop(
   });
 }
 
-export async function findCollectionAddress(
+export function findCollectionAddress(
   collection: anchor.web3.PublicKey
-): Promise<anchor.web3.PublicKey> {
-  const [collectionAddress] = await anchor.web3.PublicKey.findProgramAddress(
+): anchor.web3.PublicKey {
+  const [collectionAddress] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from("collection"), collection.toBuffer()],
     PROGRAM_ID
   );
@@ -79,23 +79,22 @@ export async function findCollectionAddress(
   return collectionAddress;
 }
 
-export async function findTokenManagerAddress(
-  mint: anchor.web3.PublicKey,
-  issuer: anchor.web3.PublicKey
-): Promise<anchor.web3.PublicKey> {
-  const [tokenManagerAddress] = await anchor.web3.PublicKey.findProgramAddress(
-    [Buffer.from("token_manager"), mint.toBuffer(), issuer.toBuffer()],
+export function findTokenManagerAddress(
+  mint: anchor.web3.PublicKey
+): anchor.web3.PublicKey {
+  const [tokenManagerAddress] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("token_manager"), mint.toBuffer()],
     PROGRAM_ID
   );
 
   return tokenManagerAddress;
 }
 
-export async function findLoanAddress(
+export function findLoanAddress(
   mint: anchor.web3.PublicKey,
   borrower: anchor.web3.PublicKey
-): Promise<anchor.web3.PublicKey> {
-  const [loanAddress] = await anchor.web3.PublicKey.findProgramAddress(
+): anchor.web3.PublicKey {
+  const [loanAddress] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from("loan"), mint.toBuffer(), borrower.toBuffer()],
     PROGRAM_ID
   );
@@ -103,12 +102,12 @@ export async function findLoanAddress(
   return loanAddress;
 }
 
-export async function findLoanOfferAddress(
+export function findLoanOfferAddress(
   collectionMint: anchor.web3.PublicKey,
   lender: anchor.web3.PublicKey,
   id: number
-): Promise<anchor.web3.PublicKey> {
-  const [loanOfferAddress] = await anchor.web3.PublicKey.findProgramAddress(
+): anchor.web3.PublicKey {
+  const [loanOfferAddress] = anchor.web3.PublicKey.findProgramAddressSync(
     [
       Buffer.from("loan_offer"),
       collectionMint.toBuffer(),
@@ -121,24 +120,23 @@ export async function findLoanOfferAddress(
   return loanOfferAddress;
 }
 
-export async function findLoanOfferVaultAddress(
+export function findLoanOfferVaultAddress(
   loanOffer: anchor.web3.PublicKey
-): Promise<anchor.web3.PublicKey> {
-  const [loanOfferVaultAddress] =
-    await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("loan_offer_vault"), loanOffer.toBuffer()],
-      PROGRAM_ID
-    );
+): anchor.web3.PublicKey {
+  const [loanOfferVaultAddress] = anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("loan_offer_vault"), loanOffer.toBuffer()],
+    PROGRAM_ID
+  );
 
   return loanOfferVaultAddress;
 }
 
-export async function findCallOptionBidAddress(
+export function findCallOptionBidAddress(
   collectionMint: anchor.web3.PublicKey,
   buyer: anchor.web3.PublicKey,
   id: number
-) {
-  const [callOptionBidAddress] = await anchor.web3.PublicKey.findProgramAddress(
+): anchor.web3.PublicKey {
+  const [callOptionBidAddress] = anchor.web3.PublicKey.findProgramAddressSync(
     [
       Buffer.from("call_option_bid"),
       collectionMint.toBuffer(),
@@ -151,10 +149,10 @@ export async function findCallOptionBidAddress(
   return callOptionBidAddress;
 }
 
-export async function findCallOptionBidVaultAddress(
+export function findCallOptionBidVaultAddress(
   callOptionBid: anchor.web3.PublicKey
-): Promise<anchor.web3.PublicKey> {
-  const [callOptionBidAddress] = await anchor.web3.PublicKey.findProgramAddress(
+): anchor.web3.PublicKey {
+  const [callOptionBidAddress] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from("call_option_bid_vault"), callOptionBid.toBuffer()],
     PROGRAM_ID
   );
@@ -162,11 +160,11 @@ export async function findCallOptionBidVaultAddress(
   return callOptionBidAddress;
 }
 
-export async function findCallOptionAddress(
+export function findCallOptionAddress(
   mint: anchor.web3.PublicKey,
   seller: anchor.web3.PublicKey
-): Promise<anchor.web3.PublicKey> {
-  const [callOptionAddress] = await anchor.web3.PublicKey.findProgramAddress(
+): anchor.web3.PublicKey {
+  const [callOptionAddress] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from("call_option"), mint.toBuffer(), seller.toBuffer()],
     PROGRAM_ID
   );
@@ -174,11 +172,11 @@ export async function findCallOptionAddress(
   return callOptionAddress;
 }
 
-export async function findRentalAddress(
+export function findRentalAddress(
   mint: anchor.web3.PublicKey,
   lender: anchor.web3.PublicKey
-): Promise<anchor.web3.PublicKey> {
-  const [rentalAddress] = await anchor.web3.PublicKey.findProgramAddress(
+): anchor.web3.PublicKey {
+  const [rentalAddress] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from("rental"), mint.toBuffer(), lender.toBuffer()],
     PROGRAM_ID
   );
@@ -186,11 +184,11 @@ export async function findRentalAddress(
   return rentalAddress;
 }
 
-export async function findRentalEscrowAddress(
+export function findRentalEscrowAddress(
   mint: anchor.web3.PublicKey,
   lender: anchor.web3.PublicKey
-): Promise<anchor.web3.PublicKey> {
-  const [rentalEscrowAddress] = await anchor.web3.PublicKey.findProgramAddress(
+): anchor.web3.PublicKey {
+  const [rentalEscrowAddress] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from("rental_escrow"), mint.toBuffer(), lender.toBuffer()],
     PROGRAM_ID
   );
@@ -198,16 +196,20 @@ export async function findRentalEscrowAddress(
   return rentalEscrowAddress;
 }
 
-export async function findMetadataAddress(mint: anchor.web3.PublicKey) {
-  return anchor.web3.PublicKey.findProgramAddress(
+export function findMetadataAddress(
+  mint: anchor.web3.PublicKey
+): anchor.web3.PublicKey {
+  const [metadataAddress] = anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from("metadata"), METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
     METADATA_PROGRAM_ID
   );
+
+  return metadataAddress;
 }
 
 export function findEscrowTokenAccount(tokenManager: anchor.web3.PublicKey) {
   const [escrowTokenAccount] = anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from("escrow_token_account"), tokenManager.toBuffer()],
+    [Buffer.from("escrow"), tokenManager.toBuffer()],
     PROGRAM_ID
   );
 
@@ -367,10 +369,7 @@ export async function askLoan(
   const collectionAddress = await findCollectionAddress(
     collection.mint.address
   );
-  const tokenManager = await findTokenManagerAddress(
-    nft.mint.address,
-    keypair.publicKey
-  );
+  const tokenManager = await findTokenManagerAddress(nft.mint.address);
 
   const largestAccounts = await connection.getTokenLargestAccounts(
     nft.mint.address
@@ -567,10 +566,7 @@ export async function takeLoan(
     lender.nft.mint.address,
     keypair.publicKey
   );
-  const tokenManager = await findTokenManagerAddress(
-    lender.nft.mint.address,
-    keypair.publicKey
-  );
+  const tokenManager = await findTokenManagerAddress(lender.nft.mint.address);
 
   const accounts = {
     signer: signer.publicKey,

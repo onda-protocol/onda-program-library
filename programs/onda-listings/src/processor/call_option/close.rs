@@ -41,9 +41,9 @@ pub struct CloseCallOption<'info> {
         seeds = [
             TokenManager::PREFIX,
             mint.key().as_ref(),
-            seller.key().as_ref()
         ],
         bump,
+        constraint = token_manager.authority == seller.key() @ ErrorCodes::Unauthorized,
     )]   
     pub token_manager: Account<'info, TokenManager>,
     #[account(
