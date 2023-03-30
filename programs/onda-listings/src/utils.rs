@@ -589,7 +589,6 @@ pub fn handle_thaw_and_transfer<'info>(
 
 pub fn claim_from_escrow<'info>(
     token_manager: &mut Account<'info, TokenManager>,
-    owner: AccountInfo<'info>,
     escrow: AccountInfo<'info>,
     escrow_token_record: Option<AccountInfo<'info>>,
     destination: AccountInfo<'info>,
@@ -606,7 +605,6 @@ pub fn claim_from_escrow<'info>(
     authorization_rules: Option<AccountInfo<'info>>,
 ) -> Result<()> {
     let token_manager_key = token_manager.key();
-    let owner_key = owner.key();
     let escrow_key = escrow.key();
     let destination_key = destination.key();
     let destination_owner_key = destination_owner.key();
@@ -679,7 +677,6 @@ pub fn claim_from_escrow<'info>(
     let signers_seeds = &[&[
         TokenManager::PREFIX,
         mint_key.as_ref(),
-        owner_key.as_ref(),
         signer_bump
     ][..]];
 

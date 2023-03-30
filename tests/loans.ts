@@ -9,6 +9,7 @@ import { PROGRAM_ID as AUTHORIZATION_RULES_PROGRAM_ID } from "@metaplex-foundati
 import * as anchor from "@project-serum/anchor";
 import * as splToken from "@solana/spl-token";
 import * as helpers from "./helpers";
+import { publicKey } from "@project-serum/anchor/dist/cjs/utils";
 
 // Configure the client to use the local cluster.
 const connection = new anchor.web3.Connection(
@@ -221,16 +222,6 @@ describe.only("Loans", () => {
       const program = helpers.getProgram(provider);
       await helpers.requestAirdrop(connection, keypair.publicKey);
 
-      const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
-        connection,
-        keypair,
-        borrower.mint,
-        keypair.publicKey
-      );
-      const lenderTokenRecord = helpers.findTokenRecordAddress(
-        borrower.mint,
-        tokenAccount.address
-      );
       const escrowTokenAccount = helpers.findEscrowTokenAccount(
         borrower.tokenManager
       );
@@ -248,8 +239,6 @@ describe.only("Loans", () => {
             depositTokenAccount: borrower.depositTokenAccount,
             depositTokenRecord: borrower.tokenRecord,
             lender: lender.keypair.publicKey,
-            lenderTokenAccount: tokenAccount.address,
-            lenderTokenRecord,
             escrowTokenAccount,
             escrowTokenRecord,
             loan: borrower.loan,
@@ -281,28 +270,12 @@ describe.only("Loans", () => {
 
     it("Allows an overdue loan to be repossessed by the lender", async () => {
       const signer = await helpers.getSigner();
-      const loan = await borrower.program.account.loan.fetch(borrower.loan);
-      const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
-        connection,
-        lender.keypair,
-        loan.mint,
-        lender.keypair.publicKey
-      );
-      const lenderTokenRecord = helpers.findTokenRecordAddress(
-        borrower.mint,
-        tokenAccount.address
-      );
-      // const escrowTokenAccount = await splToken.getAssociatedTokenAddress(
-      //   loan.mint,
-      //   borrower.tokenManager,
-      //   true
-      // );
-      const escrowTokenAccount = helpers.findEscrowTokenAccount(
+      const escrowTokenAccountPda = helpers.findEscrowTokenAccount(
         borrower.tokenManager
       );
       const escrowTokenRecord = helpers.findTokenRecordAddress(
         borrower.mint,
-        escrowTokenAccount
+        escrowTokenAccountPda
       );
 
       const accounts = {
@@ -311,9 +284,7 @@ describe.only("Loans", () => {
         depositTokenAccount: borrower.depositTokenAccount,
         depositTokenRecord: borrower.tokenRecord,
         lender: lender.keypair.publicKey,
-        lenderTokenAccount: tokenAccount.address,
-        lenderTokenRecord,
-        escrowTokenAccount,
+        escrowTokenAccount: escrowTokenAccountPda,
         escrowTokenRecord,
         loan: borrower.loan,
         tokenManager: borrower.tokenManager,
@@ -327,15 +298,8 @@ describe.only("Loans", () => {
         associatedTokenProgram: splToken.ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId,
         sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
-        clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
       };
-
-      for (const key in accounts) {
-        if (accounts[key]) {
-          console.log(key, accounts[key].toBase58());
-        }
-      }
 
       try {
         await lender.program.methods
@@ -352,9 +316,9 @@ describe.only("Loans", () => {
         connection,
         borrower.depositTokenAccount
       );
-      const lenderTokenAccount = await splToken.getAccount(
+      const escrowTokenAccount = await splToken.getAccount(
         connection,
-        tokenAccount.address
+        escrowTokenAccountPda
       );
       const tokenManager = await borrower.program.account.tokenManager.fetch(
         borrower.tokenManager
@@ -372,8 +336,70 @@ describe.only("Loans", () => {
         },
         "tokenManager state"
       );
-      assert.equal(lenderTokenAccount.amount, BigInt(1), "lenderTokenAccount");
+      assert.ok(
+        tokenManager.authority.equals(lender.keypair.publicKey),
+        "tokenManager authority"
+      );
+      assert.equal(escrowTokenAccount.amount, BigInt(1), "escrowTokenAccount");
       assert.deepEqual(defaultedListing.state, { defaulted: {} }, "loan state");
+    });
+
+    it("Allows a repossessed NFT to be claimed from escrow", async () => {
+      const signer = await helpers.getSigner();
+      const escrowTokenAccountPda = helpers.findEscrowTokenAccount(
+        borrower.tokenManager
+      );
+      const escrowTokenRecord = helpers.findTokenRecordAddress(
+        borrower.mint,
+        escrowTokenAccountPda
+      );
+      const lenderTokenAccountAddress =
+        await splToken.getAssociatedTokenAddress(
+          lender.keypair.publicKey,
+          borrower.mint
+        );
+      const lenderTokenRecord = helpers.findTokenRecordAddress(
+        borrower.mint,
+        lenderTokenAccountAddress
+      );
+
+      const accounts = {
+        signer: signer.publicKey,
+        authority: lender.keypair.publicKey,
+        destinationTokenAccount: lenderTokenAccountAddress,
+        destinationTokenRecord: lenderTokenRecord,
+        escrowTokenAccount: escrowTokenAccountPda,
+        escrowTokenRecord,
+        tokenManager: borrower.tokenManager,
+        mint: borrower.mint,
+        metadata: borrower.metadata,
+        edition: borrower.edition,
+        metadataProgram: METADATA_PROGRAM_ID,
+        authorizationRules: null,
+        authorizationRulesProgram: AUTHORIZATION_RULES_PROGRAM_ID,
+        tokenProgram: splToken.TOKEN_PROGRAM_ID,
+        associatedTokenProgram: splToken.ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+        sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
+        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+      };
+
+      try {
+        await lender.program.methods
+          .claim()
+          .accounts(accounts)
+          .signers([signer])
+          .rpc();
+      } catch (err) {
+        console.log(err);
+        throw err;
+      }
+
+      const lenderTokenAccount = await splToken.getAccount(
+        connection,
+        lenderTokenAccountAddress
+      );
+      assert.equal(lenderTokenAccount.amount, BigInt(1), "lenderTokenAccount");
     });
 
     //   it("Will allow accounts to be closed once overdue loans are repossessed", async () => {

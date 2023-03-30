@@ -158,4 +158,9 @@ pub mod onda_listings {
     pub fn close_collection(ctx: Context<CloseCollection>) -> Result<()> {
         handle_close_collection(ctx)
     }
+
+    // Common
+    pub fn claim(ctx: Context<Claim>) -> Result<()> {
+        handle_claim(ctx)
+    }
 }

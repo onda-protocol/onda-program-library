@@ -24,15 +24,6 @@ pub struct Repossess<'info> {
     #[account(
         mut,
         associated_token::mint = mint,
-        associated_token::authority = lender
-    )]
-    pub lender_token_account: Box<Account<'info, TokenAccount>>,
-    #[account(mut)]
-    /// CHECK: validated in cpi
-    pub lender_token_record: Option<UncheckedAccount<'info>>,
-    #[account(
-        mut,
-        associated_token::mint = mint,
         associated_token::authority = borrower,
     )]
     pub deposit_token_account: Box<Account<'info, TokenAccount>>,
