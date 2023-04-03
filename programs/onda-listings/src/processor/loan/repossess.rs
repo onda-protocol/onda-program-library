@@ -5,7 +5,7 @@ use {
         token::{Token, TokenAccount, Mint}
     }
 };
-use crate::state::{Loan, LoanState, Rental, TokenManager};
+use crate::state::{Loan, LoanState, TokenManager};
 use crate::error::{ErrorCodes};
 use crate::utils::*;
 use crate::constants::*;

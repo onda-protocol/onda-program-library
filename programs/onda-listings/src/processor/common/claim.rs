@@ -48,7 +48,6 @@ pub struct Claim<'info> {
       bump,
       token::mint = mint,
       token::authority = token_manager,
-      close = authority,
   )]
   pub escrow_token_account: Box<Account<'info, TokenAccount>>,
   #[account(mut)]

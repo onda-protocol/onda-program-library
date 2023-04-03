@@ -9,7 +9,6 @@ import { PROGRAM_ID as AUTHORIZATION_RULES_PROGRAM_ID } from "@metaplex-foundati
 import * as anchor from "@project-serum/anchor";
 import * as splToken from "@solana/spl-token";
 import * as helpers from "./helpers";
-import { publicKey } from "@project-serum/anchor/dist/cjs/utils";
 
 // Configure the client to use the local cluster.
 const connection = new anchor.web3.Connection(
@@ -261,7 +260,6 @@ describe.only("Loans", () => {
 
         assert.fail("Should not have been able to repossess");
       } catch (error) {
-        console.log(error);
         assert.ok(
           error.toString().includes("Error: Signature verification failed")
         );
@@ -302,6 +300,8 @@ describe.only("Loans", () => {
       };
 
       try {
+        await helpers.waitForOverdue(borrower.program, borrower.loan);
+
         await lender.program.methods
           .repossess()
           .accounts(accounts)
@@ -326,7 +326,7 @@ describe.only("Loans", () => {
       const defaultedListing = await borrower.program.account.loan.fetch(
         borrower.loan
       );
-      console.log(borrowerTokenAccount);
+
       assert.deepEqual(
         tokenManager.accounts,
         {
@@ -355,8 +355,8 @@ describe.only("Loans", () => {
       );
       const lenderTokenAccountAddress =
         await splToken.getAssociatedTokenAddress(
-          lender.keypair.publicKey,
-          borrower.mint
+          borrower.mint,
+          lender.keypair.publicKey
         );
       const lenderTokenRecord = helpers.findTokenRecordAddress(
         borrower.mint,
@@ -374,15 +374,19 @@ describe.only("Loans", () => {
         mint: borrower.mint,
         metadata: borrower.metadata,
         edition: borrower.edition,
-        metadataProgram: METADATA_PROGRAM_ID,
         authorizationRules: null,
         authorizationRulesProgram: AUTHORIZATION_RULES_PROGRAM_ID,
+        metadataProgram: METADATA_PROGRAM_ID,
         tokenProgram: splToken.TOKEN_PROGRAM_ID,
         associatedTokenProgram: splToken.ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId,
         sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
       };
+
+      for (const [key, value] of Object.entries(accounts)) {
+        console.log(key, value?.toBase58());
+      }
 
       try {
         await lender.program.methods
@@ -402,40 +406,50 @@ describe.only("Loans", () => {
       assert.equal(lenderTokenAccount.amount, BigInt(1), "lenderTokenAccount");
     });
 
-    //   it("Will allow accounts to be closed once overdue loans are repossessed", async () => {
-    //     const signer = await helpers.getSigner();
+    it("Will allow accounts to be closed once overdue loans are repossessed", async () => {
+      const signer = await helpers.getSigner();
 
-    //     try {
-    //       await borrower.program.methods
-    //         .closeLoan()
-    //         .accounts({
-    //           signer: signer.publicKey,
-    //           borrower: borrower.keypair.publicKey,
-    //           depositTokenAccount: borrower.depositTokenAccount,
-    //           loan: borrower.loan,
-    //           tokenManager: borrower.tokenManager,
-    //           mint: borrower.mint,
-    //           edition: borrower.edition,
-    //           metadataProgram: METADATA_PROGRAM_ID,
-    //           systemProgram: anchor.web3.SystemProgram.programId,
-    //           tokenProgram: splToken.TOKEN_PROGRAM_ID,
-    //         })
-    //         .signers([signer])
-    //         .rpc();
-    //     } catch (err) {
-    //       console.log(err.logs);
-    //       assert.fail(err);
-    //     }
+      const tokenRecord = helpers.findTokenRecordAddress(
+        borrower.mint,
+        borrower.depositTokenAccount
+      );
 
-    //     try {
-    //       await borrower.program.account.loan.fetch(borrower.loan);
-    //     } catch (err) {
-    //       assert.equal(
-    //         err.message,
-    //         `Account does not exist or has no data ${borrower.loan.toBase58()}`
-    //       );
-    //     }
-    //   });
+      try {
+        await borrower.program.methods
+          .closeLoan()
+          .accounts({
+            signer: signer.publicKey,
+            borrower: borrower.keypair.publicKey,
+            depositTokenAccount: borrower.depositTokenAccount,
+            depositTokenRecord: tokenRecord,
+            loan: borrower.loan,
+            tokenManager: borrower.tokenManager,
+            mint: borrower.mint,
+            metadata: borrower.metadata,
+            edition: borrower.edition,
+            authorizationRules: null,
+            authorizationRulesProgram: AUTHORIZATION_RULES_PROGRAM_ID,
+            metadataProgram: METADATA_PROGRAM_ID,
+            tokenProgram: splToken.TOKEN_PROGRAM_ID,
+            sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
+            systemProgram: anchor.web3.SystemProgram.programId,
+          })
+          .signers([signer])
+          .rpc();
+      } catch (err) {
+        console.log(err.logs);
+        assert.fail(err);
+      }
+
+      try {
+        await borrower.program.account.loan.fetch(borrower.loan);
+      } catch (err) {
+        assert.equal(
+          err.message,
+          `Account does not exist or has no data ${borrower.loan.toBase58()}`
+        );
+      }
+    });
   });
 
   // describe("Loan repayments", () => {

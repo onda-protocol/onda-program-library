@@ -623,6 +623,21 @@ export async function takeLoan(
   };
 }
 
+export async function waitForOverdue(
+  program: anchor.Program<OndaListings>,
+  loanPda: anchor.web3.PublicKey
+) {
+  const loanAccount = await program.account.loan.fetch(loanPda);
+  const startDate = loanAccount.startDate.toNumber();
+  const duration = loanAccount.duration.toNumber();
+  const expires = startDate + duration;
+  const now = Date.now() / 1000;
+  const seconds = now - expires;
+  if (seconds > 0) {
+    await wait(seconds + 1);
+  }
+}
+
 export type CallOptionBidBuyer = Awaited<ReturnType<typeof bidCallOption>>;
 export type CallOptionBidSeller = Awaited<ReturnType<typeof sellCallOption>>;
 

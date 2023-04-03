@@ -686,6 +686,19 @@ pub fn claim_from_escrow<'info>(
         signers_seeds
     )?;
 
+    // Close the escrow account
+    anchor_spl::token::close_account(
+        CpiContext::new_with_signer(
+            token_program.clone(),
+            anchor_spl::token::CloseAccount {
+                account: escrow.clone(),
+                destination: destination_owner.clone(),
+                authority: token_manager.to_account_info(),
+            },
+            signers_seeds,
+        )
+    )?;
+
     Ok(())
 }
 
