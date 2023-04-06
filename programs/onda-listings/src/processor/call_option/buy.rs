@@ -1,6 +1,7 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token};
 use crate::state::{CallOption, CallOptionState, Collection, TokenManager};
+use crate::error::{ErrorCodes};
 use crate::constants::*;
 use crate::utils::*;
 
@@ -37,7 +38,7 @@ pub struct BuyCallOption<'info> {
             mint.key().as_ref(),
         ],
         bump,
-        constraint = token_manager.authority == seller.key() @ ErrorCodes::Unauthorized,
+        constraint = token_manager.authority.unwrap() == seller.key() @ ErrorCodes::Unauthorized,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
     #[account(

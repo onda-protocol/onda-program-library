@@ -79,40 +79,21 @@ pub struct CloseLoan<'info> {
 
 
 pub fn handle_close_loan(ctx: Context<CloseLoan>) -> Result<()> {
+    let token_manager = &mut ctx.accounts.token_manager;
+    let borrower = &ctx.accounts.borrower;
+    let deposit_token_account = &ctx.accounts.deposit_token_account;
+    let mint = &ctx.accounts.mint;
+    let metadata = &ctx.accounts.metadata;
+    let edition = &ctx.accounts.edition;
+    let deposit_token_record = &ctx.accounts.deposit_token_record;
+    let token_program = &ctx.accounts.token_program;
+    let system_program = &ctx.accounts.system_program;
+    let sysvar_instructions = &ctx.accounts.sysvar_instructions;
+    let authorization_rules_program = &ctx.accounts.authorization_rules_program;
+    let authorization_rules = &ctx.accounts.authorization_rules;
+
     msg!("Loan state: {:?}", ctx.accounts.loan.state);
 
-    process_close_loan(
-        &mut ctx.accounts.token_manager,
-        &ctx.accounts.borrower,
-        &ctx.accounts.deposit_token_account,
-        &ctx.accounts.mint,
-        &ctx.accounts.metadata,
-        &ctx.accounts.edition,
-        &ctx.accounts.deposit_token_record,
-        &ctx.accounts.token_program,
-        &ctx.accounts.system_program,
-        &ctx.accounts.sysvar_instructions,
-        &ctx.accounts.authorization_rules_program,
-        &ctx.accounts.authorization_rules,
-    )?;
-  
-    Ok(())
-}
-
-pub fn process_close_loan<'info>(
-    token_manager: &mut Account<'info, TokenManager>,
-    borrower: &Signer<'info>,
-    deposit_token_account: &Account<'info, TokenAccount>,
-    mint: &Account<'info, Mint>,
-    metadata: &UncheckedAccount<'info>,
-    edition: &UncheckedAccount<'info>,
-    token_record: &Option<UncheckedAccount<'info>>,
-    token_program: &Program<'info, Token>,
-    system_program: &Program<'info, System>,
-    sysvar_instructions: &UncheckedAccount<'info>,
-    authorization_rules_program: &UncheckedAccount<'info>,
-    authorization_rules: &Option<UncheckedAccount<'info>>,
-) -> Result<()> {
     // IMPORTANT CHECK!
     if token_manager.authority.unwrap().eq(&borrower.key()) {
         // IMPORTANT CHECK!
@@ -121,7 +102,7 @@ pub fn process_close_loan<'info>(
                 token_manager,
                 borrower.to_account_info(),
                 deposit_token_account.to_account_info(),
-                match token_record {
+                match deposit_token_record {
                     Some(token_record) => Some(token_record.to_account_info()),
                     None => None,
                 },
@@ -143,7 +124,7 @@ pub fn process_close_loan<'info>(
             token_manager.accounts.loan = false;
         }   
     }
-
+  
     Ok(())
 }
 

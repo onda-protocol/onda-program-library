@@ -71,52 +71,52 @@ pub mod onda_listings {
     //     handle_repossess_with_rental(ctx)
     // }
 
-    // // Call Options
-    // pub fn bid_call_option(
-    //     ctx: Context<BidCallOption>,
-    //     amount: u64,
-    //     strike_price: u64,
-    //     expiry: i64,
-    //     id: u8,
-    // ) -> Result<()> {
-    //     handle_bid_call_option(ctx, amount, strike_price, expiry, id)
-    // }
+    // Call Options
+    pub fn bid_call_option(
+        ctx: Context<BidCallOption>,
+        amount: u64,
+        strike_price: u64,
+        expiry: i64,
+        id: u8,
+    ) -> Result<()> {
+        handle_bid_call_option(ctx, amount, strike_price, expiry, id)
+    }
 
-    // pub fn close_call_option_bid(ctx: Context<CloseCallOptionBid>, id: u8) -> Result<()> {
-    //     handle_close_call_option_bid(ctx, id)
-    // }
+    pub fn close_call_option_bid(ctx: Context<CloseCallOptionBid>, id: u8) -> Result<()> {
+        handle_close_call_option_bid(ctx, id)
+    }
 
-    // pub fn sell_call_option<'info>(
-    //     ctx: Context<'_, '_, '_, 'info, SellCallOption<'info>>,
-    //     id: u8,
-    // ) -> Result<()> {
-    //     handle_sell_call_option(ctx, id)
-    // }
+    pub fn sell_call_option<'info>(
+        ctx: Context<'_, '_, '_, 'info, SellCallOption<'info>>,
+        id: u8,
+    ) -> Result<()> {
+        handle_sell_call_option(ctx, id)
+    }
 
-    // pub fn ask_call_option<'info>(
-    //     ctx: Context<'_, '_, '_, 'info, AskCallOption<'info>>,
-    //     amount: u64,
-    //     strike_price: u64,
-    //     expiry: i64,
-    // ) -> Result<()> {
-    //     handle_ask_call_option(ctx, amount, strike_price, expiry)
-    // }
+    pub fn ask_call_option<'info>(
+        ctx: Context<'_, '_, '_, 'info, AskCallOption<'info>>,
+        amount: u64,
+        strike_price: u64,
+        expiry: i64,
+    ) -> Result<()> {
+        handle_ask_call_option(ctx, amount, strike_price, expiry)
+    }
 
-    // pub fn buy_call_option<'info>(ctx: Context<'_, '_, '_, 'info, BuyCallOption<'info>>) -> Result<()> {
-    //     handle_buy_call_option(ctx)
-    // }
+    pub fn buy_call_option<'info>(ctx: Context<'_, '_, '_, 'info, BuyCallOption<'info>>) -> Result<()> {
+        handle_buy_call_option(ctx)
+    }
 
-    // pub fn exercise_call_option<'info>(ctx: Context<'_, '_, '_, 'info, ExerciseCallOption<'info>>) -> Result<()> {
-    //     handle_exercise_call_option(ctx)
-    // }
+    pub fn exercise_call_option<'info>(ctx: Context<'_, '_, '_, 'info, ExerciseCallOption<'info>>) -> Result<()> {
+        handle_exercise_call_option(ctx)
+    }
 
     // pub fn exercise_call_option_with_rental<'info>(ctx: Context<'_, '_, '_, 'info, ExerciseCallOptionWithRental<'info>>) -> Result<()> {
     //     handle_exercise_call_option_with_rental(ctx)
     // }
 
-    // pub fn close_call_option<'info>(ctx: Context<'_, '_, '_, 'info, CloseCallOption<'info>>) -> Result<()> {
-    //     handle_close_call_option(ctx)
-    // }
+    pub fn close_call_option<'info>(ctx: Context<'_, '_, '_, 'info, CloseCallOption<'info>>) -> Result<()> {
+        handle_close_call_option(ctx)
+    }
 
     // // Rentals
     // pub fn init_rental<'info>(
