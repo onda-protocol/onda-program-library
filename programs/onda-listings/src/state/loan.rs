@@ -7,6 +7,7 @@ pub enum LoanState {
     Unlisted,
     Listed,
     Active,
+    Repaid,
     Defaulted,
 }
 
@@ -28,10 +29,6 @@ pub struct Loan {
     pub outstanding: u64,
     /// The liquidation threshold in basis points
     pub threshold: Option<u32>,
-    /// Number of installments
-    pub installments: u8,
-    /// Current installment
-    pub current_installment: u8,
     /// Notice issued ts
     pub notice_issued: Option<i64>,
     /// Duration of the loan in seconds
@@ -59,7 +56,6 @@ impl Loan {
         loan.creator_basis_points = creator_basis_points;
         loan.outstanding = amount;
         loan.threshold = None;
-        loan.installments = 1;
         loan.duration = duration;
         loan.state = LoanState::Listed;
     
@@ -75,7 +71,6 @@ impl Loan {
         require!(loan.amount.is_some(), ErrorCodes::InvalidState);
         require_keys_neq!(loan.borrower, SYSTEM_ACCOUNT, ErrorCodes::InvalidState);
         require_eq!(loan.outstanding, loan.amount.unwrap(), ErrorCodes::InvalidState);
-        require_gt!(loan.installments, 0, ErrorCodes::InvalidState);
         require_gt!(loan.duration, 0, ErrorCodes::InvalidState);
         require_gte!(loan.basis_points, 0, ErrorCodes::InvalidState);
     

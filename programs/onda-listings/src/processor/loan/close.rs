@@ -40,7 +40,11 @@ pub struct CloseLoan<'info> {
         bump,
         has_one = mint,
         has_one = borrower,
-        constraint = loan.state == LoanState::Listed || loan.state == LoanState::Defaulted @ ErrorCodes::InvalidState,
+        // constraint = (
+        //     loan.state == LoanState::Listed || 
+        //     loan.state == LoanState::Defaulted || 
+        //     loan.state == LoanState::Repaid
+        // ) @ ErrorCodes::InvalidState,
         close = borrower,
     )]
     pub loan: Box<Account<'info, Loan>>,
@@ -75,6 +79,8 @@ pub struct CloseLoan<'info> {
 
 
 pub fn handle_close_loan(ctx: Context<CloseLoan>) -> Result<()> {
+    msg!("Loan state: {:?}", ctx.accounts.loan.state);
+
     process_close_loan(
         &mut ctx.accounts.token_manager,
         &ctx.accounts.borrower,
