@@ -41,7 +41,10 @@ pub struct AskCallOption<'info> {
         ],
         space = TokenManager::space(),
         bump,
-        constraint = token_manager.authority.unwrap() == seller.key() @ ErrorCodes::Unauthorized,
+        constraint = (
+            token_manager.authority == Some(seller.key()) || 
+            token_manager.authority == None
+        ) @ ErrorCodes::Unauthorized,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
     #[account(
@@ -55,6 +58,7 @@ pub struct AskCallOption<'info> {
     pub collection: Box<Account<'info, Collection>>,
     #[account(constraint = mint.supply == 1)]
     pub mint: Box<Account<'info, Mint>>,
+    #[account(mut)]
     /// CHECK: deserialized and checked
     pub metadata: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
@@ -125,6 +129,7 @@ pub fn handle_ask_call_option(
         expiry
     )?;
     //
+    token_manager.authority = Some(seller.key());
     token_manager.accounts.call_option = true;
     token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
 

@@ -36,12 +36,11 @@ pub struct ExerciseCallOption<'info> {
         mut,
         seeds = [
             TokenManager::PREFIX,
-            mint.key().as_ref(),
-            seller.key().as_ref()
+            mint.key().as_ref()
         ],
         bump,
         constraint = token_manager.accounts.rental != true @ ErrorCodes::InvalidState,
-        constraint = token_manager.authority.unwrap() == seller.key() @ ErrorCodes::Unauthorized,
+        constraint = token_manager.authority == Some(seller.key()) @ ErrorCodes::Unauthorized,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
     #[account(
@@ -56,6 +55,7 @@ pub struct ExerciseCallOption<'info> {
         associated_token::authority = seller
     )]
     pub deposit_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
     /// CHECK: validated in cpi
     pub deposit_token_record: Option<UncheckedAccount<'info>>,
     #[account(
@@ -76,6 +76,7 @@ pub struct ExerciseCallOption<'info> {
     pub mint: Box<Account<'info, Mint>>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
+    #[account(mut)]
     /// CHECK: deserialized and checked
     pub metadata: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
@@ -116,7 +117,7 @@ pub fn handle_exercise_call_option<'info>(ctx: Context<'_, '_, '_, 'info, Exerci
     let remaining_accounts = &mut ctx.remaining_accounts.iter();
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
-    msg!("Exercise with strike price: {} lamports", call_option.strike_price);
+    // msg!("Exercise with strike price: {} lamports", call_option.strike_price);
 
     if unix_timestamp > call_option.expiry {
         return Err(ErrorCodes::OptionExpired.into())
@@ -134,8 +135,8 @@ pub fn handle_exercise_call_option<'info>(ctx: Context<'_, '_, '_, 'info, Exerci
         remaining_accounts,
     )?;  
 
-    msg!("remaining amount {}", remaining_amount);
-    msg!("paid to creators {}", call_option.strike_price - remaining_amount);
+    // msg!("remaining amount {}", remaining_amount);
+    // msg!("paid to creators {}", call_option.strike_price - remaining_amount);
 
     anchor_lang::solana_program::program::invoke(
         &anchor_lang::solana_program::system_instruction::transfer(
@@ -151,7 +152,7 @@ pub fn handle_exercise_call_option<'info>(ctx: Context<'_, '_, '_, 'info, Exerci
 
     handle_thaw_and_transfer(
         token_manager,
-        buyer.to_account_info(),
+        seller.to_account_info(),
         deposit_token_account.to_account_info(),
         match deposit_token_record {
             Some(account) => Some(account.to_account_info()),

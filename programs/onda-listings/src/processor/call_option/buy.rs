@@ -38,7 +38,7 @@ pub struct BuyCallOption<'info> {
             mint.key().as_ref(),
         ],
         bump,
-        constraint = token_manager.authority.unwrap() == seller.key() @ ErrorCodes::Unauthorized,
+        constraint = token_manager.authority == Some(seller.key()) @ ErrorCodes::Unauthorized,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
     #[account(

@@ -727,10 +727,7 @@ export async function sellCallOption(
     buyer.nft.mint.address,
     keypair.publicKey
   );
-  const tokenManager = await findTokenManagerAddress(
-    buyer.nft.mint.address,
-    keypair.publicKey
-  );
+  const tokenManager = await findTokenManagerAddress(buyer.nft.mint.address);
 
   try {
     await program.methods
@@ -797,34 +794,44 @@ export async function askCallOption(
   const collectionAddress = await findCollectionAddress(
     collection.mint.address
   );
-  const tokenManager = await findTokenManagerAddress(
-    nft.mint.address,
-    keypair.publicKey
-  );
+  const tokenManager = await findTokenManagerAddress(nft.mint.address);
 
   const amount = new anchor.BN(options.amount);
   const strikePrice = new anchor.BN(options.strikePrice);
   const expiry = new anchor.BN(options.expiry);
 
+  const accounts = {
+    tokenManager,
+    signer: signer.publicKey,
+    callOption: callOptionAddress,
+    collection: collectionAddress,
+    mint: nft.mint.address,
+    metadata: nft.metadataAddress,
+    edition: nft.edition.address,
+    seller: keypair.publicKey,
+    depositTokenAccount: depositTokenAccount,
+    tokenRecord: null,
+    metadataProgram: METADATA_PROGRAM_ID,
+    authorizationRules: null,
+    authorizationRulesProgram: AUTHORIZATION_RULES_PROGRAM_ID,
+    tokenProgram: splToken.TOKEN_PROGRAM_ID,
+    rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+    systemProgram: anchor.web3.SystemProgram.programId,
+    sysvarInstructions: anchor.web3.SYSVAR_INSTRUCTIONS_PUBKEY,
+    clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
+  };
+
+  if (nft.tokenStandard === TokenStandard.ProgrammableNonFungible) {
+    accounts.tokenRecord = findTokenRecordAddress(
+      nft.mint.address,
+      depositTokenAccount
+    );
+  }
+
   try {
     await program.methods
       .askCallOption(amount, strikePrice, expiry)
-      .accounts({
-        tokenManager,
-        signer: signer.publicKey,
-        callOption: callOptionAddress,
-        collection: collectionAddress,
-        mint: nft.mint.address,
-        metadata: nft.metadataAddress,
-        edition: nft.edition.address,
-        seller: keypair.publicKey,
-        depositTokenAccount: depositTokenAccount,
-        metadataProgram: METADATA_PROGRAM_ID,
-        tokenProgram: splToken.TOKEN_PROGRAM_ID,
-        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-        systemProgram: anchor.web3.SystemProgram.programId,
-        clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
-      })
+      .accounts(accounts)
       .signers([signer])
       .rpc();
   } catch (error) {
@@ -837,11 +844,12 @@ export async function askCallOption(
     provider,
     program,
     tokenManager,
+    tokenRecord: accounts.tokenRecord,
     callOption: callOptionAddress,
     collection: collectionAddress,
     depositTokenAccount,
     mint: nft.mint.address,
-    metatdata: nft.metadataAddress,
+    metadata: nft.metadataAddress,
     edition: nft.edition.address,
   };
 }
@@ -858,7 +866,7 @@ export async function buyCallOption(
 
   const metadata = await Metadata.fromAccountAddress(
     connection,
-    seller.metatdata
+    seller.metadata
   );
 
   const accounts = {
@@ -868,7 +876,7 @@ export async function buyCallOption(
     callOption: seller.callOption,
     tokenManager: seller.tokenManager,
     mint: seller.mint,
-    metadata: seller.metatdata,
+    metadata: seller.metadata,
     edition: seller.edition,
     collection: seller.collection,
     metadataProgram: METADATA_PROGRAM_ID,

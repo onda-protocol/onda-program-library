@@ -17,7 +17,7 @@ const connection = new anchor.web3.Connection(
   anchor.AnchorProvider.defaultOptions().preflightCommitment
 );
 
-describe.only("Loans", () => {
+describe("Loans", () => {
   describe("Offers", () => {
     let lender: helpers.LoanOfferLender;
     let borrower: helpers.LoanOfferBorrower;
@@ -154,29 +154,11 @@ describe.only("Loans", () => {
     });
 
     it("Freezes tokens after initialization", async () => {
-      const receiver = anchor.web3.Keypair.generate();
-      await helpers.requestAirdrop(connection, receiver.publicKey);
-
-      const receiverTokenAccount = await splToken.createAccount(
+      const tokenAccount = await splToken.getAccount(
         connection,
-        receiver,
-        borrower.mint,
-        receiver.publicKey
+        borrower.depositTokenAccount
       );
-
-      try {
-        await splToken.transfer(
-          connection,
-          borrower.keypair,
-          borrower.depositTokenAccount,
-          receiverTokenAccount,
-          borrower.keypair.publicKey,
-          1
-        );
-        assert.ok(false);
-      } catch (err) {
-        assert.ok(err.logs.includes("Program log: Error: Account is frozen"));
-      }
+      assert.equal(tokenAccount.isFrozen, true);
     });
 
     it("Allows loans to be given", async () => {
