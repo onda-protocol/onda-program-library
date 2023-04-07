@@ -120,6 +120,9 @@ pub fn handle_repossess(ctx: Context<Repossess>) -> Result<()> {
         return err!(ErrorCodes::NotOverdue)
     }
 
+    loan.state = LoanState::Defaulted;
+    token_manager.accounts.loan = false; 
+
     handle_thaw_and_transfer(
         token_manager,
         borrower.to_account_info(),
@@ -147,9 +150,6 @@ pub fn handle_repossess(ctx: Context<Repossess>) -> Result<()> {
             None => None,
         },
     )?;
-
-    loan.state = LoanState::Defaulted;
-    token_manager.accounts.loan = false; 
 
     Ok(())
 }

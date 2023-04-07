@@ -40,11 +40,7 @@ pub struct CloseLoan<'info> {
         bump,
         has_one = mint,
         has_one = borrower,
-        // constraint = (
-        //     loan.state == LoanState::Listed || 
-        //     loan.state == LoanState::Defaulted || 
-        //     loan.state == LoanState::Repaid
-        // ) @ ErrorCodes::InvalidState,
+        constraint = loan.state != LoanState::Active @ ErrorCodes::InvalidState,
         close = borrower,
     )]
     pub loan: Box<Account<'info, Loan>>,

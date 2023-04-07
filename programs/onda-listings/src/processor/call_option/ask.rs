@@ -69,6 +69,7 @@ pub struct AskCallOption<'info> {
     /// CHECK: validated in cpi
     pub authorization_rules: Option<UncheckedAccount<'info>>, 
     /// Misc
+    /// CHECK: validated in cpi
     pub sysvar_instructions: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,

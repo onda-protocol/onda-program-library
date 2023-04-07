@@ -385,10 +385,6 @@ describe.only("Loans", () => {
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
       };
 
-      for (const [key, value] of Object.entries(accounts)) {
-        console.log(key, value?.toBase58());
-      }
-
       try {
         await lender.program.methods
           .claim()
@@ -448,7 +444,7 @@ describe.only("Loans", () => {
     });
   });
 
-  describe.only("Loan repayments", () => {
+  describe("Loan repayments", () => {
     let borrower: Awaited<ReturnType<typeof helpers.askLoan>>;
     let lender: Awaited<ReturnType<typeof helpers.giveLoan>>;
     let options;
@@ -649,13 +645,6 @@ describe.only("Loans", () => {
     });
 
     it("Will not allow a loan to be repossessed if not overdue", async () => {
-      const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
-        connection,
-        lender.keypair,
-        borrower.mint,
-        lender.keypair.publicKey
-      );
-
       const escrowTokenAccount = helpers.findEscrowTokenAccount(
         borrower.tokenManager
       );
@@ -703,8 +692,6 @@ describe.only("Loans", () => {
 
     it("Allows loans to be repaid", async () => {
       const signer = await helpers.getSigner();
-      const borrower = await helpers.askLoan(connection, options);
-      const lender = await helpers.giveLoan(connection, borrower);
       const lenderPreRepaymentBalance = await connection.getBalance(
         lender.keypair.publicKey
       );
