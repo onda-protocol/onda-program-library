@@ -14,7 +14,7 @@ import { requestAirdrop } from "../helpers";
 const program = anchor.workspace.OndaSocial as anchor.Program<OndaSocial>;
 const connection = program.provider.connection;
 
-function findTreeAuthorityPda(merkleTree: anchor.web3.PublicKey) {
+function findPostConfigPda(merkleTree: anchor.web3.PublicKey) {
   return anchor.web3.PublicKey.findProgramAddressSync(
     [merkleTree.toBuffer()],
     program.programId
@@ -27,7 +27,7 @@ describe.only("Onda social", () => {
   const payer = program.provider.publicKey;
   const merkleTreeKeypair = anchor.web3.Keypair.generate();
   const merkleTree = merkleTreeKeypair.publicKey;
-  const treeAuthority = findTreeAuthorityPda(merkleTree);
+  const postConfig = findPostConfigPda(merkleTree);
 
   it("Creates a new tree", async () => {
     const space = getConcurrentMerkleTreeAccountSize(maxDepth, maxBufferSize);
@@ -39,19 +39,28 @@ describe.only("Onda social", () => {
       programId: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
     });
 
-    const createTreeIx = await program.methods
-      .createTree(maxDepth, maxBufferSize)
+    const createPostIx = await program.methods
+      .createPost({
+        maxDepth,
+        maxBufferSize,
+        collection: anchor.web3.Keypair.generate().publicKey,
+        postData: {
+          text: {
+            title: "Hello world!",
+            body: "I should be a markdown string",
+          },
+        },
+      })
       .accounts({
-        treeAuthority,
+        author: payer,
+        postConfig,
         merkleTree,
-        payer,
-        treeCreator: payer,
         logWrapper: SPL_NOOP_PROGRAM_ID,
         compressionProgram: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
       })
       .instruction();
 
-    const tx = new anchor.web3.Transaction().add(allocTreeIx).add(createTreeIx);
+    const tx = new anchor.web3.Transaction().add(allocTreeIx).add(createPostIx);
     tx.feePayer = payer;
 
     await requestAirdrop(connection, payer);
@@ -69,15 +78,10 @@ describe.only("Onda social", () => {
     This is an example paragraph in an MDX file. You can include **bold** and *italic* text, just like in regular Markdown.
     `;
 
-    const leafOwner = anchor.web3.Keypair.generate().publicKey;
-    const leafDelegate = leafOwner;
-
-    await program.methods.addPost({ body: mdx }).accounts({
-      treeAuthority,
-      leafOwner,
-      leafDelegate,
+    await program.methods.addComment({ body: mdx }).accounts({
+      postConfig,
       merkleTree,
-      payer,
+      author: payer,
       logWrapper: SPL_NOOP_PROGRAM_ID,
       compressionProgram: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
     });

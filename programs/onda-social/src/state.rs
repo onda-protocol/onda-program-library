@@ -5,25 +5,25 @@ use spl_account_compression::Node;
 pub const ASSET_PREFIX: &str = "asset";
 pub const POST_CONFIG_SIZE: usize = 32 + 8 + 8 + 1 + 32 + 15; // 15 bytes padding
 
-#[derive(BorshSerialize, BorshDeserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
 pub struct CommentArgs {
     pub body: String,
 }
 
-#[derive(BorshSerialize, BorshDeserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
 pub enum RestrictionType {
     None,
     Collection { collection: Pubkey },
 }
 
-#[derive(BorshSerialize, BorshDeserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
 pub enum PostData {
-    Text { body: String },
-    Image { url: String },
-    Link { url: String },
+    Text { title: String, body: String },
+    Image { title: String, src: String },
+    Link { title: String, url: String },
 }
 
-#[derive(BorshSerialize, BorshDeserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
 pub struct PostArgs {
     pub max_depth: u32,
     pub max_buffer_size: u32,
@@ -50,7 +50,7 @@ impl PostConfig {
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
 #[repr(u8)]
 pub enum OndaSocialEventType {
     /// Marker for 0 data.
@@ -60,7 +60,7 @@ pub enum OndaSocialEventType {
 }
 
 
-#[derive(BorshSerialize, BorshDeserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
 pub struct LeafSchemaEvent {
     pub event_type: OndaSocialEventType,
     pub version: Version,

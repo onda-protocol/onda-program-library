@@ -1,8 +1,6 @@
 use anchor_lang::{
     prelude::*,
-    solana_program::{
-        keccak
-    },
+    solana_program::{keccak},
 };
 use spl_account_compression::{
     program::SplAccountCompression, wrap_application_data_v1, Node, Noop,
@@ -60,30 +58,15 @@ pub mod onda_social {
         )?;
 
         let data_hash = keccak::hashv(&[post.post_data.try_to_vec()?.as_slice()]);
-        let asset_id = get_asset_id(&merkle_tree.key(), post_config.post_count);
-        let created_at = Clock::get()?.unix_timestamp;
-        let leaf = LeafSchema::new_v0(
-            asset_id,
+        append_post(
             author,
-            created_at,
-            None,
-            post_config.post_count,
-            data_hash.to_bytes(),
-        );
-
-        wrap_application_data_v1(leaf.to_event().try_to_vec()?, wrapper)?;
-
-        append_leaf(
-            &merkle_tree.key(),
+            data_hash,
+            post_config,
             post_config_bump,
-            &compression_program.to_account_info(),
-            &post_config.to_account_info(),
-            &merkle_tree.to_account_info(),
-            &wrapper.to_account_info(),
-            leaf.to_node(),
+            merkle_tree,
+            compression_program,
+            wrapper,
         )?;
-
-        post_config.increment_post_count();
 
         Ok(())
     }
@@ -101,36 +84,22 @@ pub mod onda_social {
         }
 
         let data_hash = keccak::hashv(&[data.try_to_vec()?.as_slice()]);
-        let asset_id = get_asset_id(&merkle_tree.key(), post_config.post_count);
-        let created_at = Clock::get()?.unix_timestamp;
-        let leaf = LeafSchema::new_v0(
-            asset_id,
+        append_post(
             author,
-            created_at,
-            None,
-            post_config.post_count,
-            data_hash.to_bytes(),
-        );
-
-        wrap_application_data_v1(leaf.to_event().try_to_vec()?, wrapper)?;
-
-        append_leaf(
-            &merkle_tree.key(),
+            data_hash,
+            post_config,
             post_config_bump,
-            &compression_program.to_account_info(),
-            &post_config.to_account_info(),
-            &merkle_tree.to_account_info(),
-            &wrapper.to_account_info(),
-            leaf.to_node(),
+            merkle_tree,
+            compression_program,
+            wrapper,
         )?;
-
-        post_config.increment_post_count();
 
         Ok(())
     }
 }
 
 #[derive(Accounts)]
+#[instruction(data: PostArgs)]
 pub struct CreatePost<'info> {
     #[account(mut)]
     pub author: Signer<'info>,
@@ -151,6 +120,7 @@ pub struct CreatePost<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(data: CommentArgs)]
 pub struct AddComment<'info> {
     #[account(mut)]
     pub author: Signer<'info>,
@@ -166,6 +136,43 @@ pub struct AddComment<'info> {
     pub log_wrapper: Program<'info, Noop>,
     pub compression_program: Program<'info, SplAccountCompression>,
     pub system_program: Program<'info, System>,
+}
+
+pub fn append_post<'info>(
+    author: Pubkey,
+    data_hash: keccak::Hash,
+    post_config: &mut Account<'info, PostConfig>,
+    post_config_bump: u8,
+    merkle_tree: &AccountInfo<'info>,
+    compression_program: &AccountInfo<'info>,
+    log_wrapper: &Program<'info, Noop>,
+) -> Result<()> {
+    let asset_id = get_asset_id(&merkle_tree.key(), post_config.post_count);
+    let created_at = Clock::get()?.unix_timestamp;
+    let leaf = LeafSchema::new_v0(
+        asset_id,
+        author,
+        created_at,
+        None,
+        post_config.post_count,
+        data_hash.to_bytes(),
+    );
+
+    wrap_application_data_v1(leaf.to_event().try_to_vec()?, log_wrapper)?;
+
+    append_leaf(
+        &merkle_tree.key(),
+        post_config_bump,
+        &compression_program.to_account_info(),
+        &post_config.to_account_info(),
+        &merkle_tree.to_account_info(),
+        &log_wrapper.to_account_info(),
+        leaf.to_node(),
+    )?;
+
+    post_config.increment_post_count();
+
+    Ok(())
 }
 
 pub fn append_leaf<'info>(
