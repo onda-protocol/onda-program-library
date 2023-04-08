@@ -8,30 +8,16 @@ import {
   ValidDepthSizePair,
 } from "@solana/spl-account-compression";
 import assert from "assert";
-import { IDL, OndaSocial } from "../../target/types/onda_social";
+import { OndaSocial } from "../../target/types/onda_social";
 import { requestAirdrop } from "../helpers";
 
-const connection = new anchor.web3.Connection(
-  "http://127.0.0.1:8899",
-  anchor.AnchorProvider.defaultOptions().preflightCommitment
-);
-
-const PROGRAM_ID = new anchor.web3.PublicKey(
-  "EF5T6akPE1MuvKHNjD1ZNFz71MbZPDBxF3NN1wPAY1XP"
-);
-const keypair = anchor.web3.Keypair.generate();
-const wallet = new anchor.Wallet(keypair);
-const provider = new anchor.AnchorProvider(
-  connection,
-  wallet,
-  anchor.AnchorProvider.defaultOptions()
-);
-const program = new anchor.Program<OndaSocial>(IDL, PROGRAM_ID, provider);
+const program = anchor.workspace.OndaSocial as anchor.Program<OndaSocial>;
+const connection = program.provider.connection;
 
 function findTreeAuthorityPda(merkleTree: anchor.web3.PublicKey) {
   return anchor.web3.PublicKey.findProgramAddressSync(
     [merkleTree.toBuffer()],
-    PROGRAM_ID
+    program.programId
   )[0];
 }
 
@@ -39,7 +25,7 @@ describe.only("Onda social", () => {
   it("Creates a new tree", async () => {
     const maxDepth = 14;
     const maxBufferSize = 64;
-    const payer = keypair.publicKey;
+    const payer = program.provider.publicKey;
     const merkleTreeKeypair = anchor.web3.Keypair.generate();
     const merkleTree = merkleTreeKeypair.publicKey;
     const space = getConcurrentMerkleTreeAccountSize(maxDepth, maxBufferSize);
@@ -53,7 +39,7 @@ describe.only("Onda social", () => {
 
     const treeAuthority = findTreeAuthorityPda(merkleTree);
     const createTreeIx = await program.methods
-      .createTree(3, 3)
+      .createTree(maxDepth, maxBufferSize)
       .accounts({
         treeAuthority,
         merkleTree,
@@ -67,17 +53,12 @@ describe.only("Onda social", () => {
     const tx = new anchor.web3.Transaction().add(allocTreeIx).add(createTreeIx);
     tx.feePayer = payer;
 
-    await requestAirdrop(connection, keypair.publicKey);
+    await requestAirdrop(connection, payer);
 
     try {
-      await anchor.web3.sendAndConfirmTransaction(
-        connection,
-        tx,
-        [merkleTreeKeypair, keypair],
-        {
-          commitment: "confirmed",
-        }
-      );
+      await program.provider.sendAndConfirm(tx, [merkleTreeKeypair], {
+        commitment: "confirmed",
+      });
     } catch (err) {
       console.log(err);
       throw err;
