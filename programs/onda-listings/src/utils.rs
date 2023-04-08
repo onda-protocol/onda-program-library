@@ -9,10 +9,7 @@ use {
     },
     anchor_spl::token::{TokenAccount},
     mpl_token_metadata::{
-        instruction::{
-            freeze_delegated_account, thaw_delegated_account, builders, 
-            InstructionBuilder, TransferArgs, DelegateArgs, UnlockArgs, LockArgs, RevokeArgs
-        },
+        instruction::{builders, InstructionBuilder, TransferArgs, DelegateArgs, UnlockArgs, LockArgs, RevokeArgs},
         state::{Metadata, TokenStandard}
     },
 };
@@ -20,120 +17,6 @@ use {
 use crate::constants::*;
 use crate::state::{Rental, Collection, TokenManager};
 use crate::error::*;
-
-pub struct FreezeParams<'a, 'b> {
-  /// CHECK
-  pub delegate: AccountInfo<'a>,
-  /// CHECK
-  pub token_account: AccountInfo<'a>,
-  /// CHECK
-  pub edition: AccountInfo<'a>,
-  /// CHECK
-  pub mint: AccountInfo<'a>,
-  pub signer_seeds: &'b [&'b [&'b [u8]]]
-}
-
-pub fn freeze<'a, 'b>(params: FreezeParams<'a, 'b>) -> Result<()> {
-  let FreezeParams {
-      delegate,
-      token_account,
-      edition,
-      mint,
-      signer_seeds
-  } = params;
-
-  invoke_signed(
-      &freeze_delegated_account(
-          mpl_token_metadata::ID,
-          delegate.key(),
-          token_account.key(),
-          edition.key(),
-          mint.key()
-      ),
-      &[
-          delegate,
-          token_account.clone(),
-          edition,
-          mint
-      ],
-      signer_seeds
-  )?;
-
-  Ok(())
-}
-
-pub fn thaw<'a, 'b>(params: FreezeParams<'a, 'b>) -> Result<()> {
-  let FreezeParams {
-      delegate,
-      token_account,
-      edition,
-      mint,
-      signer_seeds,
-  } = params;
-
-  invoke_signed(
-      &thaw_delegated_account(
-          mpl_token_metadata::ID,
-          delegate.key(),
-          token_account.key(),
-          edition.key(),
-          mint.key()
-      ),
-      &[
-          delegate,
-          token_account.clone(),
-          edition,
-          mint
-      ],
-      signer_seeds
-  )?;
-
-  Ok(())
-}
-
-pub fn delegate_and_freeze_token_account<'info>(
-    token_manager: &mut Account<'info, TokenManager>,
-    token_program: AccountInfo<'info>,
-    token_account: AccountInfo<'info>,
-    authority: AccountInfo<'info>,
-    mint: AccountInfo<'info>,
-    edition: AccountInfo<'info>,
-    issuer: AccountInfo<'info>,
-) -> Result<()> {    
-    anchor_spl::token::approve(
-        CpiContext::new(
-            token_program,
-            anchor_spl::token::Approve {
-                to: token_account.clone(),
-                delegate: token_manager.to_account_info(),
-                authority: authority.clone(),
-            }
-        ),
-        1
-    )?;
-
-    let mint_pubkey = mint.key();
-    let issuer_pubkey = issuer.key();
-    let signer_bump = &[token_manager.bump];
-    let signer_seeds = &[&[
-        TokenManager::PREFIX,
-        mint_pubkey.as_ref(),
-        issuer_pubkey.as_ref(),
-        signer_bump
-    ][..]];
-
-    freeze(
-        FreezeParams {
-            delegate: token_manager.to_account_info(),
-            token_account,
-            edition,
-            mint,
-            signer_seeds: signer_seeds
-        }
-    )?;
-
-    Ok(())
-}
 
 pub fn handle_delegate_and_freeze<'info>(
     token_manager: &mut Account<'info, TokenManager>,
@@ -309,10 +192,6 @@ pub fn handle_thaw_and_revoke<'info>(
     let sysvar_instructions_key = sysvar_instructions.key();
     let token_program_key = token_program.key();
     let authorization_rules_program_key = authorization_rules_program.key();
-
-    let metadata = Metadata::deserialize(
-        &mut metadata_info.data.borrow_mut().as_ref()
-    )?;
 
     let mut unlock_builder = builders::UnlockBuilder::new();
 
@@ -686,232 +565,22 @@ pub fn claim_from_escrow<'info>(
         signers_seeds
     )?;
 
-    Ok(())
-}
-
-
-pub fn maybe_delegate_and_freeze_token_account<'info>(
-    token_manager: &mut Account<'info, TokenManager>,
-    token_account: &mut Account<'info, TokenAccount>,
-    authority: AccountInfo<'info>,
-    mint: AccountInfo<'info>,
-    edition: AccountInfo<'info>,
-    issuer: AccountInfo<'info>,
-    token_program: AccountInfo<'info>,
-) -> Result<()> {
-    if token_account.delegate.is_some() {
-        if !token_account.is_frozen() && token_account.delegate.unwrap() != token_manager.key()  {
-            anchor_spl::token::revoke(
-                CpiContext::new(
-                    token_program.clone(),
-                    anchor_spl::token::Revoke {
-                        source: token_account.to_account_info(),
-                        authority: authority.clone(),
-                    }
-                )
-            )?;
-
-            delegate_and_freeze_token_account(
-                token_manager,
-                token_program,
-                token_account.to_account_info(),
-                authority,
-                mint,
-                edition,
-                issuer,
-            )?;
-        } else if token_account.delegate.unwrap() != token_manager.key() || token_account.delegated_amount != 1 {
-            return err!(ErrorCodes::InvalidDelegate);
-        }
-    } else {
-        delegate_and_freeze_token_account(
-            token_manager,
-            token_program,
-            token_account.to_account_info(),
-            authority,
-            mint,
-            edition,
-            issuer,
-        )?;
-    }
-
-    Ok(())
-}
-
-pub fn thaw_token_account<'info>(
-    token_manager: &mut Account<'info, TokenManager>,
-    token_account: AccountInfo<'info>,
-    authority: AccountInfo<'info>,
-    mint: AccountInfo<'info>,
-    edition: AccountInfo<'info>,
-) -> Result<()> {
-    let mint_pubkey = mint.key();
-    let issuer_pubkey = authority.key();
-    let signer_bump = &[token_manager.bump];
-    let signer_seeds = &[&[
-        TokenManager::PREFIX,
-        mint_pubkey.as_ref(),
-        issuer_pubkey.as_ref(),
-        signer_bump
-    ][..]];
-  
-    thaw(
-        FreezeParams {
-            delegate: token_manager.to_account_info(),
-            token_account,
-            edition,
-            mint,
-            signer_seeds: signer_seeds
-        }
-    )?;
-
-    Ok(())
-}
-
-pub fn thaw_and_revoke_token_account<'info>(
-    token_manager: &mut Account<'info, TokenManager>,
-    token_program: AccountInfo<'info>,
-    token_account: AccountInfo<'info>,
-    authority: AccountInfo<'info>,
-    mint: AccountInfo<'info>,
-    edition: AccountInfo<'info>,
-) -> Result<()> {
-    thaw_token_account(
-        token_manager,
-        token_account.clone(),
-        authority.clone(),
-        mint,
-        edition,
-    )?;
-
-    anchor_spl::token::revoke(
-        CpiContext::new(
-            token_program,
-            anchor_spl::token::Revoke {
-                source: token_account,
-                authority,
-            }
+    // Close the escrow account
+    anchor_spl::token::close_account(
+        CpiContext::new_with_signer(
+            token_program.clone(),
+            anchor_spl::token::CloseAccount {
+                account: escrow.clone(),
+                destination: destination_owner.clone(),
+                authority: token_manager.to_account_info(),
+            },
+            signers_seeds,
         )
     )?;
 
     Ok(())
 }
 
-pub fn thaw_and_transfer_from_token_account<'info>(
-    token_manager: &mut Account<'info, TokenManager>,
-    token_program: AccountInfo<'info>,
-    owner: AccountInfo<'info>,
-    from_token_account: AccountInfo<'info>,
-    to_token_account: AccountInfo<'info>,
-    mint: AccountInfo<'info>,
-    metadata: AccountInfo<'info>,
-    edition: AccountInfo<'info>,
-) -> Result<()> {
-    let mint_pubkey = mint.key();
-    let issuer_pubkey = owner.key();
-    let signer_bump = &[token_manager.bump];
-    let signer_seeds = &[&[
-        TokenManager::PREFIX,
-        mint_pubkey.as_ref(),
-        issuer_pubkey.as_ref(),
-        signer_bump
-    ][..]];
-
-    thaw(
-        FreezeParams {
-            delegate: token_manager.to_account_info(),
-            token_account: from_token_account.clone(),
-            edition,
-            mint,
-            signer_seeds: signer_seeds
-        }
-    )?;
-
-    anchor_spl::token::transfer(
-        CpiContext::new_with_signer(
-            token_program.to_account_info(),
-            anchor_spl::token::Transfer {
-                from: from_token_account,
-                to: to_token_account,
-                authority: token_manager.to_account_info(),
-            },
-            signer_seeds
-        ),
-        1
-    )?;
-
-    Ok(())
-}
-
-pub fn thaw_and_transfer_programmable_nft<'info>(
-    token_manager: &mut Account<'info, TokenManager>,
-    owner: AccountInfo<'info>,
-    new_owner: AccountInfo<'info>,
-    from_token_account: AccountInfo<'info>,
-    to_token_account: AccountInfo<'info>,
-    owner_token_record: AccountInfo<'info>,
-    mint: AccountInfo<'info>,
-    metadata_info: AccountInfo<'info>,
-    edition: AccountInfo<'info>,
-    token_program: AccountInfo<'info>,
-    associated_token_program: AccountInfo<'info>,
-    system_program: AccountInfo<'info>,
-    sysvar_instructions: AccountInfo<'info>
-) -> Result<()> {
-    let transfer_ix = builders::TransferBuilder::new()
-        .token(from_token_account.key())
-        .token_owner(owner.key())
-        .destination(to_token_account.key())
-        .destination_owner(new_owner.key())
-        .mint(mint.key())
-        .metadata(metadata_info.key())
-        .edition(edition.key())
-        .owner_token_record(owner_token_record.key())
-        .payer(new_owner.key())
-        .authority(token_manager.key())
-        .spl_token_program(token_program.key())
-        .spl_ata_program(associated_token_program.key())
-        .system_program(system_program.key())
-        .sysvar_instructions(sysvar_instructions.key())
-        .build(TransferArgs::V1 { 
-            amount: 1,
-            authorization_data: None
-        })
-        .unwrap()
-        .instruction();
-
-    let mint_pubkey = mint.key();
-    let issuer_pubkey = owner.key();
-    let signer_bump = &[token_manager.bump];
-    let signer_seeds = &[&[
-        TokenManager::PREFIX,
-        mint_pubkey.as_ref(),
-        issuer_pubkey.as_ref(),
-        signer_bump
-    ][..]];
-
-    invoke_signed(
-        &transfer_ix,
-        &[
-            token_manager.to_account_info(),
-            owner,
-            new_owner,
-            from_token_account,
-            to_token_account,
-            owner_token_record,
-            mint,
-            metadata_info,
-            edition,
-            token_program,
-            associated_token_program,
-            system_program,
-            sysvar_instructions,
-        ],
-        signer_seeds,
-    )?;
-
-    Ok(())
-}
 
 pub fn calculate_widthdawl_amount<'info>(rental: &mut Account<'info, Rental>, unix_timestamp: i64) -> Result<u64> {
     require!(rental.current_start.is_some(), ErrorCodes::InvalidState);

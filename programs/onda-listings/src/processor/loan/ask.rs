@@ -41,7 +41,10 @@ pub struct AskLoan<'info> {
         ],
         space = TokenManager::space(),
         bump,
-        constraint = token_manager.authority == Some(borrower.key()) || token_manager.authority == None @ ErrorCodes::Unauthorized,
+        constraint = (
+            token_manager.authority == Some(borrower.key()) || 
+            token_manager.authority == None
+        ) @ ErrorCodes::Unauthorized,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
     #[account(

@@ -2,16 +2,17 @@ use anchor_lang::{
   prelude::*,
   solana_program::{
       program::{invoke},
+      system_instruction::{transfer}
   }
 };
-use anchor_spl::token::{Mint, Token, TokenAccount};
+use anchor_spl::token::{Mint};
 use crate::utils::*;
 use crate::constants::*;
 use crate::error::*;
-use crate::state::{Loan, LoanState, TokenManager};
-use crate::processor::loan::close::{process_close_loan};
+use crate::state::{Loan, LoanState};
 
 #[derive(Accounts)]
+#[instruction(amount: u64)]
 pub struct RepayLoan<'info> {
     #[account(
         constraint = signer.key() == SIGNER_PUBKEY
@@ -19,12 +20,6 @@ pub struct RepayLoan<'info> {
     pub signer: Signer<'info>,
     #[account(mut)]
     pub borrower: Signer<'info>,
-    #[account(
-        mut,
-        associated_token::mint = mint,
-        associated_token::authority = borrower
-    )]
-    pub deposit_token_account: Box<Account<'info, TokenAccount>>,
     /// CHECK: contrained on loan_account
     #[account(mut)]
     pub lender: AccountInfo<'info>,
@@ -39,40 +34,22 @@ pub struct RepayLoan<'info> {
         has_one = borrower,
         has_one = mint,
         constraint = loan.lender.unwrap() == lender.key(), 
-        constraint = loan.state == LoanState::Active,
-        close = borrower,
+        constraint = loan.state == LoanState::Active
     )]
     pub loan: Box<Account<'info, Loan>>,
-    #[account(
-        mut,
-        seeds = [
-            TokenManager::PREFIX,
-            mint.key().as_ref(),
-            borrower.key().as_ref()
-        ],
-        bump,
-    )]   
-    pub token_manager: Box<Account<'info, TokenManager>>,
     pub mint: Box<Account<'info, Mint>>,
-    /// CHECK: deserialized and validated
+    /// CHECK: deserialized and checked
     pub metadata: UncheckedAccount<'info>,
-    /// CHECK: validated in cpi
-    pub edition: UncheckedAccount<'info>,
-    /// CHECK: validated in cpi
-    pub metadata_program: UncheckedAccount<'info>, 
     pub system_program: Program<'info, System>,
-    pub token_program: Program<'info, Token>,
     pub clock: Sysvar<'info, Clock>,
 }
 
-pub fn handle_repay_loan<'info>(ctx: Context<'_, '_, '_, 'info, RepayLoan<'info>>) -> Result<()> {
+pub fn handle_repay_loan<'info>(ctx: Context<'_, '_, '_, 'info, RepayLoan<'info>>, amount: u64) -> Result<()> {
     let loan = &mut ctx.accounts.loan;
     let borrower = &ctx.accounts.borrower;
-    let deposit_token_account = &ctx.accounts.deposit_token_account;
-    let token_manager = &mut ctx.accounts.token_manager;
     let mint = &ctx.accounts.mint;
-    let edition = &ctx.accounts.edition;
 
+    let payment = std::cmp::min(amount, loan.outstanding);
     let duration = ctx.accounts.clock.unix_timestamp.checked_sub(
         loan.start_date.unwrap()
     ).ok_or(ErrorCodes::NumericalOverflow)?;
@@ -81,15 +58,15 @@ pub fn handle_repay_loan<'info>(ctx: Context<'_, '_, '_, 'info, RepayLoan<'info>
     let is_overdue = ctx.accounts.clock.unix_timestamp > expiry;
     
     let interest_due = calculate_loan_repayment_fee(
-        loan.amount.unwrap(),
+        payment,
         loan.basis_points,
         duration,
         is_overdue
     )?;
-    let amount_due = loan.amount.unwrap().checked_add(interest_due).ok_or(ErrorCodes::NumericalOverflow)?;
+    let amount_due = payment.checked_add(interest_due).ok_or(ErrorCodes::NumericalOverflow)?;
 
     invoke(
-        &anchor_lang::solana_program::system_instruction::transfer(
+        &transfer(
             &loan.borrower,
             &loan.lender.unwrap(),
             amount_due,
@@ -116,14 +93,16 @@ pub fn handle_repay_loan<'info>(ctx: Context<'_, '_, '_, 'info, RepayLoan<'info>
         &mut ctx.remaining_accounts.iter(),
     )?;
 
-    process_close_loan(
-        token_manager,
-        borrower,
-        deposit_token_account,
-        mint,
-        edition,
-        &ctx.accounts.token_program
-    )?;
+    loan.outstanding = loan.outstanding - payment;
+    
+    msg!("Repaid {}", payment);
+    msg!("Amount outstanding: {}", loan.outstanding);
+    
+    if loan.outstanding == 0 {
+        msg!("Loan fully repaid");
+        loan.state = LoanState::Repaid;
+        msg!("Loan state {:?}", loan.state);
+    }
 
     Ok(())
 }

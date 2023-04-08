@@ -27,6 +27,9 @@ pub struct CloseLoan<'info> {
         constraint = deposit_token_account.owner == borrower.key(),
     )]
     pub deposit_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    /// CHECK: validated in cpi
+    pub deposit_token_record: Option<UncheckedAccount<'info>>,
     #[account(
         mut,
         seeds = [
@@ -37,7 +40,7 @@ pub struct CloseLoan<'info> {
         bump,
         has_one = mint,
         has_one = borrower,
-        constraint = loan.state == LoanState::Listed || loan.state == LoanState::Defaulted,
+        constraint = loan.state != LoanState::Active @ ErrorCodes::InvalidState,
         close = borrower,
     )]
     pub loan: Box<Account<'info, Loan>>,
@@ -48,7 +51,6 @@ pub struct CloseLoan<'info> {
             mint.key().as_ref(),
         ],
         bump,
-        constraint = token_manager.authority == Some(borrower.key()) @ ErrorCodes::Unauthorized,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
     pub mint: Box<Account<'info, Mint>>,
@@ -57,9 +59,6 @@ pub struct CloseLoan<'info> {
     pub metadata: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
-    #[account(mut)]
-    /// CHECK: validated in cpi
-    pub token_record: Option<UncheckedAccount<'info>>,
     /// CHECK: validated in cpi
     pub metadata_program: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
@@ -76,65 +75,52 @@ pub struct CloseLoan<'info> {
 
 
 pub fn handle_close_loan(ctx: Context<CloseLoan>) -> Result<()> {
-    process_close_loan(
-        &mut ctx.accounts.token_manager,
-        &ctx.accounts.borrower,
-        &ctx.accounts.deposit_token_account,
-        &ctx.accounts.mint,
-        &ctx.accounts.metadata,
-        &ctx.accounts.edition,
-        &ctx.accounts.token_record,
-        &ctx.accounts.token_program,
-        &ctx.accounts.system_program,
-        &ctx.accounts.sysvar_instructions,
-        &ctx.accounts.authorization_rules_program,
-        &ctx.accounts.authorization_rules,
-    )?;
-  
-    Ok(())
-}
+    let token_manager = &mut ctx.accounts.token_manager;
+    let borrower = &ctx.accounts.borrower;
+    let deposit_token_account = &ctx.accounts.deposit_token_account;
+    let mint = &ctx.accounts.mint;
+    let metadata = &ctx.accounts.metadata;
+    let edition = &ctx.accounts.edition;
+    let deposit_token_record = &ctx.accounts.deposit_token_record;
+    let token_program = &ctx.accounts.token_program;
+    let system_program = &ctx.accounts.system_program;
+    let sysvar_instructions = &ctx.accounts.sysvar_instructions;
+    let authorization_rules_program = &ctx.accounts.authorization_rules_program;
+    let authorization_rules = &ctx.accounts.authorization_rules;
 
-pub fn process_close_loan<'info>(
-    token_manager: &mut Account<'info, TokenManager>,
-    borrower: &Signer<'info>,
-    deposit_token_account: &Account<'info, TokenAccount>,
-    mint: &Account<'info, Mint>,
-    metadata: &UncheckedAccount<'info>,
-    edition: &UncheckedAccount<'info>,
-    token_record: &Option<UncheckedAccount<'info>>,
-    token_program: &Program<'info, Token>,
-    system_program: &Program<'info, System>,
-    sysvar_instructions: &UncheckedAccount<'info>,
-    authorization_rules_program: &UncheckedAccount<'info>,
-    authorization_rules: &Option<UncheckedAccount<'info>>,
-) -> Result<()> {
-    token_manager.accounts.loan = false;
+    msg!("Loan state: {:?}", ctx.accounts.loan.state);
+
     // IMPORTANT CHECK!
-    if token_manager.accounts.rental == false {
-        handle_thaw_and_revoke(
-            token_manager,
-            borrower.to_account_info(),
-            deposit_token_account.to_account_info(),
-            match token_record {
-                Some(token_record) => Some(token_record.to_account_info()),
-                None => None,
-            },
-            mint.to_account_info(),
-            metadata.to_account_info(),
-            edition.to_account_info(),
-            token_program.to_account_info(),
-            system_program.to_account_info(),
-            sysvar_instructions.to_account_info(),
-            authorization_rules_program.to_account_info(),
-            match authorization_rules {
-                Some(authorization_rules) => Some(authorization_rules.to_account_info()),
-                None => None,
-            },
-        )?;
-    
-        token_manager.close(borrower.to_account_info())?;    
+    if token_manager.authority.unwrap().eq(&borrower.key()) {
+        // IMPORTANT CHECK!
+        if token_manager.accounts.rental == false {
+            handle_thaw_and_revoke(
+                token_manager,
+                borrower.to_account_info(),
+                deposit_token_account.to_account_info(),
+                match deposit_token_record {
+                    Some(token_record) => Some(token_record.to_account_info()),
+                    None => None,
+                },
+                mint.to_account_info(),
+                metadata.to_account_info(),
+                edition.to_account_info(),
+                token_program.to_account_info(),
+                system_program.to_account_info(),
+                sysvar_instructions.to_account_info(),
+                authorization_rules_program.to_account_info(),
+                match authorization_rules {
+                    Some(authorization_rules) => Some(authorization_rules.to_account_info()),
+                    None => None,
+                },
+            )?;
+        
+            token_manager.close(borrower.to_account_info())?;    
+        } else {
+            token_manager.accounts.loan = false;
+        }   
     }
-
+  
     Ok(())
 }
 

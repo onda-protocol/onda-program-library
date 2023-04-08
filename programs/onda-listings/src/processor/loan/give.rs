@@ -1,6 +1,7 @@
 use anchor_lang::{prelude::*};
 use anchor_spl::token::{Mint, Token};
 use crate::state::{Loan, LoanState, TokenManager};
+use crate::error::{ErrorCodes};
 use crate::constants::*;
 
 #[derive(Accounts)]
@@ -34,6 +35,7 @@ pub struct GiveLoan<'info> {
             TokenManager::PREFIX,
             mint.key().as_ref(),
         ],
+        constraint = token_manager.authority == Some(borrower.key()) @ ErrorCodes::Unauthorized,
         bump,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,

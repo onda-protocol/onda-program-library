@@ -17,7 +17,7 @@ const connection = new anchor.web3.Connection(
 );
 
 const PROGRAM_ID = new anchor.web3.PublicKey(
-  "EF5T6akPE1MuvKHNjD1ZNFz71MbZPDBxF3NN1wPAY1XP"
+  "62616yhPNbv1uxcGbs84pk9PmGbBaaEBXAZmLE6P1nGS"
 );
 const keypair = anchor.web3.Keypair.generate();
 const wallet = new anchor.Wallet(keypair);
@@ -53,7 +53,7 @@ describe.only("Onda social", () => {
 
     const treeAuthority = findTreeAuthorityPda(merkleTree);
     const createTreeIx = await program.methods
-      .createTree(3, 3)
+      .createTree(maxDepth, maxBufferSize)
       .accounts({
         treeAuthority,
         merkleTree,
