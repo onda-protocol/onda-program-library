@@ -16,6 +16,7 @@
     "@metaplex-foundation/mpl-token-auth-rules": "^1.2.0",
     "@metaplex-foundation/mpl-token-metadata": "^2.2.2",
     "@msgpack/msgpack": "^3.0.0-beta1",
+    "@solana/spl-account-compression": "^0.1.7",
     "@types/mocha": "^9.1.0",
     "bip39": "^3.0.4",
     "dotenv": "^16.0.3",

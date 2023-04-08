@@ -17,7 +17,7 @@ const connection = new anchor.web3.Connection(
   anchor.AnchorProvider.defaultOptions().preflightCommitment
 );
 
-describe.only("Loans", () => {
+describe("Loans", () => {
   describe("Offers", () => {
     let lender: helpers.LoanOfferLender;
     let borrower: helpers.LoanOfferBorrower;
@@ -110,7 +110,7 @@ describe.only("Loans", () => {
     });
   });
 
-  describe.only("Loan repossessions", () => {
+  describe("Loan repossessions", () => {
     let borrower: helpers.LoanBorrower;
     let lender: helpers.LoanLender;
     let options;

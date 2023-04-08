@@ -11,7 +11,7 @@ pub use state::*;
 pub use constants::*;
 pub use utils::*;
 
-declare_id!("F2BTn5cmYkTzo52teXhG6jyLS3y2BujdE56yZaGyvxwC");
+declare_id!("CKUdSYh8hQp8WYXDbWDFks5AUKopeS5D336PMqePh5bs");
 
 #[program]
 pub mod onda_listings {

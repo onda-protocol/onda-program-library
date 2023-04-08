@@ -7,13 +7,13 @@ url = "https://anchor.projectserum.com"
 seeds = false
 
 [programs.localnet]
-onda_listings = "F2BTn5cmYkTzo52teXhG6jyLS3y2BujdE56yZaGyvxwC"
+onda_listings = "CKUdSYh8hQp8WYXDbWDFks5AUKopeS5D336PMqePh5bs"
 
 [programs.devnet]
-onda_listings = "F2BTn5cmYkTzo52teXhG6jyLS3y2BujdE56yZaGyvxwC"
+onda_listings = "CKUdSYh8hQp8WYXDbWDFks5AUKopeS5D336PMqePh5bs"
 
 [programs.mainnet]
-onda_listings = "F2BTn5cmYkTzo52teXhG6jyLS3y2BujdE56yZaGyvxwC"
+onda_listings = "CKUdSYh8hQp8WYXDbWDFks5AUKopeS5D336PMqePh5bs"
 
 [provider]
 cluster = "localnet"
@@ -30,3 +30,9 @@ url = "https://api.mainnet-beta.solana.com"
 
 [[test.validator.clone]]
 address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+
+[[test.validator.clone]]
+address = "cmtDvXumGCrqC1Age74AVPhSRVXJMd8PJS91L8KbNCK"
+
+[[test.validator.clone]]
+address = "noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV"
