@@ -22,12 +22,14 @@ function findTreeAuthorityPda(merkleTree: anchor.web3.PublicKey) {
 }
 
 describe.only("Onda social", () => {
+  const maxDepth = 14;
+  const maxBufferSize = 64;
+  const payer = program.provider.publicKey;
+  const merkleTreeKeypair = anchor.web3.Keypair.generate();
+  const merkleTree = merkleTreeKeypair.publicKey;
+  const treeAuthority = findTreeAuthorityPda(merkleTree);
+
   it("Creates a new tree", async () => {
-    const maxDepth = 14;
-    const maxBufferSize = 64;
-    const payer = program.provider.publicKey;
-    const merkleTreeKeypair = anchor.web3.Keypair.generate();
-    const merkleTree = merkleTreeKeypair.publicKey;
     const space = getConcurrentMerkleTreeAccountSize(maxDepth, maxBufferSize);
     const allocTreeIx = anchor.web3.SystemProgram.createAccount({
       fromPubkey: payer,
@@ -37,7 +39,6 @@ describe.only("Onda social", () => {
       programId: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
     });
 
-    const treeAuthority = findTreeAuthorityPda(merkleTree);
     const createTreeIx = await program.methods
       .createTree(maxDepth, maxBufferSize)
       .accounts({
@@ -54,18 +55,33 @@ describe.only("Onda social", () => {
     tx.feePayer = payer;
 
     await requestAirdrop(connection, payer);
-
-    try {
-      await program.provider.sendAndConfirm(tx, [merkleTreeKeypair], {
-        commitment: "confirmed",
-      });
-    } catch (err) {
-      console.log(err);
-      throw err;
-    }
+    await program.provider.sendAndConfirm(tx, [merkleTreeKeypair], {
+      commitment: "confirmed",
+    });
 
     assert.ok(true);
   });
 
-  it("Adds a post to the tree", async () => {});
+  it("Adds a post to the tree", async () => {
+    const mdx = `
+    # My MDX Example
+    
+    This is an example paragraph in an MDX file. You can include **bold** and *italic* text, just like in regular Markdown.
+    `;
+
+    const leafOwner = anchor.web3.Keypair.generate().publicKey;
+    const leafDelegate = leafOwner;
+
+    await program.methods.addPost({ body: mdx }).accounts({
+      treeAuthority,
+      leafOwner,
+      leafDelegate,
+      merkleTree,
+      payer,
+      logWrapper: SPL_NOOP_PROGRAM_ID,
+      compressionProgram: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
+    });
+
+    assert.ok(true);
+  });
 });
