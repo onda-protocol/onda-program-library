@@ -5,6 +5,6 @@ use anchor_lang::prelude::*;
 pub enum OndaSocialError {
   #[msg("Insufficient post capacity.")]
   InsufficientPostCapacity,
-  #[msg("Tree creator or tree delegate must sign.")]
-  TreeAuthorityIncorrect,
+  #[msg("Unauthorized.")]
+  Unauthorized,
 }

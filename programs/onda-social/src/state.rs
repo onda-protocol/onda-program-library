@@ -2,13 +2,8 @@ use anchor_lang::{prelude::*, solana_program::keccak};
 use borsh::{BorshDeserialize, BorshSerialize};
 use spl_account_compression::Node;
 
-pub const ASSET_PREFIX: &str = "asset";
-pub const POST_CONFIG_SIZE: usize = 32 + 8 + 8 + 1 + 32 + 15; // 15 bytes padding
-
-#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
-pub struct CommentArgs {
-    pub body: String,
-}
+pub const ENTRY_PREFIX: &str = "entry";
+pub const FORUM_CONFIG_SIZE: usize = 8 + 8 + 1 + 32 + 15; // 15 bytes padding
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
 pub enum RestrictionType {
@@ -16,30 +11,14 @@ pub enum RestrictionType {
     Collection { collection: Pubkey },
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
-pub enum PostData {
-    Text { title: String, body: String },
-    Image { title: String, src: String },
-    Link { title: String, url: String },
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
-pub struct PostArgs {
-    pub max_depth: u32,
-    pub max_buffer_size: u32,
-    pub collection: Option<Pubkey>,
-    pub post_data: PostData,
-}
-
 #[account]
-pub struct PostConfig {
-    pub author: Pubkey,
+pub struct ForumConfig {
     pub total_capacity: u64,
     pub post_count: u64,
     pub restriction: RestrictionType,
 }
 
-impl PostConfig {
+impl ForumConfig {
     pub fn increment_post_count(&mut self) {
         self.post_count = self.post_count.saturating_add(1);
     }
@@ -48,6 +27,19 @@ impl PostConfig {
         let remaining_posts = self.total_capacity.saturating_sub(self.post_count);
         requested_capacity <= remaining_posts
     }
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
+pub enum EntryData {
+    TextPost { title: String, body: String },
+    ImagePost { title: String, src: String },
+    LinkPost { title: String, url: String },
+    Comment { parent: Pubkey, body: String },
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
+pub struct EntryArgs {
+    pub data: EntryData,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
@@ -99,9 +91,29 @@ impl Version {
 }
 
 #[derive(BorshSerialize, BorshDeserialize, PartialEq, Eq, Debug, Clone)]
+pub enum EntryType {
+    TextPost,
+    ImagePost,
+    LinkPost,
+    Comment,
+}
+
+impl EntryType {
+    pub fn to_bytes(&self) -> u8 {
+        match self {
+            EntryType::TextPost => 0,
+            EntryType::ImagePost => 1,
+            EntryType::LinkPost => 2,
+            EntryType::Comment => 3,
+        }
+    }
+}
+
+#[derive(BorshSerialize, BorshDeserialize, PartialEq, Eq, Debug, Clone)]
 pub enum LeafSchema {
     V1 {
         id: Pubkey,
+        entry_type: EntryType,
         author: Pubkey,
         created_at: i64,
         edited_at: Option<i64>,
@@ -114,6 +126,7 @@ impl Default for LeafSchema {
   fn default() -> Self {
       Self::V1 {
           id: Default::default(),
+          entry_type: EntryType::TextPost,
           author: Default::default(),
           created_at: Default::default(),
           edited_at: None,
@@ -125,7 +138,8 @@ impl Default for LeafSchema {
 
 impl LeafSchema {
   pub fn new_v0(
-    id: Pubkey,
+      id: Pubkey,
+      entry_type: EntryType,
       author: Pubkey,
       created_at: i64,
       edited_at: Option<i64>,
@@ -137,6 +151,7 @@ impl LeafSchema {
         author,
         created_at,
         edited_at,
+        entry_type,
         nonce,
         data_hash,
       }
@@ -174,6 +189,7 @@ impl LeafSchema {
       let hashed_leaf = match self {
           LeafSchema::V1 {
               id,
+              entry_type,
               author,
               created_at,
               edited_at,
@@ -182,6 +198,7 @@ impl LeafSchema {
           } => keccak::hashv(&[
               &[self.version().to_bytes()],
               id.as_ref(),
+              &[entry_type.to_bytes()],
               author.as_ref(),
               created_at.to_le_bytes().as_ref(),
               edited_at.unwrap_or(0).to_le_bytes().as_ref(),

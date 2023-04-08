@@ -327,6 +327,18 @@ dependencies = [
 
 [[package]]
 name = "anchor-spl"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f32390ce8356f54c0f0245ea156f8190717e37285b8bf4f406a613dc4b954cde"
+dependencies = [
+ "anchor-lang 0.26.0",
+ "solana-program",
+ "spl-associated-token-account",
+ "spl-token",
+]
+
+[[package]]
+name = "anchor-spl"
 version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75cc8066fbd45e0e03edf48342c79265aa34ca76cefeace48ef6c402b6946665"
@@ -1449,6 +1461,7 @@ name = "onda-social"
 version = "0.1.0"
 dependencies = [
  "anchor-lang 0.26.0",
+ "anchor-spl 0.26.0",
  "spl-account-compression",
 ]
 
@@ -1457,7 +1470,7 @@ name = "onda_listings"
 version = "1.0.0"
 dependencies = [
  "anchor-lang 0.27.0",
- "anchor-spl",
+ "anchor-spl 0.27.0",
  "mpl-token-auth-rules",
  "mpl-token-metadata",
  "solana-program",
