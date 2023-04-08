@@ -9,6 +9,7 @@ import {
 } from "@solana/spl-account-compression";
 import assert from "assert";
 import { IDL, OndaSocial } from "../../target/types/onda_social";
+import { requestAirdrop } from "../helpers";
 
 const connection = new anchor.web3.Connection(
   "http://127.0.0.1:8899",
@@ -65,15 +66,22 @@ describe.only("Onda social", () => {
 
     const tx = new anchor.web3.Transaction().add(allocTreeIx).add(createTreeIx);
     tx.feePayer = payer;
-    await anchor.web3.sendAndConfirmTransaction(
-      connection,
-      tx,
-      [merkleTreeKeypair, keypair],
-      {
-        commitment: "confirmed",
-        skipPreflight: true,
-      }
-    );
+
+    await requestAirdrop(connection, keypair.publicKey);
+
+    try {
+      await anchor.web3.sendAndConfirmTransaction(
+        connection,
+        tx,
+        [merkleTreeKeypair, keypair],
+        {
+          commitment: "confirmed",
+        }
+      );
+    } catch (err) {
+      console.log(err);
+      throw err;
+    }
 
     assert.ok(true);
   });
