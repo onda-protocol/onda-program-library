@@ -1,5 +1,6 @@
 import * as anchor from "@project-serum/anchor";
 import * as borsh from "@coral-xyz/borsh";
+import { keccak_256 } from "js-sha3";
 import {
   getConcurrentMerkleTreeAccountSize,
   SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
@@ -25,7 +26,7 @@ function findEntryId(merkleTree: anchor.web3.PublicKey, entryIndex: number) {
     [
       Buffer.from("entry"),
       merkleTree.toBuffer(),
-      new anchor.BN(entryIndex).toBuffer("le"),
+      new anchor.BN(entryIndex).toBuffer("le", 8),
     ],
     program.programId
   )[0];
@@ -115,45 +116,22 @@ describe.only("Onda social", () => {
       "confirmed"
     );
     const innerInstructions = parsedTx.meta.innerInstructions[0];
-    const noopIx = innerInstructions.instructions[2];
+    const noopIx = innerInstructions.instructions[0];
     if ("data" in noopIx) {
       const serializedData = noopIx.data;
       const data = base58.decode(serializedData);
       console.log(data);
-      // id: Pubkey,
-      // entry_type: EntryType,
-      // author: Pubkey,
-      // created_at: i64,
-      // edited_at: Option<i64>,
-      // nonce: u64,
-      // data_hash: [u8; 32],
 
-      interface Leaf {
-        id: anchor.web3.PublicKey;
-        // entry_type: number;
-        // author: anchor.web3.PublicKey;
-        // created_at: number;
-        // edited_at: number | null;
-        // nonce: number;
-        // data_hash: Buffer;
+      const buffer = Buffer.from(data.slice(8));
+      const decoded = program.coder.types.decode("LeafSchema", buffer);
+      console.log("Decoded: ", decoded);
+
+      if (decoded.v1.entryType.textPost) {
+        const entry = borsh
+          .struct([borsh.str("title"), borsh.str("body")])
+          .decode(decoded.v1.dataHash);
+        console.log("Entry: ", entry);
       }
-
-      const layout = borsh.struct(
-        [
-          borsh.publicKey("id"),
-          // borsh.u8("entry_type"),
-          // borsh.publicKey("author"),
-          // borsh.i64("created_at"),
-          // borsh.option(borsh.i64("edited_at"), "edited_at"),
-          // borsh.u64("nonce"),
-          // borsh.vec(borsh.u8("data"), "data_hash"),
-        ],
-        "Leaf"
-      );
-      const decoded: Leaf = layout.decode(data.slice(8));
-      console.log("Decoded: ", {
-        id: decoded.id.toBase58(),
-      });
     }
     assert.ok(true);
   });

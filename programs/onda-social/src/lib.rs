@@ -75,7 +75,6 @@ pub mod onda_social {
         }
 
         let entry_id = get_entry_id(&merkle_tree.key(), forum_config.post_count);
-        msg!("post_count: {}", forum_config.post_count);
         msg!("entry_id: {:?}", entry_id);
         let (entry_type, data_hash) = match entry.data {
             EntryData::TextPost { title, body } => {
