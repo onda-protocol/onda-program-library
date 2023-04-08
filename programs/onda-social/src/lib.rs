@@ -10,7 +10,7 @@ use spl_account_compression::{
 
 use crate::{
     error::OndaSocialError,
-    state::{PostArgs, TreeConfig, LeafSchema, ASSET_PREFIX, TREE_AUTHORITY_SIZE},
+    state::{PostArgs, PostConfig, CommentArgs, LeafSchema, RestrictionType, ASSET_PREFIX, POST_CONFIG_SIZE},
 };
 
 pub mod error;
@@ -22,54 +22,52 @@ declare_id!("62616yhPNbv1uxcGbs84pk9PmGbBaaEBXAZmLE6P1nGS");
 pub mod onda_social {
     use super::*;
 
-    pub fn create_tree(
-        ctx: Context<CreateTree>,
-        max_depth: u32,
-        max_buffer_size: u32,
+    pub fn create_post(
+        ctx: Context<CreatePost>,
+        post: PostArgs,
     ) -> Result<()> {
-        let merkle_tree = ctx.accounts.merkle_tree.to_account_info();
+        let author =  ctx.accounts.author.key();
+        let post_config = &mut ctx.accounts.post_config;
+        let post_config_bump = *ctx.bumps.get("post_config").unwrap();
+        let merkle_tree = &ctx.accounts.merkle_tree;
         let seed = merkle_tree.key();
-        let seeds = &[seed.as_ref(), &[*ctx.bumps.get("tree_authority").unwrap()]];
-        let authority = &mut ctx.accounts.tree_authority;
-        authority.set_inner(TreeConfig {
-            tree_creator: ctx.accounts.tree_creator.key(),
-            tree_delegate: ctx.accounts.tree_creator.key(),
-            total_post_capacity: 1 << max_depth,
+        let seeds = &[seed.as_ref(), &[*ctx.bumps.get("post_config").unwrap()]];
+        let wrapper = &ctx.accounts.log_wrapper;
+        let compression_program = &ctx.accounts.compression_program;
+        post_config.set_inner(PostConfig {
+            author,
+            total_capacity: 1 << post.max_depth,
             post_count: 0,
+            restriction: match post.collection {
+                Some(collection) => RestrictionType::Collection { collection },
+                None => RestrictionType::None,
+            },
         });
         let authority_pda_signer = &[&seeds[..]];
         let cpi_ctx = CpiContext::new_with_signer(
             ctx.accounts.compression_program.to_account_info(),
             spl_account_compression::cpi::accounts::Initialize {
-                authority: ctx.accounts.tree_authority.to_account_info(),
-                merkle_tree,
-                noop: ctx.accounts.log_wrapper.to_account_info(),
+                authority: post_config.to_account_info(),
+                merkle_tree: merkle_tree.to_account_info(),
+                noop: wrapper.to_account_info(),
             },
             authority_pda_signer,
         );
-        spl_account_compression::cpi::init_empty_merkle_tree(cpi_ctx, max_depth, max_buffer_size)
-    }
+        spl_account_compression::cpi::init_empty_merkle_tree(
+            cpi_ctx,
+            post.max_depth,
+            post.max_buffer_size
+        )?;
 
-    pub fn add_post(ctx: Context<AddPost>, post: PostArgs) -> Result<()> {
-        let owner = ctx.accounts.leaf_owner.key();
-        let delegate = ctx.accounts.leaf_delegate.key();
-        let authority = &mut ctx.accounts.tree_authority;
-        let authority_bump = *ctx.bumps.get("tree_authority").unwrap();
-        let merkle_tree = &ctx.accounts.merkle_tree;
-        let wrapper = &ctx.accounts.log_wrapper;
-        let compression_program = &ctx.accounts.compression_program;
-
-        if !authority.contains_post_capacity(1) {
-            return err!(OndaSocialError::InsufficientPostCapacity);
-        }
-
-        let data_hash = keccak::hashv(&[post.try_to_vec()?.as_slice()]);
-        let asset_id = get_asset_id(&merkle_tree.key(), authority.post_count);
+        let data_hash = keccak::hashv(&[post.post_data.try_to_vec()?.as_slice()]);
+        let asset_id = get_asset_id(&merkle_tree.key(), post_config.post_count);
+        let created_at = Clock::get()?.unix_timestamp;
         let leaf = LeafSchema::new_v0(
             asset_id,
-            owner,
-            delegate,
-            authority.post_count,
+            author,
+            created_at,
+            None,
+            post_config.post_count,
             data_hash.to_bytes(),
         );
 
@@ -77,58 +75,94 @@ pub mod onda_social {
 
         append_leaf(
             &merkle_tree.key(),
-            authority_bump,
+            post_config_bump,
             &compression_program.to_account_info(),
-            &authority.to_account_info(),
+            &post_config.to_account_info(),
             &merkle_tree.to_account_info(),
             &wrapper.to_account_info(),
             leaf.to_node(),
         )?;
 
-        authority.increment_post_count();
+        post_config.increment_post_count();
+
+        Ok(())
+    }
+
+    pub fn add_comment(ctx: Context<AddComment>, data: CommentArgs) -> Result<()> {
+        let author = ctx.accounts.author.key();
+        let post_config = &mut ctx.accounts.post_config;
+        let post_config_bump = *ctx.bumps.get("post_config").unwrap();
+        let merkle_tree = &ctx.accounts.merkle_tree;
+        let wrapper = &ctx.accounts.log_wrapper;
+        let compression_program = &ctx.accounts.compression_program;
+
+        if !post_config.contains_post_capacity(1) {
+            return err!(OndaSocialError::InsufficientPostCapacity);
+        }
+
+        let data_hash = keccak::hashv(&[data.try_to_vec()?.as_slice()]);
+        let asset_id = get_asset_id(&merkle_tree.key(), post_config.post_count);
+        let created_at = Clock::get()?.unix_timestamp;
+        let leaf = LeafSchema::new_v0(
+            asset_id,
+            author,
+            created_at,
+            None,
+            post_config.post_count,
+            data_hash.to_bytes(),
+        );
+
+        wrap_application_data_v1(leaf.to_event().try_to_vec()?, wrapper)?;
+
+        append_leaf(
+            &merkle_tree.key(),
+            post_config_bump,
+            &compression_program.to_account_info(),
+            &post_config.to_account_info(),
+            &merkle_tree.to_account_info(),
+            &wrapper.to_account_info(),
+            leaf.to_node(),
+        )?;
+
+        post_config.increment_post_count();
 
         Ok(())
     }
 }
 
 #[derive(Accounts)]
-pub struct CreateTree<'info> {
+pub struct CreatePost<'info> {
+    #[account(mut)]
+    pub author: Signer<'info>,
     #[account(
         init,
         seeds = [merkle_tree.key().as_ref()],
-        payer = payer,
-        space = TREE_AUTHORITY_SIZE,
+        payer = author,
+        space = POST_CONFIG_SIZE,
         bump,
     )]
-    pub tree_authority: Account<'info, TreeConfig>,
+    pub post_config: Account<'info, PostConfig>,
     #[account(zero)]
     /// CHECK: This account must be all zeros
     pub merkle_tree: UncheckedAccount<'info>,
-    #[account(mut)]
-    pub payer: Signer<'info>,
-    pub tree_creator: Signer<'info>,
     pub log_wrapper: Program<'info, Noop>,
     pub compression_program: Program<'info, SplAccountCompression>,
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
-pub struct AddPost<'info> {
+pub struct AddComment<'info> {
+    #[account(mut)]
+    pub author: Signer<'info>,
     #[account(
         mut,
         seeds = [merkle_tree.key().as_ref()],
         bump,
     )]
-    pub tree_authority: Account<'info, TreeConfig>,
-    /// CHECK: This account is neither written to nor read from.
-    pub leaf_owner: AccountInfo<'info>,
-    /// CHECK: This account is neither written to nor read from.
-    pub leaf_delegate: AccountInfo<'info>,
+    pub post_config: Account<'info, PostConfig>,
     #[account(mut)]
     /// CHECK: unsafe
     pub merkle_tree: UncheckedAccount<'info>,
-    pub payer: Signer<'info>,
-    pub tree_delegate: Signer<'info>,
     pub log_wrapper: Program<'info, Noop>,
     pub compression_program: Program<'info, SplAccountCompression>,
     pub system_program: Program<'info, System>,

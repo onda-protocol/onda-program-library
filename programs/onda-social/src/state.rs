@@ -3,29 +3,49 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use spl_account_compression::Node;
 
 pub const ASSET_PREFIX: &str = "asset";
-pub const TREE_AUTHORITY_SIZE: usize = 32 + 32 + 8 + 8 + 15; // 15 bytes padding
+pub const POST_CONFIG_SIZE: usize = 32 + 8 + 8 + 1 + 32 + 15; // 15 bytes padding
 
-#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(BorshSerialize, BorshDeserialize, PartialEq, Eq, Debug, Clone)]
+pub struct CommentArgs {
+    pub body: String,
+}
+
+#[derive(BorshSerialize, BorshDeserialize, PartialEq, Eq, Debug, Clone)]
+pub enum RestrictionType {
+    None,
+    Collection { collection: Pubkey },
+}
+
+#[derive(BorshSerialize, BorshDeserialize, PartialEq, Eq, Debug, Clone)]
+pub enum PostData {
+    Text { body: String },
+    Image { url: String },
+    Link { url: String },
+}
+
+#[derive(BorshSerialize, BorshDeserialize, PartialEq, Eq, Debug, Clone)]
 pub struct PostArgs {
-  pub body: String,
+    pub max_depth: u32,
+    pub max_buffer_size: u32,
+    pub collection: Option<Pubkey>,
+    pub post_data: PostData,
 }
 
 #[account]
-#[derive(Copy, Debug, PartialEq, Eq)]
-pub struct TreeConfig {
-    pub tree_creator: Pubkey,
-    pub tree_delegate: Pubkey,
-    pub total_post_capacity: u64,
+pub struct PostConfig {
+    pub author: Pubkey,
+    pub total_capacity: u64,
     pub post_count: u64,
+    pub restriction: RestrictionType,
 }
 
-impl TreeConfig {
+impl PostConfig {
     pub fn increment_post_count(&mut self) {
         self.post_count = self.post_count.saturating_add(1);
     }
 
     pub fn contains_post_capacity(&self, requested_capacity: u64) -> bool {
-        let remaining_posts = self.total_post_capacity.saturating_sub(self.post_count);
+        let remaining_posts = self.total_capacity.saturating_sub(self.post_count);
         requested_capacity <= remaining_posts
     }
 }
@@ -82,8 +102,9 @@ impl Version {
 pub enum LeafSchema {
     V1 {
         id: Pubkey,
-        owner: Pubkey,
-        delegate: Pubkey,
+        author: Pubkey,
+        created_at: i64,
+        edited_at: Option<i64>,
         nonce: u64,
         data_hash: [u8; 32],
     },
@@ -93,8 +114,9 @@ impl Default for LeafSchema {
   fn default() -> Self {
       Self::V1 {
           id: Default::default(),
-          owner: Default::default(),
-          delegate: Default::default(),
+          author: Default::default(),
+          created_at: Default::default(),
+          edited_at: None,
           nonce: 0,
           data_hash: [0; 32],
       }
@@ -103,18 +125,20 @@ impl Default for LeafSchema {
 
 impl LeafSchema {
   pub fn new_v0(
-      id: Pubkey,
-      owner: Pubkey,
-      delegate: Pubkey,
+    id: Pubkey,
+      author: Pubkey,
+      created_at: i64,
+      edited_at: Option<i64>,
       nonce: u64,
       data_hash: [u8; 32],
   ) -> Self {
-      Self::V1 {
-          id,
-          owner,
-          delegate,
-          nonce,
-          data_hash,
+    Self::V1 {
+        id,
+        author,
+        created_at,
+        edited_at,
+        nonce,
+        data_hash,
       }
   }
 
@@ -150,15 +174,17 @@ impl LeafSchema {
       let hashed_leaf = match self {
           LeafSchema::V1 {
               id,
-              owner,
-              delegate,
+              author,
+              created_at,
+              edited_at,
               nonce,
               data_hash,
           } => keccak::hashv(&[
               &[self.version().to_bytes()],
               id.as_ref(),
-              owner.as_ref(),
-              delegate.as_ref(),
+              author.as_ref(),
+              created_at.to_le_bytes().as_ref(),
+              edited_at.unwrap_or(0).to_le_bytes().as_ref(),
               nonce.to_le_bytes().as_ref(),
               data_hash.as_ref(),
           ])
