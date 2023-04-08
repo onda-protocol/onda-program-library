@@ -16,7 +16,7 @@ use crate::{
 pub mod error;
 pub mod state;
 
-declare_id!("EF5T6akPE1MuvKHNjD1ZNFz71MbZPDBxF3NN1wPAY1XP");
+declare_id!("62616yhPNbv1uxcGbs84pk9PmGbBaaEBXAZmLE6P1nGS");
 
 #[program]
 pub mod onda_social {

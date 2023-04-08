@@ -31,6 +31,9 @@ pub struct SellCallOption<'info> {
         constraint = deposit_token_account.mint == mint.key(),
     )]
     pub deposit_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    /// CHECK: validated in cpi
+    pub deposit_token_record: Option<UncheckedAccount<'info>>,
     #[account(
         init,
         payer = seller,
@@ -74,7 +77,7 @@ pub struct SellCallOption<'info> {
         ],
         space = TokenManager::space(),
         bump,
-        constraint = token_manager.authority == seller.key() @ ErrorCodes::Unauthorized,
+        constraint = token_manager.authority.unwrap() == seller.key() @ ErrorCodes::Unauthorized,
     )]
     pub token_manager: Box<Account<'info, TokenManager>>,
     #[account(
@@ -94,7 +97,13 @@ pub struct SellCallOption<'info> {
     pub edition: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
     pub metadata_program: UncheckedAccount<'info>,
+    /// CHECK: validated in cpi
+    pub authorization_rules_program: UncheckedAccount<'info>,
+    /// CHECK: validated in cpi
+    pub authorization_rules: Option<UncheckedAccount<'info>>, 
     /// Misc
+    /// CHECK: not supported by anchor? used in cpi
+    pub sysvar_instructions: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub rent: Sysvar<'info, Rent>,
@@ -106,11 +115,23 @@ pub fn handle_sell_call_option<'info>(
   _id: u8,
 ) -> Result<()> {
     let call_option = &mut ctx.accounts.call_option;
-    let collection = &ctx.accounts.collection;
     let bid = &mut ctx.accounts.call_option_bid;
-    let escrow_payment_account = &mut ctx.accounts.escrow_payment_account;
+    let seller = &ctx.accounts.seller;
+    let buyer = &ctx.accounts.buyer;
     let token_manager = &mut ctx.accounts.token_manager;
+    let collection = &ctx.accounts.collection;
+    let escrow_payment_account = &mut ctx.accounts.escrow_payment_account;
     let deposit_token_account = &mut ctx.accounts.deposit_token_account;
+    let deposit_token_record = &ctx.accounts.deposit_token_record;
+    let mint = &ctx.accounts.mint;
+    let metadata = &ctx.accounts.metadata;
+    let edition = &ctx.accounts.edition;
+    let token_program = &ctx.accounts.token_program;
+    let system_program = &ctx.accounts.system_program;
+    let sysvar_instructions = &ctx.accounts.sysvar_instructions;
+    let authorization_rules_program = &ctx.accounts.authorization_rules_program;
+    let authorization_rules = &ctx.accounts.authorization_rules;
+    let unix_timestamp = ctx.accounts.clock.unix_timestamp;
     let remaining_accounts = &mut ctx.remaining_accounts.iter();
 
     assert_collection_valid(
@@ -123,26 +144,16 @@ pub fn handle_sell_call_option<'info>(
     require_eq!(token_manager.accounts.loan, false, ErrorCodes::InvalidState);
 
     // Init
-    call_option.seller = ctx.accounts.seller.key();
-    call_option.buyer = Some(ctx.accounts.buyer.key());
-    call_option.mint = ctx.accounts.mint.key();
+    call_option.seller = seller.key();
+    call_option.buyer = Some(buyer.key());
+    call_option.mint = mint.key();
     call_option.bump = *ctx.bumps.get("call_option").unwrap();
     //
     CallOption::init_ask_state(call_option, bid.amount, collection.config.option_basis_points, bid.strike_price, bid.expiry)?;
-    CallOption::set_active(call_option, ctx.accounts.clock.unix_timestamp)?;
+    CallOption::set_active(call_option, unix_timestamp)?;
     //
     token_manager.accounts.call_option = true;
     token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
-
-    maybe_delegate_and_freeze_token_account(
-        token_manager,
-        deposit_token_account,
-        ctx.accounts.seller.to_account_info(),
-        ctx.accounts.mint.to_account_info(),
-        ctx.accounts.edition.to_account_info(),
-        ctx.accounts.seller.to_account_info(),
-        ctx.accounts.token_program.to_account_info(),
-    )?;
 
     let call_option_bid_pubkey = bid.key();
     let signer_bump = &[bid.escrow_bump];
@@ -176,6 +187,33 @@ pub fn handle_sell_call_option<'info>(
         signer_seeds
     )?;
 
+    // Freeze deposit token account
+    if deposit_token_account.delegate.is_some() {
+        if deposit_token_account.delegate.unwrap() != token_manager.key() {
+            return err!(ErrorCodes::InvalidState);
+        }
+    } else {
+        handle_delegate_and_freeze(
+            token_manager,
+            seller.to_account_info(),
+            deposit_token_account.to_account_info(),
+            match deposit_token_record {
+                Some(token_record) => Some(token_record.to_account_info()),
+                None => None,
+            },
+            mint.to_account_info(),
+            metadata.to_account_info(),
+            edition.to_account_info(),
+            token_program.to_account_info(),
+            system_program.to_account_info(),
+            sysvar_instructions.to_account_info(),
+            authorization_rules_program.to_account_info(),
+            match authorization_rules {
+                Some(authorization_rules) => Some(authorization_rules.to_account_info()),
+                None => None,
+            }
+        )?;
+    }
 
     Ok(())
 }

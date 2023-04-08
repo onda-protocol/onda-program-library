@@ -41,7 +41,10 @@ pub struct AskCallOption<'info> {
         ],
         space = TokenManager::space(),
         bump,
-        contract = token_manager.authority == seller.key() @ ErrorCodes::Unauthorized,
+        constraint = (
+            token_manager.authority == Some(seller.key()) || 
+            token_manager.authority == None
+        ) @ ErrorCodes::Unauthorized,
     )]   
     pub token_manager: Box<Account<'info, TokenManager>>,
     #[account(
@@ -55,13 +58,23 @@ pub struct AskCallOption<'info> {
     pub collection: Box<Account<'info, Collection>>,
     #[account(constraint = mint.supply == 1)]
     pub mint: Box<Account<'info, Mint>>,
+    #[account(mut)]
     /// CHECK: deserialized and checked
     pub metadata: UncheckedAccount<'info>,
     /// CHECK: validated in cpi
     pub edition: UncheckedAccount<'info>,
+    #[account(mut)]
     /// CHECK: validated in cpi
-    pub metadata_program: UncheckedAccount<'info>, 
+    pub token_record: Option<UncheckedAccount<'info>>,
+    /// CHECK: validated in cpi
+    pub metadata_program: UncheckedAccount<'info>,
+    /// CHECK: validated in cpi
+    pub authorization_rules_program: UncheckedAccount<'info>,
+    /// CHECK: validated in cpi
+    pub authorization_rules: Option<UncheckedAccount<'info>>, 
     /// Misc
+    /// CHECK: validated in cpi
+    pub sysvar_instructions: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub clock: Sysvar<'info, Clock>,
@@ -75,9 +88,19 @@ pub fn handle_ask_call_option(
   expiry: i64
 ) -> Result<()> {
     let call_option = &mut ctx.accounts.call_option;
+    let seller = &ctx.accounts.seller;
     let token_manager = &mut ctx.accounts.token_manager;
     let collection = &ctx.accounts.collection;
     let deposit_token_account = &mut ctx.accounts.deposit_token_account;
+    let token_record = &ctx.accounts.token_record;
+    let mint = &ctx.accounts.mint;
+    let metadata = &ctx.accounts.metadata;
+    let edition = &ctx.accounts.edition;
+    let token_program = &ctx.accounts.token_program;
+    let system_program = &ctx.accounts.system_program;
+    let sysvar_instructions = &ctx.accounts.sysvar_instructions;
+    let authorization_rules_program = &ctx.accounts.authorization_rules_program;
+    let authorization_rules = &ctx.accounts.authorization_rules;
     let unix_timestamp = ctx.accounts.clock.unix_timestamp;
 
     assert_collection_valid(
@@ -106,18 +129,37 @@ pub fn handle_ask_call_option(
         expiry
     )?;
     //
+    token_manager.authority = Some(seller.key());
     token_manager.accounts.call_option = true;
     token_manager.bump = *ctx.bumps.get("token_manager").unwrap();
 
-    maybe_delegate_and_freeze_token_account(
-        token_manager,
-        deposit_token_account,
-        ctx.accounts.seller.to_account_info(),
-        ctx.accounts.mint.to_account_info(),
-        ctx.accounts.edition.to_account_info(),
-        ctx.accounts.seller.to_account_info(),
-        ctx.accounts.token_program.to_account_info(),
-    )?;
+    // Freeze deposit token account
+    if deposit_token_account.delegate.is_some() {
+        if deposit_token_account.delegate.unwrap() != token_manager.key() {
+            return err!(ErrorCodes::InvalidState);
+        }
+    } else {
+        handle_delegate_and_freeze(
+            token_manager,
+            seller.to_account_info(),
+            deposit_token_account.to_account_info(),
+            match token_record {
+                Some(token_record) => Some(token_record.to_account_info()),
+                None => None,
+            },
+            mint.to_account_info(),
+            metadata.to_account_info(),
+            edition.to_account_info(),
+            token_program.to_account_info(),
+            system_program.to_account_info(),
+            sysvar_instructions.to_account_info(),
+            authorization_rules_program.to_account_info(),
+            match authorization_rules {
+                Some(authorization_rules) => Some(authorization_rules.to_account_info()),
+                None => None,
+            }
+        )?;
+    }
 
     Ok(())
 }

@@ -8,15 +8,15 @@ seeds = false
 
 [programs.localnet]
 onda_listings = "CKUdSYh8hQp8WYXDbWDFks5AUKopeS5D336PMqePh5bs"
-onda_social = "EF5T6akPE1MuvKHNjD1ZNFz71MbZPDBxF3NN1wPAY1XP"
+onda_social = "62616yhPNbv1uxcGbs84pk9PmGbBaaEBXAZmLE6P1nGS"
 
 [programs.devnet]
 onda_listings = "CKUdSYh8hQp8WYXDbWDFks5AUKopeS5D336PMqePh5bs"
-onda_social = "EF5T6akPE1MuvKHNjD1ZNFz71MbZPDBxF3NN1wPAY1XP"
+onda_social = "62616yhPNbv1uxcGbs84pk9PmGbBaaEBXAZmLE6P1nGS"
 
 [programs.mainnet]
 onda_listings = "CKUdSYh8hQp8WYXDbWDFks5AUKopeS5D336PMqePh5bs"
-onda_social = "EF5T6akPE1MuvKHNjD1ZNFz71MbZPDBxF3NN1wPAY1XP"
+onda_social = "62616yhPNbv1uxcGbs84pk9PmGbBaaEBXAZmLE6P1nGS"
 
 [provider]
 cluster = "localnet"
