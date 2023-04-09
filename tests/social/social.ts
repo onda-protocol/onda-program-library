@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import * as anchor from "@project-serum/anchor";
 import * as borsh from "@coral-xyz/borsh";
 import { keccak_256 } from "js-sha3";
@@ -89,12 +91,7 @@ describe.only("Onda social", () => {
   });
 
   it("Adds a post to the tree", async () => {
-    const mdx = `
-    # My MDX Example
-    
-    This is an example paragraph in an MDX file. You can include **bold** and *italic* text, just like in regular Markdown.
-    `;
-
+    const mdx = fs.readFileSync(path.join(__dirname, "./test.mdx"), "utf8");
     const entryId = findEntryId(merkleTree, 0);
     console.log("Entry ID: ", entryId.toBase58());
     const signature = await program.methods
@@ -115,23 +112,27 @@ describe.only("Onda social", () => {
       signature,
       "confirmed"
     );
+    console.log(JSON.stringify(parsedTx, null, 2));
     const innerInstructions = parsedTx.meta.innerInstructions[0];
     const noopIx = innerInstructions.instructions[0];
     if ("data" in noopIx) {
-      const serializedData = noopIx.data;
-      const data = base58.decode(serializedData);
-      console.log(data);
+      const serializedEvent = noopIx.data;
+      const event = base58.decode(serializedEvent);
+      const eventBuffer = Buffer.from(event.slice(8));
+      const eventDecoded = program.coder.types.decode(
+        "LeafSchema",
+        eventBuffer
+      );
+      console.log("Decoded: ", eventDecoded);
+    }
 
-      const buffer = Buffer.from(data.slice(8));
-      const decoded = program.coder.types.decode("LeafSchema", buffer);
-      console.log("Decoded: ", decoded);
-
-      if (decoded.v1.entryType.textPost) {
-        const entry = borsh
-          .struct([borsh.str("title"), borsh.str("body")])
-          .decode(decoded.v1.dataHash);
-        console.log("Entry: ", entry);
-      }
+    const outerIx = parsedTx.transaction.message.instructions[0];
+    if ("data" in outerIx) {
+      const data = outerIx.data;
+      const entry = base58.decode(data);
+      const buffer = Buffer.from(entry.slice(8));
+      const entryDecoded = program.coder.types.decode("EntryData", buffer);
+      console.log("Entry: ", entryDecoded);
     }
     assert.ok(true);
   });

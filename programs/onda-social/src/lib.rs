@@ -75,19 +75,19 @@ pub mod onda_social {
         }
 
         let entry_id = get_entry_id(&merkle_tree.key(), forum_config.post_count);
-        msg!("entry_id: {:?}", entry_id);
-        let (entry_type, data_hash) = match entry.data {
-            EntryData::TextPost { title, body } => {
-                (EntryType::TextPost, keccak::hashv(&[title.as_bytes(), body.as_bytes()]))
+        let data_hash = keccak::hashv(&[&entry.data.try_to_vec()?]);
+        let entry_type = match entry.data {
+            EntryData::TextPost { .. } => {
+                EntryType::TextPost
             },
-            EntryData::ImagePost { title, src } => {
-                (EntryType::ImagePost, keccak::hashv(&[title.as_bytes(), src.as_bytes()]))
+            EntryData::ImagePost { .. } => {
+                EntryType::ImagePost
             },
-            EntryData::LinkPost { title, url } => {
-                (EntryType::LinkPost, keccak::hashv(&[title.as_bytes(), url.as_bytes()]))
+            EntryData::LinkPost { .. } => {
+                EntryType::LinkPost
             },
-            EntryData::Comment { parent, body } => {
-                (EntryType::Comment, keccak::hashv(&[parent.as_ref(), body.as_bytes()]))
+            EntryData::Comment { .. } => {
+                EntryType::Comment
             },
         };
         let created_at = Clock::get()?.unix_timestamp;
