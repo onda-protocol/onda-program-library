@@ -91,7 +91,7 @@ describe.only("Onda social", () => {
   });
 
   it("Adds a post to the tree", async () => {
-    const mdx = fs.readFileSync(path.join(__dirname, "./test.mdx"), "utf8");
+    const mdx = fs.readFileSync(path.join(__dirname, "./test.md"), "utf8");
     const entryId = findEntryId(merkleTree, 0);
     console.log("Entry ID: ", entryId.toBase58());
     const signature = await program.methods
