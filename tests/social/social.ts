@@ -1,8 +1,6 @@
 import fs from "fs";
 import path from "path";
 import * as anchor from "@project-serum/anchor";
-import * as borsh from "@coral-xyz/borsh";
-import { keccak_256 } from "js-sha3";
 import {
   getConcurrentMerkleTreeAccountSize,
   SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
@@ -108,11 +106,24 @@ describe.only("Onda social", () => {
       })
       .rpc({ commitment: "confirmed" });
 
+    await program.methods
+      .addEntry({ data: { textPost: { title: "Hello World 2!", body: mdx } } })
+      .accounts({
+        forumConfig,
+        merkleTree,
+        author: payer,
+        mint: null,
+        tokenAccount: null,
+        metadata: null,
+        logWrapper: SPL_NOOP_PROGRAM_ID,
+        compressionProgram: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
+      })
+      .rpc({ commitment: "confirmed" });
+
     const parsedTx = await program.provider.connection.getParsedTransaction(
       signature,
       "confirmed"
     );
-    console.log(JSON.stringify(parsedTx, null, 2));
     const innerInstructions = parsedTx.meta.innerInstructions[0];
     const noopIx = innerInstructions.instructions[0];
     if ("data" in noopIx) {
@@ -123,7 +134,6 @@ describe.only("Onda social", () => {
         "LeafSchema",
         eventBuffer
       );
-      console.log("Decoded: ", eventDecoded);
     }
 
     const outerIx = parsedTx.transaction.message.instructions[0];
@@ -132,7 +142,6 @@ describe.only("Onda social", () => {
       const entry = base58.decode(data);
       const buffer = Buffer.from(entry.slice(8));
       const entryDecoded = program.coder.types.decode("EntryData", buffer);
-      console.log("Entry: ", entryDecoded);
     }
     assert.ok(true);
   });

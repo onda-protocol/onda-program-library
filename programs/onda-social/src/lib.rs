@@ -8,6 +8,10 @@ use anchor_spl::{
 use spl_account_compression::{
     program::SplAccountCompression, wrap_application_data_v1, Node, Noop,
 };
+use mpl_token_metadata::{
+    state::Metadata,
+    pda::find_metadata_account
+};
 
 use crate::{
     error::OndaSocialError,
@@ -17,7 +21,7 @@ use crate::{
 pub mod error;
 pub mod state;
 
-declare_id!("62616yhPNbv1uxcGbs84pk9PmGbBaaEBXAZmLE6P1nGS");
+declare_id!("BWWPkJpv6fV2ZM5aNua8btxBXooWdW2qjWwUDBhz1p9S");
 
 #[program]
 pub mod onda_social {
@@ -67,14 +71,40 @@ pub mod onda_social {
         let log_wrapper = &ctx.accounts.log_wrapper;
         let compression_program = &ctx.accounts.compression_program;
 
+        let mint = &ctx.accounts.mint;
+        let metadata = &ctx.accounts.metadata;
+        let token_account = &ctx.accounts.token_account;
+        // Check if the forum is restricted to a collection.
         match forum_config.restriction {
             RestrictionType::None => (),
             RestrictionType::Collection { collection } => {
+                let mint = mint.clone().ok_or(OndaSocialError::Unauthorized)?;
+                let metadata_info = metadata.clone().ok_or(OndaSocialError::Unauthorized)?;
+                let metadata = Metadata::deserialize(
+                    &mut metadata_info.data.borrow_mut().as_ref()
+                )?;
+                let token_account = token_account.clone().ok_or(OndaSocialError::Unauthorized)?;
+
+                // Check the metadata address is valid pda for this mint
+                let (metadata_pda, _) = find_metadata_account(
+                    &mint.key()
+                  );
+                require_keys_eq!(metadata_info.key(), metadata_pda, OndaSocialError::Unauthorized);
+
+                // Check the metadata is verified for this collection
+                let metadata_collection = metadata.collection.ok_or(OndaSocialError::Unauthorized)?;
+                require!(metadata_collection.verified, OndaSocialError::Unauthorized);
+                require_keys_eq!(collection, metadata_collection.key, OndaSocialError::Unauthorized);
+
+                // Check if the token account is owned by the author.
+                require_keys_eq!(author, token_account.owner, OndaSocialError::Unauthorized);
+
                 return err!(OndaSocialError::Unauthorized)
             }
         }
 
         let entry_id = get_entry_id(&merkle_tree.key(), forum_config.post_count);
+        msg!("entry_id: {:?}", entry_id);
         let data_hash = keccak::hashv(&[&entry.data.try_to_vec()?]);
         let entry_type = match entry.data {
             EntryData::TextPost { .. } => {
@@ -100,6 +130,8 @@ pub mod onda_social {
             forum_config.post_count,
             data_hash.to_bytes(),
         );
+        msg!("leaf: {:?}", leaf.id());
+        msg!("nonce: {:?}", leaf.nonce());
 
         wrap_application_data_v1(leaf.to_event().try_to_vec()?, log_wrapper)?;
 
@@ -114,6 +146,7 @@ pub mod onda_social {
         )?;
 
         forum_config.increment_post_count();
+        msg!("post_count: {:?}", forum_config.post_count);
 
         Ok(())
     }

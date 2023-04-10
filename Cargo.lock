@@ -1462,6 +1462,7 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang 0.26.0",
  "anchor-spl 0.26.0",
+ "mpl-token-metadata",
  "spl-account-compression",
 ]
 

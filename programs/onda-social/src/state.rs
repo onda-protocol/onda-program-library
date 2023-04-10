@@ -34,7 +34,7 @@ pub enum EntryData {
     TextPost { title: String, body: String },
     ImagePost { title: String, src: String },
     LinkPost { title: String, url: String },
-    Comment { parent: Pubkey, body: String },
+    Comment { post: Pubkey, parent: Option<Pubkey>, body: String },
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
@@ -182,6 +182,7 @@ impl LeafSchema {
   }
 
   pub fn to_event(&self) -> LeafSchemaEvent {
+      msg!("to_event: {:?}", self.clone().id());
       LeafSchemaEvent::new(self.version(), self.clone(), self.to_node())
   }
 
