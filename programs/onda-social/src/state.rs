@@ -30,19 +30,6 @@ impl ForumConfig {
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
-pub enum EntryData {
-    TextPost { title: String, body: String },
-    ImagePost { title: String, src: String },
-    LinkPost { title: String, url: String },
-    Comment { post: Pubkey, parent: Option<Pubkey>, body: String },
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
-pub struct EntryArgs {
-    pub data: EntryData,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
 #[repr(u8)]
 pub enum OndaSocialEventType {
     /// Marker for 0 data.
@@ -90,30 +77,18 @@ impl Version {
     }
 }
 
-#[derive(BorshSerialize, BorshDeserialize, PartialEq, Eq, Debug, Clone)]
-pub enum EntryType {
-    TextPost,
-    ImagePost,
-    LinkPost,
-    Comment,
-}
-
-impl EntryType {
-    pub fn to_bytes(&self) -> u8 {
-        match self {
-            EntryType::TextPost => 0,
-            EntryType::ImagePost => 1,
-            EntryType::LinkPost => 2,
-            EntryType::Comment => 3,
-        }
-    }
+#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
+pub enum DataV1 {
+    TextPost { title: String, body: String },
+    ImagePost { title: String, src: String },
+    LinkPost { title: String, url: String },
+    Comment { post: Pubkey, parent: Option<Pubkey>, body: String },
 }
 
 #[derive(BorshSerialize, BorshDeserialize, PartialEq, Eq, Debug, Clone)]
 pub enum LeafSchema {
     V1 {
         id: Pubkey,
-        entry_type: EntryType,
         author: Pubkey,
         created_at: i64,
         edited_at: Option<i64>,
@@ -126,7 +101,6 @@ impl Default for LeafSchema {
   fn default() -> Self {
       Self::V1 {
           id: Default::default(),
-          entry_type: EntryType::TextPost,
           author: Default::default(),
           created_at: Default::default(),
           edited_at: None,
@@ -139,7 +113,6 @@ impl Default for LeafSchema {
 impl LeafSchema {
   pub fn new_v0(
       id: Pubkey,
-      entry_type: EntryType,
       author: Pubkey,
       created_at: i64,
       edited_at: Option<i64>,
@@ -151,7 +124,6 @@ impl LeafSchema {
         author,
         created_at,
         edited_at,
-        entry_type,
         nonce,
         data_hash,
       }
@@ -190,7 +162,6 @@ impl LeafSchema {
       let hashed_leaf = match self {
           LeafSchema::V1 {
               id,
-              entry_type,
               author,
               created_at,
               edited_at,
@@ -199,7 +170,6 @@ impl LeafSchema {
           } => keccak::hashv(&[
               &[self.version().to_bytes()],
               id.as_ref(),
-              &[entry_type.to_bytes()],
               author.as_ref(),
               created_at.to_le_bytes().as_ref(),
               edited_at.unwrap_or(0).to_le_bytes().as_ref(),

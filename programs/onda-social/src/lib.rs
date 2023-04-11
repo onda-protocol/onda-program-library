@@ -15,7 +15,7 @@ use mpl_token_metadata::{
 
 use crate::{
     error::OndaSocialError,
-    state::{ForumConfig, EntryArgs, EntryData, EntryType, LeafSchema, RestrictionType, ENTRY_PREFIX, FORUM_CONFIG_SIZE},
+    state::{DataV1, ForumConfig, LeafSchema, RestrictionType, ENTRY_PREFIX, FORUM_CONFIG_SIZE},
 };
 
 pub mod error;
@@ -25,6 +25,8 @@ declare_id!("BWWPkJpv6fV2ZM5aNua8btxBXooWdW2qjWwUDBhz1p9S");
 
 #[program]
 pub mod onda_social {
+    use crate::state::DataV1;
+
     use super::*;
 
     pub fn init_forum(
@@ -62,7 +64,7 @@ pub mod onda_social {
 
     pub fn add_entry(
         ctx: Context<AddEntry>,
-        entry: EntryArgs,
+        data: DataV1,
     ) -> Result<()> {
         let author =  ctx.accounts.author.key();
         let forum_config = &mut ctx.accounts.forum_config;
@@ -104,26 +106,10 @@ pub mod onda_social {
         }
 
         let entry_id = get_entry_id(&merkle_tree.key(), forum_config.post_count);
-        msg!("entry_id: {:?}", entry_id);
-        let data_hash = keccak::hashv(&[&entry.data.try_to_vec()?]);
-        let entry_type = match entry.data {
-            EntryData::TextPost { .. } => {
-                EntryType::TextPost
-            },
-            EntryData::ImagePost { .. } => {
-                EntryType::ImagePost
-            },
-            EntryData::LinkPost { .. } => {
-                EntryType::LinkPost
-            },
-            EntryData::Comment { .. } => {
-                EntryType::Comment
-            },
-        };
         let created_at = Clock::get()?.unix_timestamp;
+        let data_hash = keccak::hashv(&[&data.try_to_vec()?]);
         let leaf = LeafSchema::new_v0(
             entry_id,
-            entry_type,
             author,
             created_at,
             None,
