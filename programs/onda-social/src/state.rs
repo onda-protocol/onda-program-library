@@ -3,12 +3,15 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use spl_account_compression::Node;
 
 pub const ENTRY_PREFIX: &str = "entry";
-pub const FORUM_CONFIG_SIZE: usize = 8 + 8 + 1 + 32 + 15; // 15 bytes padding
+pub const FORUM_CONFIG_SIZE: usize = 8 + 8 + 8 + 1 + 32 + 60; // 60 bytes padding
+pub const LIKES_PREFIX: &str = "likes";
+pub const LIKES_SIZE: usize = 8 + 8;
+pub const LIKE_AMOUNT_LAMPORTS: u64 = 100_000;
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
 pub enum RestrictionType {
     None,
-    Collection { collection: Pubkey },
+    Collection { address: Pubkey },
 }
 
 #[account]
@@ -26,6 +29,17 @@ impl ForumConfig {
     pub fn contains_post_capacity(&self, requested_capacity: u64) -> bool {
         let remaining_posts = self.total_capacity.saturating_sub(self.post_count);
         requested_capacity <= remaining_posts
+    }
+}
+
+#[account]
+pub struct LikeRecord {
+    pub amount: u64,
+}
+
+impl LikeRecord {
+    pub fn increment_like_count(&mut self) {
+        self.amount = self.amount.saturating_add(1);
     }
 }
 

@@ -1,6 +1,9 @@
 use anchor_lang::{
     prelude::*,
-    solana_program::{keccak},
+    solana_program::{
+        keccak, 
+        system_instruction,
+    },
 };
 use anchor_spl::{
     token::{Mint, TokenAccount},
@@ -15,16 +18,87 @@ use mpl_token_metadata::{
 
 use crate::{
     error::OndaSocialError,
-    state::{DataV1, ForumConfig, LeafSchema, RestrictionType, ENTRY_PREFIX, FORUM_CONFIG_SIZE},
+    state::*,
 };
 
 pub mod error;
 pub mod state;
 
-declare_id!("BWWPkJpv6fV2ZM5aNua8btxBXooWdW2qjWwUDBhz1p9S");
+declare_id!("62616yhPNbv1uxcGbs84pk9PmGbBaaEBXAZmLE6P1nGS");
+
+#[derive(Accounts)]
+pub struct InitForum<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(
+        init,
+        seeds = [merkle_tree.key().as_ref()],
+        payer = payer,
+        space = FORUM_CONFIG_SIZE,
+        bump,
+    )]
+    pub forum_config: Account<'info, ForumConfig>,
+    #[account(zero)]
+    /// CHECK: This account must be all zeros
+    pub merkle_tree: UncheckedAccount<'info>,
+    pub log_wrapper: Program<'info, Noop>,
+    pub compression_program: Program<'info, SplAccountCompression>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct AddEntry<'info> {
+    #[account(mut)]
+    pub author: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [merkle_tree.key().as_ref()],
+        bump,
+    )]
+    pub forum_config: Account<'info, ForumConfig>,
+    pub mint: Option<Account<'info, Mint>>,
+    /// CHECK: deserialized
+    pub metadata: Option<UncheckedAccount<'info>>,
+    pub token_account: Option<Account<'info, TokenAccount>>,
+    #[account(mut)]
+    /// CHECK: constrained by seeds
+    pub merkle_tree: UncheckedAccount<'info>,
+    pub log_wrapper: Program<'info, Noop>,
+    pub compression_program: Program<'info, SplAccountCompression>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(entry_id: Pubkey)]
+pub struct LikeEntry<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(mut)]
+    /// CHECK: constrained by seeds
+    pub author: AccountInfo<'info>,
+    #[account(
+        seeds = [merkle_tree.key().as_ref()],
+        bump,
+    )]
+    pub forum_config: Account<'info, ForumConfig>,
+    #[account(
+        init_if_needed,
+        seeds = [LIKES_PREFIX.as_ref(), entry_id.as_ref(), author.key().as_ref()],
+        bump,
+        payer = payer,
+        space = LIKES_SIZE,
+    )]
+    pub like_record: Account<'info, LikeRecord>,
+    #[account(mut)]
+    /// CHECK: constrained by seeds
+    pub merkle_tree: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
 
 #[program]
 pub mod onda_social {
+    use anchor_lang::solana_program::program::invoke;
+
     use crate::state::DataV1;
 
     use super::*;
@@ -79,7 +153,7 @@ pub mod onda_social {
         // Check if the forum is restricted to a collection.
         match forum_config.restriction {
             RestrictionType::None => (),
-            RestrictionType::Collection { collection } => {
+            RestrictionType::Collection { address } => {
                 let mint = mint.clone().ok_or(OndaSocialError::Unauthorized)?;
                 let metadata_info = metadata.clone().ok_or(OndaSocialError::Unauthorized)?;
                 let metadata = Metadata::deserialize(
@@ -96,12 +170,10 @@ pub mod onda_social {
                 // Check the metadata is verified for this collection
                 let metadata_collection = metadata.collection.ok_or(OndaSocialError::Unauthorized)?;
                 require!(metadata_collection.verified, OndaSocialError::Unauthorized);
-                require_keys_eq!(collection, metadata_collection.key, OndaSocialError::Unauthorized);
+                require_keys_eq!(address, metadata_collection.key, OndaSocialError::Unauthorized);
 
                 // Check if the token account is owned by the author.
                 require_keys_eq!(author, token_account.owner, OndaSocialError::Unauthorized);
-
-                return err!(OndaSocialError::Unauthorized)
             }
         }
 
@@ -116,8 +188,6 @@ pub mod onda_social {
             forum_config.post_count,
             data_hash.to_bytes(),
         );
-        msg!("leaf: {:?}", leaf.id());
-        msg!("nonce: {:?}", leaf.nonce());
 
         wrap_application_data_v1(leaf.to_event().try_to_vec()?, log_wrapper)?;
 
@@ -132,52 +202,34 @@ pub mod onda_social {
         )?;
 
         forum_config.increment_post_count();
-        msg!("post_count: {:?}", forum_config.post_count);
 
         Ok(())
     }
-}
 
-#[derive(Accounts)]
-pub struct InitForum<'info> {
-    #[account(mut)]
-    pub payer: Signer<'info>,
-    #[account(
-        init,
-        seeds = [merkle_tree.key().as_ref()],
-        payer = payer,
-        space = FORUM_CONFIG_SIZE,
-        bump,
-    )]
-    pub forum_config: Account<'info, ForumConfig>,
-    #[account(zero)]
-    /// CHECK: This account must be all zeros
-    pub merkle_tree: UncheckedAccount<'info>,
-    pub log_wrapper: Program<'info, Noop>,
-    pub compression_program: Program<'info, SplAccountCompression>,
-    pub system_program: Program<'info, System>,
-}
+    pub fn like_entry(ctx: Context<LikeEntry>, entry_id: Pubkey) -> Result<()> {
+        let payer = &ctx.accounts.payer;
+        let author = &ctx.accounts.author;
+        let like_record = &mut ctx.accounts.like_record;
 
-#[derive(Accounts)]
-pub struct AddEntry<'info> {
-    #[account(mut)]
-    pub author: Signer<'info>,
-    #[account(
-        mut,
-        seeds = [merkle_tree.key().as_ref()],
-        bump,
-    )]
-    pub forum_config: Account<'info, ForumConfig>,
-    pub mint: Option<Account<'info, Mint>>,
-    /// CHECK: deserialized
-    pub metadata: Option<UncheckedAccount<'info>>,
-    pub token_account: Option<Account<'info, TokenAccount>>,
-    #[account(mut)]
-    /// CHECK: This account must be all zeros
-    pub merkle_tree: UncheckedAccount<'info>,
-    pub log_wrapper: Program<'info, Noop>,
-    pub compression_program: Program<'info, SplAccountCompression>,
-    pub system_program: Program<'info, System>,
+        like_record.increment_like_count();
+
+        msg!("tipping like to author {:?} for entry ${:?}", author.key(), entry_id.key());
+        // 1 like == 100,000 lamports
+        invoke(
+            &system_instruction::transfer(
+                &payer.key(),
+                &author.key(),
+                LIKE_AMOUNT_LAMPORTS,
+            ),
+            &[
+                payer.to_account_info(),
+                author.to_account_info(),
+                ctx.accounts.system_program.to_account_info(),
+            ],
+        )?;
+
+        Ok(())
+    }
 }
 
 pub fn append_leaf<'info>(
