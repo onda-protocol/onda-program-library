@@ -59,6 +59,10 @@ pub struct AddEntry<'info> {
     pub mint: Option<Account<'info, Mint>>,
     /// CHECK: deserialized
     pub metadata: Option<UncheckedAccount<'info>>,
+    #[account(
+        associated_token::mint = mint,
+        associated_token::authority = author,
+    )]
     pub token_account: Option<Account<'info, TokenAccount>>,
     #[account(mut)]
     /// CHECK: constrained by seeds
@@ -213,10 +217,12 @@ pub mod onda_social {
                 // Check the metadata is verified for this collection
                 let metadata_collection = metadata.collection.ok_or(OndaSocialError::Unauthorized)?;
                 require!(metadata_collection.verified, OndaSocialError::Unauthorized);
-                require_keys_eq!(address, metadata_collection.key, OndaSocialError::Unauthorized);
+                require_keys_eq!(metadata_collection.key, address, OndaSocialError::Unauthorized);
 
-                // Check if the token account is owned by the author.
-                require_keys_eq!(author, token_account.owner, OndaSocialError::Unauthorized);
+                // Check the token account is owned by the author and has correct balance
+                require_eq!(token_account.amount, 1, OndaSocialError::Unauthorized);
+                require_eq!(token_account.mint, mint.key(), OndaSocialError::Unauthorized);
+                require_keys_eq!(token_account.owner, author, OndaSocialError::Unauthorized);
             }
         }
         let entry_id = get_entry_id(&merkle_tree.key(), forum_config.post_count);
