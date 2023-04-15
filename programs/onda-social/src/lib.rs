@@ -220,10 +220,7 @@ pub mod onda_social {
             }
         }
         let entry_id = get_entry_id(&merkle_tree.key(), forum_config.post_count);
-        msg!("nonce {}", forum_config.post_count);
-        msg!("entry_id {:?}", entry_id);
         let created_at = Clock::get()?.unix_timestamp;
-        msg!("created at {}", created_at);
         let data_hash = keccak::hashv(&[&data.try_to_vec()?]);
         let leaf = LeafSchema::new_v0(
             entry_id,
