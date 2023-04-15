@@ -3,9 +3,15 @@ import {
   createVerifyLeafIx,
   ConcurrentMerkleTreeAccount,
   getConcurrentMerkleTreeAccountSize,
+  MerkleTree,
   SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
   SPL_NOOP_PROGRAM_ID,
 } from "@solana/spl-account-compression";
+import {
+  Metaplex,
+  keypairIdentity,
+  NftWithToken,
+} from "@metaplex-foundation/js";
 import assert from "assert";
 import base58 from "bs58";
 import { keccak_256 } from "js-sha3";
@@ -55,18 +61,90 @@ function findLikeRecordPda(
   )[0];
 }
 
+function findProfilePda(author: anchor.web3.PublicKey) {
+  return anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("profile"), author.toBuffer()],
+    program.programId
+  )[0];
+}
+
+async function createAnchorProgram(
+  keypair: anchor.web3.Keypair = anchor.web3.Keypair.generate()
+) {
+  await requestAirdrop(connection, keypair.publicKey);
+  return new anchor.Program<OndaSocial>(
+    IDL,
+    program.programId,
+    new anchor.AnchorProvider(
+      connection,
+      new anchor.Wallet(keypair),
+      anchor.AnchorProvider.defaultOptions()
+    )
+  );
+}
+
 describe.only("Onda social", () => {
   const maxDepth = 14;
   const maxBufferSize = 256;
-  const payer = program.provider.publicKey;
   const merkleTreeKeypair = anchor.web3.Keypair.generate();
   const merkleTree = merkleTreeKeypair.publicKey;
   const forumConfig = findForumConfigPda(merkleTree);
 
-  let entryData: DataV1;
-  let eventData: LeafSchemaV1;
+  const authors: anchor.web3.PublicKey[] = [];
+  const leafSchemaV1: LeafSchemaV1[] = [];
+  const dataArgs: DataV1[] = [];
+
+  async function createPost(title: string, body: string) {
+    const program = await createAnchorProgram();
+    authors.push(program.provider.publicKey);
+    return program.methods
+      .addEntry({
+        textPost: { title, body },
+      })
+      .accounts({
+        forumConfig,
+        merkleTree,
+        author: program.provider.publicKey,
+        mint: null,
+        tokenAccount: null,
+        metadata: null,
+        logWrapper: SPL_NOOP_PROGRAM_ID,
+        compressionProgram: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
+      })
+      .rpc({ commitment: "confirmed" })
+      .then(async (signature) => {
+        const parsedTx = await program.provider.connection.getParsedTransaction(
+          signature,
+          "confirmed"
+        );
+        const innerInstructions = parsedTx.meta.innerInstructions[0];
+        const noopIx = innerInstructions.instructions[0];
+        if ("data" in noopIx) {
+          const serializedEvent = noopIx.data;
+          const event = base58.decode(serializedEvent);
+          const eventBuffer = Buffer.from(event.slice(8));
+          leafSchemaV1.push(
+            program.coder.types.decode("LeafSchema", eventBuffer).v1
+          );
+        } else {
+          throw new Error("No data in noopIx");
+        }
+
+        const outerIx = parsedTx.transaction.message.instructions[0];
+        if ("data" in outerIx) {
+          const data = outerIx.data;
+          const entry = base58.decode(data);
+          const buffer = Buffer.from(entry.slice(8));
+          dataArgs.push(program.coder.types.decode("DataV1", buffer));
+        } else {
+          throw new Error("No data in outerIx");
+        }
+      });
+  }
 
   it("Creates a new tree", async () => {
+    const program = await createAnchorProgram();
+    const payer = program.provider.publicKey;
     const space = getConcurrentMerkleTreeAccountSize(maxDepth, maxBufferSize);
     const lamports = await connection.getMinimumBalanceForRentExemption(space);
     console.log("Allocating ", space, " bytes for merkle tree");
@@ -114,82 +192,40 @@ describe.only("Onda social", () => {
     assert.ok(true);
   });
 
-  it("Adds a post to the tree", async () => {
-    let signature;
-
+  it("Adds multiple posts to the tree", async () => {
     try {
-      signature = await program.methods
-        .addEntry({
-          textPost: {
-            title: "Hello World!",
-            body: `Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.`,
-          },
-        })
-        .accounts({
-          forumConfig,
-          merkleTree,
-          author: payer,
-          mint: null,
-          tokenAccount: null,
-          metadata: null,
-          logWrapper: SPL_NOOP_PROGRAM_ID,
-          compressionProgram: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
-        })
-        .rpc({ commitment: "confirmed" });
+      await Promise.all([
+        createPost(
+          "Hello World!",
+          "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
+        ),
+        createPost(
+          "Hello World 2!",
+          "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
+        ),
+        createPost(
+          "Hello World 3!",
+          "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
+        ),
+      ]);
+      assert.ok(true);
     } catch (err) {
       console.log(err);
       throw err;
     }
-
-    const parsedTx = await program.provider.connection.getParsedTransaction(
-      signature,
-      "confirmed"
-    );
-    const innerInstructions = parsedTx.meta.innerInstructions[0];
-    const noopIx = innerInstructions.instructions[0];
-    if ("data" in noopIx) {
-      const serializedEvent = noopIx.data;
-      const event = base58.decode(serializedEvent);
-      const eventBuffer = Buffer.from(event.slice(8));
-      eventData = program.coder.types.decode("LeafSchema", eventBuffer).v1;
-      assert.ok(eventData);
-    } else {
-      assert.fail("No data in noopIx");
-    }
-
-    const outerIx = parsedTx.transaction.message.instructions[0];
-    if ("data" in outerIx) {
-      const data = outerIx.data;
-      const entry = base58.decode(data);
-      const buffer = Buffer.from(entry.slice(8));
-      entryData = program.coder.types.decode("DataV1", buffer);
-      assert.ok(entryData);
-    } else {
-      assert.fail("No data in outerIx");
-    }
   });
 
   it("Allows users to tip the author", async () => {
-    const tipper = anchor.web3.Keypair.generate();
-    const newProgram = new anchor.Program<OndaSocial>(
-      IDL,
-      program.programId,
-      new anchor.AnchorProvider(
-        connection,
-        new anchor.Wallet(tipper),
-        anchor.AnchorProvider.defaultOptions()
-      )
-    );
-    await requestAirdrop(connection, tipper.publicKey);
-
+    const program = await createAnchorProgram();
+    const payer = program.provider.publicKey;
     const entryId = findEntryId(merkleTree, 0);
-    const likeRecordPda = findLikeRecordPda(entryId, payer);
+    const likeRecordPda = findLikeRecordPda(entryId, authors[0]);
 
-    await newProgram.methods
+    await program.methods
       .likeEntry(entryId)
       .accounts({
-        payer: tipper.publicKey,
-        author: payer,
+        payer,
+        author: authors[0],
         forumConfig,
         merkleTree,
         likeRecord: likeRecordPda,
@@ -202,43 +238,80 @@ describe.only("Onda social", () => {
   });
 
   it("Verifies an entry", async () => {
+    const program = await createAnchorProgram();
+    const payer = program.provider.publicKey;
     const merkleTreeAccount =
       await ConcurrentMerkleTreeAccount.fromAccountAddress(
         connection,
         merkleTree
       );
-    const leafIndex = new anchor.BN(0);
-    const entryId = findEntryId(merkleTree, 0);
-    const verifyIx = createVerifyLeafIx(merkleTree, {
-      root: merkleTreeAccount.getCurrentRoot(),
-      leaf: computeCompressedEntryHash(
-        entryId,
-        payer,
-        eventData.createdAt,
-        eventData.editedAt,
-        leafIndex,
-        {
-          textPost: {
-            title: "Hello World!",
-            body: `Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.`,
-          },
-        }
-      ),
-      leafIndex: 0,
-      proof: [],
-    });
 
+    const leaves = computeLeaves(leafSchemaV1, dataArgs);
+    const tree = MerkleTree.sparseMerkleTreeFromLeaves(
+      leaves,
+      merkleTreeAccount.getMaxDepth()
+    );
+    const leafIndex = 0;
+    const proof = tree.getProof(leafIndex);
+    const verifyIx = createVerifyLeafIx(merkleTree, proof);
     const tx = new anchor.web3.Transaction().add(verifyIx);
     tx.feePayer = payer;
 
     try {
       await program.provider.sendAndConfirm(tx, [], {
         commitment: "confirmed",
+        skipPreflight: true,
       });
     } catch (err) {
       console.log(err.logs);
       throw err;
     }
+  });
+
+  let nft: NftWithToken;
+  let user = anchor.web3.Keypair.generate();
+  const profilePda = findProfilePda(user.publicKey);
+
+  it("Updates a profile", async () => {
+    const program = await createAnchorProgram(user);
+    const metaplex = Metaplex.make(connection).use(keypairIdentity(user));
+    const result = await metaplex.nfts().create({
+      uri: "https://arweave.net/123",
+      name: "My NFT",
+      sellerFeeBasisPoints: 500,
+      creators: [
+        {
+          address: user.publicKey,
+          share: 100,
+        },
+      ],
+    });
+    nft = result.nft;
+
+    const accounts = {
+      author: user.publicKey,
+      profile: profilePda,
+      mint: nft.mint.address,
+      metadata: nft.metadataAddress,
+      tokenAccount: nft.token.address,
+    };
+    await program.methods.updateProfile("MrGM").accounts(accounts).rpc();
+
+    const profile = await program.account.profile.fetch(profilePda);
+    assert.equal(profile.name.replace(/\0/g, ""), "MrGM");
+    assert.equal(profile.mint.toBase58(), nft.mint.address.toBase58());
+  });
+
+  it("Permissionlessly verifies a profile mint", async () => {
+    const accounts = {
+      author: user.publicKey,
+      profile: profilePda,
+      mint: nft.mint.address,
+      metadata: nft.metadataAddress,
+      tokenAccount: nft.token.address,
+    };
+    await program.methods.verifyProfile().accounts(accounts).rpc();
+    assert.ok(true);
   });
 });
 
@@ -266,4 +339,24 @@ function computeCompressedEntryHash(
   ]);
 
   return Buffer.from(keccak_256.digest(message));
+}
+
+function computeLeaves(events: LeafSchemaV1[], dataArgs: DataV1[]) {
+  const leaves: Buffer[] = [];
+
+  for (const index in events) {
+    const entry = events[index];
+    const data = dataArgs[index];
+    const hash = computeCompressedEntryHash(
+      entry.id,
+      entry.author,
+      entry.createdAt,
+      entry.editedAt,
+      entry.nonce,
+      data
+    );
+    leaves[entry.nonce.toNumber()] = hash;
+  }
+
+  return leaves;
 }

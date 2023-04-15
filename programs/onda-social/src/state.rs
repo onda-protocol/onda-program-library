@@ -12,6 +12,7 @@ pub const LIKE_AMOUNT_LAMPORTS: u64 = 100_000;
 pub enum RestrictionType {
     None,
     Collection { address: Pubkey },
+    Mint { address: Pubkey },
 }
 
 #[account]
@@ -30,6 +31,16 @@ impl ForumConfig {
         let remaining_posts = self.total_capacity.saturating_sub(self.post_count);
         requested_capacity <= remaining_posts
     }
+}
+
+pub const MAX_NAME_LENGTH: usize = 32;
+pub const MAX_PROFILE_SIZE: usize = 8 + 4 + MAX_NAME_LENGTH + 1 + 32;
+pub const PROFILE_PREFIX: &str = "profile";
+
+#[account]
+pub struct Profile {
+    pub name: String,
+    pub mint: Option<Pubkey>,
 }
 
 #[account]
