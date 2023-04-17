@@ -226,8 +226,6 @@ describe.only("Onda social", () => {
       .accounts({
         payer,
         author: authors[0],
-        forumConfig,
-        merkleTree,
         likeRecord: likeRecordPda,
       })
       .rpc();

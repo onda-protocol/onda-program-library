@@ -24,7 +24,7 @@ use crate::{
 pub mod error;
 pub mod state;
 
-declare_id!("9JraSM3unmzqJ44RD8bmxmL4iu9tJfR7U7tv6EkcP63s");
+declare_id!("5KCUQVLFg1E7SuZbuLNG5n5UAA6Gzxshdp1wnq9pNtyD");
 
 #[derive(Accounts)]
 pub struct InitForum<'info> {
@@ -77,14 +77,12 @@ pub struct AddEntry<'info> {
 pub struct LikeEntry<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(mut)]
-    /// CHECK: constrained by seeds
-    pub author: AccountInfo<'info>,
     #[account(
-        seeds = [merkle_tree.key().as_ref()],
-        bump,
+        mut,
+        constraint = payer.key() != author.key() @OndaSocialError::Unauthorized,
     )]
-    pub forum_config: Account<'info, ForumConfig>,
+    /// CHECK: constrained by seeds
+    pub author: UncheckedAccount<'info>,
     #[account(
         init_if_needed,
         seeds = [LIKES_PREFIX.as_ref(), entry_id.as_ref(), author.key().as_ref()],
@@ -93,9 +91,6 @@ pub struct LikeEntry<'info> {
         space = LIKES_SIZE,
     )]
     pub like_record: Account<'info, LikeRecord>,
-    #[account(mut)]
-    /// CHECK: constrained by seeds
-    pub merkle_tree: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
 
