@@ -65,7 +65,7 @@ async function createAnchorProgram(
   );
 }
 
-describe.only("Onda Compression", () => {
+describe.only("onda_compression", () => {
   const maxDepth = 14;
   const maxBufferSize = 256;
   const merkleTreeKeypair = anchor.web3.Keypair.generate();
@@ -232,7 +232,6 @@ describe.only("Onda Compression", () => {
   it("Deletes an entry", async () => {
     const author = authors[0];
     const program = await createAnchorProgram(author);
-    const payer = program.provider.publicKey;
 
     const dataHash = program.coder.types
       .encode("DataV1", dataArgs[0])
@@ -250,52 +249,6 @@ describe.only("Onda Compression", () => {
         logWrapper: SPL_NOOP_PROGRAM_ID,
         compressionProgram: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
       });
-  });
-
-  let nft: NftWithToken;
-  let user = anchor.web3.Keypair.generate();
-  const profilePda = findProfilePda(user.publicKey);
-
-  it("Updates a profile", async () => {
-    const program = await createAnchorProgram(user);
-    const metaplex = Metaplex.make(connection).use(keypairIdentity(user));
-    const result = await metaplex.nfts().create({
-      uri: "https://arweave.net/123",
-      name: "My NFT",
-      sellerFeeBasisPoints: 500,
-      creators: [
-        {
-          address: user.publicKey,
-          share: 100,
-        },
-      ],
-    });
-    nft = result.nft;
-
-    const accounts = {
-      author: user.publicKey,
-      profile: profilePda,
-      mint: nft.mint.address,
-      metadata: nft.metadataAddress,
-      tokenAccount: nft.token.address,
-    };
-    await program.methods.updateProfile("MrGM").accounts(accounts).rpc();
-
-    const profile = await program.account.profile.fetch(profilePda);
-    assert.equal(profile.name.replace(/\0/g, ""), "MrGM");
-    assert.equal(profile.mint.toBase58(), nft.mint.address.toBase58());
-  });
-
-  it("Permissionlessly verifies a profile mint", async () => {
-    const accounts = {
-      author: user.publicKey,
-      profile: profilePda,
-      mint: nft.mint.address,
-      metadata: nft.metadataAddress,
-      tokenAccount: nft.token.address,
-    };
-    await program.methods.verifyProfile().accounts(accounts).rpc();
-    assert.ok(true);
   });
 });
 

@@ -1476,6 +1476,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "onda-profile"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang 0.26.0",
+ "anchor-spl 0.26.0",
+ "mpl-token-metadata",
+]
+
+[[package]]
 name = "onda_listings"
 version = "1.0.0"
 dependencies = [

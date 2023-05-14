@@ -30,16 +30,6 @@ impl ForumConfig {
     }
 }
 
-pub const MAX_NAME_LENGTH: usize = 32;
-pub const MAX_PROFILE_SIZE: usize = 8 + 4 + MAX_NAME_LENGTH + 1 + 32;
-pub const PROFILE_PREFIX: &str = "profile";
-
-#[account]
-pub struct Profile {
-    pub name: String,
-    pub mint: Option<Pubkey>,
-}
-
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
 #[repr(u8)]
 pub enum OndaSocialEventType {

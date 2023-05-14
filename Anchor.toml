@@ -9,14 +9,20 @@ seeds = false
 [programs.localnet]
 onda_listings = "CKUdSYh8hQp8WYXDbWDFks5AUKopeS5D336PMqePh5bs"
 onda_compression = "5KCUQVLFg1E7SuZbuLNG5n5UAA6Gzxshdp1wnq9pNtyD"
+onda_bloom = "4d1647ML518kE3CSpvSKseXPQMorWedWBGFvjYCC7yqj"
+onda_profile = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
 
 [programs.devnet]
 onda_listings = "CKUdSYh8hQp8WYXDbWDFks5AUKopeS5D336PMqePh5bs"
 onda_compression = "5KCUQVLFg1E7SuZbuLNG5n5UAA6Gzxshdp1wnq9pNtyD"
+onda_bloom = "4d1647ML518kE3CSpvSKseXPQMorWedWBGFvjYCC7yqj"
+onda_profile = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
 
 [programs.mainnet]
 onda_listings = "CKUdSYh8hQp8WYXDbWDFks5AUKopeS5D336PMqePh5bs"
 onda_compression = "5KCUQVLFg1E7SuZbuLNG5n5UAA6Gzxshdp1wnq9pNtyD"
+onda_bloom = "4d1647ML518kE3CSpvSKseXPQMorWedWBGFvjYCC7yqj"
+onda_profile = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
 
 [provider]
 cluster = "localnet"
