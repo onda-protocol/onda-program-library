@@ -15,6 +15,8 @@ pub enum OndaBloomError {
     Unauthorized,
     #[msg("Invalid mint.")]
     InvalidMint,
+    #[msg("Numeric overflow.")]
+    NumericOverflow,
 } 
 
 #[account]
@@ -84,6 +86,19 @@ pub mod onda_bloom {
 
         bloom.increment_plankton_count();
 
+        // Protocol takes 2% of the amount 
+        let protocol_fee = amount.checked_div(50).ok_or(OndaBloomError::NumericOverflow).unwrap();
+        let remaining_amount = amount.checked_sub(protocol_fee).ok_or(OndaBloomError::NumericOverflow).unwrap();
+
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.deposit_token_account.to_account_info(),
+            to: ctx.accounts.protocol_fee_token_account.to_account_info(),
+            authority: payer.to_account_info(),
+        };
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+        token::transfer(cpi_ctx, protocol_fee)?;
+
         let cpi_accounts = Transfer {
             from: ctx.accounts.deposit_token_account.to_account_info(),
             to: ctx.accounts.author_token_account.to_account_info(),
@@ -91,9 +106,8 @@ pub mod onda_bloom {
         };
         let cpi_program = ctx.accounts.token_program.to_account_info();
         let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
-        token::transfer(cpi_ctx, amount)?;
+        token::transfer(cpi_ctx, remaining_amount)?;
 
         Ok(())
     }
 }
-
