@@ -1,9 +1,6 @@
 use anchor_lang::{
     prelude::*,
-    solana_program::{
-        keccak, 
-        system_instruction,
-    },
+    solana_program::{keccak},
 };
 use anchor_spl::{
     token::{Mint, TokenAccount},
@@ -73,25 +70,22 @@ pub struct AddEntry<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(entry_id: Pubkey)]
-pub struct LikeEntry<'info> {
+pub struct DeleteEntry<'info> {
     #[account(mut)]
-    pub payer: Signer<'info>,
+    pub author: Signer<'info>,
     #[account(
         mut,
-        constraint = payer.key() != author.key() @OndaSocialError::Unauthorized,
-    )]
-    /// CHECK: constrained by seeds
-    pub author: UncheckedAccount<'info>,
-    #[account(
-        init_if_needed,
-        seeds = [LIKES_PREFIX.as_ref(), entry_id.as_ref(), author.key().as_ref()],
+        seeds = [merkle_tree.key().as_ref()],
         bump,
-        payer = payer,
-        space = LIKES_SIZE,
     )]
-    pub like_record: Account<'info, LikeRecord>,
+    pub forum_config: Account<'info, ForumConfig>,
+    #[account(mut)]
+    /// CHECK: constrained by seeds
+    pub merkle_tree: UncheckedAccount<'info>,
+    pub log_wrapper: Program<'info, Noop>,
+    pub compression_program: Program<'info, SplAccountCompression>,
     pub system_program: Program<'info, System>,
+
 }
 
 #[derive(Accounts)]
@@ -135,11 +129,7 @@ pub struct VerifyProfile<'info> {
 }
 
 #[program]
-pub mod onda_social {
-    use anchor_lang::solana_program::program::invoke;
-
-    use crate::state::DataV1;
-
+pub mod onda_compression {
     use super::*;
 
     pub fn init_forum(
@@ -249,29 +239,42 @@ pub mod onda_social {
         Ok(())
     }
 
-    pub fn like_entry(ctx: Context<LikeEntry>, entry_id: Pubkey) -> Result<()> {
-        let payer = &ctx.accounts.payer;
+    pub fn delete_entry<'info>(
+        ctx: Context<'_, '_, '_, 'info, DeleteEntry<'info>>,
+        root: [u8; 32],
+        created_at: i64,
+        edited_at: Option<i64>,
+        data_hash: [u8; 32],
+        nonce: u64,
+        index: u32,
+    ) -> Result<()> {
         let author = &ctx.accounts.author;
-        let like_record = &mut ctx.accounts.like_record;
 
-        like_record.increment_like_count();
+        let entry_id = get_entry_id(&ctx.accounts.merkle_tree.key(), nonce);
+        let previous_leaf = LeafSchema::new_v0(
+            entry_id,
+            author.key(),
+            created_at,
+            edited_at,
+            nonce,
+            data_hash,
+        );
 
-        msg!("tipping like to author {:?} for entry ${:?}", author.key(), entry_id.key());
-        // 1 like == 100,000 lamports
-        invoke(
-            &system_instruction::transfer(
-                &payer.key(),
-                &author.key(),
-                LIKE_AMOUNT_LAMPORTS,
-            ),
-            &[
-                payer.to_account_info(),
-                author.to_account_info(),
-                ctx.accounts.system_program.to_account_info(),
-            ],
-        )?;
+        let new_leaf = Node::default();
 
-        Ok(())
+        replace_leaf(
+            &ctx.accounts.merkle_tree.key(),
+            *ctx.bumps.get("forum_config").unwrap(),
+            &ctx.accounts.compression_program.to_account_info(),
+            &ctx.accounts.forum_config.to_account_info(),
+            &ctx.accounts.merkle_tree.to_account_info(),
+            &ctx.accounts.log_wrapper.to_account_info(),
+            ctx.remaining_accounts,
+            root,
+            previous_leaf.to_node(),
+            new_leaf,
+            index,
+        )
     }
 
     pub fn update_profile(ctx: Context<UpdateProfile>, name: String) -> Result<()> {
@@ -353,6 +356,34 @@ pub fn append_leaf<'info>(
         authority_pda_signer,
     );
     spl_account_compression::cpi::append(cpi_ctx, leaf_node)
+}
+
+pub fn replace_leaf<'info>(
+    seed: &Pubkey,
+    bump: u8,
+    compression_program: &AccountInfo<'info>,
+    authority: &AccountInfo<'info>,
+    merkle_tree: &AccountInfo<'info>,
+    log_wrapper: &AccountInfo<'info>,
+    remaining_accounts: &[AccountInfo<'info>],
+    root_node: Node,
+    previous_leaf: Node,
+    new_leaf: Node,
+    index: u32,
+) -> Result<()> {
+    let seeds = &[seed.as_ref(), &[bump]];
+    let authority_pda_signer = &[&seeds[..]];
+    let cpi_ctx = CpiContext::new_with_signer(
+        compression_program.clone(),
+        spl_account_compression::cpi::accounts::Modify {
+            authority: authority.clone(),
+            merkle_tree: merkle_tree.clone(),
+            noop: log_wrapper.clone(),
+        },
+        authority_pda_signer,
+    )
+    .with_remaining_accounts(remaining_accounts.to_vec());
+    spl_account_compression::cpi::replace_leaf(cpi_ctx, root_node, previous_leaf, new_leaf, index)
 }
 
 pub fn get_entry_id(tree_id: &Pubkey, nonce: u64) -> Pubkey {

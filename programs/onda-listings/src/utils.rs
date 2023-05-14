@@ -7,7 +7,6 @@ use {
             system_instruction::{transfer}
         },
     },
-    anchor_spl::token::{TokenAccount},
     mpl_token_metadata::{
         instruction::{builders, InstructionBuilder, TransferArgs, DelegateArgs, UnlockArgs, LockArgs, RevokeArgs},
         state::{Metadata, TokenStandard}

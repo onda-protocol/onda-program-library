@@ -15,15 +15,18 @@ import {
 import assert from "assert";
 import base58 from "bs58";
 import { keccak_256 } from "js-sha3";
-import { OndaSocial, IDL } from "../target/types/onda_social";
+import { OndaCompression, IDL } from "../target/types/onda_compression";
 import { requestAirdrop } from "./helpers";
 
-const program = anchor.workspace.OndaSocial as anchor.Program<OndaSocial>;
+const program = anchor.workspace
+  .OndaCompression as anchor.Program<OndaCompression>;
 const connection = program.provider.connection;
 
-type OndaSocialTypes = anchor.IdlTypes<OndaSocial>;
-type DataV1 = OndaSocialTypes["DataV1"];
-type LeafSchemaV1 = SnakeToCamelCaseObj<OndaSocialTypes["LeafSchema"]["v1"]>;
+type OndaCompressionTypes = anchor.IdlTypes<OndaCompression>;
+type DataV1 = OndaCompressionTypes["DataV1"];
+type LeafSchemaV1 = SnakeToCamelCaseObj<
+  OndaCompressionTypes["LeafSchema"]["v1"]
+>;
 type SnakeToCamelCase<S extends string> = S extends `${infer T}_${infer U}`
   ? `${T}${Capitalize<SnakeToCamelCase<U>>}`
   : S;
@@ -40,27 +43,6 @@ function findForumConfigPda(merkleTree: anchor.web3.PublicKey) {
   )[0];
 }
 
-function findEntryId(merkleTree: anchor.web3.PublicKey, entryIndex: number) {
-  return anchor.web3.PublicKey.findProgramAddressSync(
-    [
-      Buffer.from("entry"),
-      merkleTree.toBuffer(),
-      new anchor.BN(entryIndex).toBuffer("le", 8),
-    ],
-    program.programId
-  )[0];
-}
-
-function findLikeRecordPda(
-  entryId: anchor.web3.PublicKey,
-  author: anchor.web3.PublicKey
-) {
-  return anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from("likes"), entryId.toBuffer(), author.toBuffer()],
-    program.programId
-  )[0];
-}
-
 function findProfilePda(author: anchor.web3.PublicKey) {
   return anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from("profile"), author.toBuffer()],
@@ -72,7 +54,7 @@ async function createAnchorProgram(
   keypair: anchor.web3.Keypair = anchor.web3.Keypair.generate()
 ) {
   await requestAirdrop(connection, keypair.publicKey);
-  return new anchor.Program<OndaSocial>(
+  return new anchor.Program<OndaCompression>(
     IDL,
     program.programId,
     new anchor.AnchorProvider(
@@ -83,20 +65,21 @@ async function createAnchorProgram(
   );
 }
 
-describe.only("Onda social", () => {
+describe.only("Onda Compression", () => {
   const maxDepth = 14;
   const maxBufferSize = 256;
   const merkleTreeKeypair = anchor.web3.Keypair.generate();
   const merkleTree = merkleTreeKeypair.publicKey;
   const forumConfig = findForumConfigPda(merkleTree);
 
-  const authors: anchor.web3.PublicKey[] = [];
+  const authors: anchor.web3.Keypair[] = [];
   const leafSchemaV1: LeafSchemaV1[] = [];
   const dataArgs: DataV1[] = [];
 
   async function createPost(title: string, body: string) {
-    const program = await createAnchorProgram();
-    authors.push(program.provider.publicKey);
+    const author = anchor.web3.Keypair.generate();
+    const program = await createAnchorProgram(author);
+    authors.push(author);
     return program.methods
       .addEntry({
         textPost: { title, body },
@@ -161,7 +144,7 @@ describe.only("Onda social", () => {
       programId: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
     });
 
-    const createPostIx = await program.methods
+    const initForumIx = await program.methods
       .initForum(maxDepth, maxBufferSize, {
         // collection: { collection: anchor.web3.Keypair.generate().publicKey },
         none: {},
@@ -175,7 +158,7 @@ describe.only("Onda social", () => {
       })
       .instruction();
 
-    const tx = new anchor.web3.Transaction().add(allocTreeIx).add(createPostIx);
+    const tx = new anchor.web3.Transaction().add(allocTreeIx).add(initForumIx);
     tx.feePayer = payer;
 
     await requestAirdrop(connection, payer);
@@ -215,26 +198,6 @@ describe.only("Onda social", () => {
     }
   });
 
-  it("Allows users to tip the author", async () => {
-    const program = await createAnchorProgram();
-    const payer = program.provider.publicKey;
-    const entryId = findEntryId(merkleTree, 0);
-    const likeRecordPda = findLikeRecordPda(entryId, authors[0]);
-
-    await program.methods
-      .likeEntry(entryId)
-      .accounts({
-        payer,
-        author: authors[0],
-        likeRecord: likeRecordPda,
-      })
-      .rpc();
-
-    const likeRecord = await program.account.likeRecord.fetch(likeRecordPda);
-
-    assert.equal(likeRecord.amount.toNumber(), 1);
-  });
-
   it("Verifies an entry", async () => {
     const program = await createAnchorProgram();
     const payer = program.provider.publicKey;
@@ -264,6 +227,29 @@ describe.only("Onda social", () => {
       console.log(err.logs);
       throw err;
     }
+  });
+
+  it("Deletes an entry", async () => {
+    const author = authors[0];
+    const program = await createAnchorProgram(author);
+    const payer = program.provider.publicKey;
+
+    const dataHash = program.coder.types
+      .encode("DataV1", dataArgs[0])
+      .map((x) => x);
+
+    await program.methods
+      // @ts-expect-error
+      .deleteEntry({
+        dataHash,
+      })
+      .accounts({
+        forumConfig,
+        merkleTree,
+        author: author.publicKey,
+        logWrapper: SPL_NOOP_PROGRAM_ID,
+        compressionProgram: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
+      });
   });
 
   let nft: NftWithToken;

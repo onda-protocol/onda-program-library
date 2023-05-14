@@ -4,9 +4,6 @@ use spl_account_compression::Node;
 
 pub const ENTRY_PREFIX: &str = "entry";
 pub const FORUM_CONFIG_SIZE: usize = 8 + 8 + 8 + 1 + 32 + 60; // 60 bytes padding
-pub const LIKES_PREFIX: &str = "likes";
-pub const LIKES_SIZE: usize = 8 + 8;
-pub const LIKE_AMOUNT_LAMPORTS: u64 = 100_000;
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
 pub enum RestrictionType {
@@ -41,17 +38,6 @@ pub const PROFILE_PREFIX: &str = "profile";
 pub struct Profile {
     pub name: String,
     pub mint: Option<Pubkey>,
-}
-
-#[account]
-pub struct LikeRecord {
-    pub amount: u64,
-}
-
-impl LikeRecord {
-    pub fn increment_like_count(&mut self) {
-        self.amount = self.amount.saturating_add(1);
-    }
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
