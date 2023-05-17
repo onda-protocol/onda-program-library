@@ -6,8 +6,8 @@ declare_id!("4d1647ML518kE3CSpvSKseXPQMorWedWBGFvjYCC7yqj");
 
 pub const BLOOM_PREFIX: &str = "bloom";
 pub const BLOOM_SIZE: usize = 8 + 8;
-pub const PLANKTON_MINT: Pubkey = pubkey!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
-pub const PROTOCOL_FEE_PLANKTON_ATA: Pubkey = pubkey!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+pub const PLANKTON_MINT: Pubkey = pubkey!("pktnre2sUNQZXwHicZj6njpShhSazmzQz5rJtcqnkG5");
+pub const PROTOCOL_FEE_PLANKTON_ATA: Pubkey = pubkey!("EneovF7KrWHBC6QKmoiwC2S6PUFBZnpYcuyUTdD59iYp");
 
 #[error_code]
 pub enum OndaBloomError {
