@@ -21,7 +21,7 @@ use crate::{
 pub mod error;
 pub mod state;
 
-declare_id!("5KCUQVLFg1E7SuZbuLNG5n5UAA6Gzxshdp1wnq9pNtyD");
+declare_id!("ondac1bD7BYSbqf2jifdthJYADkGuN4NkMZNYjuopn3");
 
 #[derive(Accounts)]
 pub struct InitForum<'info> {

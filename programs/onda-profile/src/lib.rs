@@ -1,11 +1,10 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{TokenAccount, Mint};
 use mpl_token_metadata::{
-    state::Metadata,
     pda::find_metadata_account
 };
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("ondapcq2qXTSynRieMCE9BjRsZ2XALEEZZunkwbhCPF");
 
 pub const MAX_NAME_LENGTH: usize = 32;
 pub const MAX_PROFILE_SIZE: usize = 8 + 4 + MAX_NAME_LENGTH + 1 + 32;

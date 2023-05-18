@@ -2,7 +2,7 @@ use anchor_lang::{prelude::*};
 use solana_program::{pubkey, pubkey::Pubkey};
 use anchor_spl::token::{self, TokenAccount, Transfer, Token, Mint};
 
-declare_id!("4d1647ML518kE3CSpvSKseXPQMorWedWBGFvjYCC7yqj");
+declare_id!("onda3Sxku2NT88Ho8WfEgbkavNEELWzaguvh4itdn3C");
 
 pub const BLOOM_PREFIX: &str = "bloom";
 pub const BLOOM_SIZE: usize = 8 + 8;
