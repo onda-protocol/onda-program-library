@@ -1,6 +1,9 @@
 use anchor_lang::{prelude::*};
 use solana_program::{pubkey, pubkey::Pubkey};
-use anchor_spl::token::{self, TokenAccount, Transfer, Token, Mint};
+use anchor_spl::{
+    token::{self, TokenAccount, Transfer, Token, Mint},
+    associated_token::AssociatedToken
+};
 
 declare_id!("onda3Sxku2NT88Ho8WfEgbkavNEELWzaguvh4itdn3C");
 
@@ -37,20 +40,19 @@ pub struct FeedPlankton<'info> {
     pub payer: Signer<'info>,
     #[account(
         mut,
-        token::mint = mint,
-        token::authority = payer,
+        associated_token::mint = mint,
+        associated_token::authority = payer,
     )]
     deposit_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
-        mut,
         constraint = payer.key() != author.key() @OndaBloomError::Unauthorized,
     )]
     /// CHECK: constrained by seeds
     pub author: UncheckedAccount<'info>,
     #[account(
         init_if_needed,
-        token::mint = mint,
-        token::authority = author,
+        associated_token::mint = mint,
+        associated_token::authority = author,
         payer = payer,
     )]
     pub author_token_account: Box<Account<'info, TokenAccount>>,
@@ -74,6 +76,7 @@ pub struct FeedPlankton<'info> {
     pub mint: Account<'info, Mint>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
 #[program]
