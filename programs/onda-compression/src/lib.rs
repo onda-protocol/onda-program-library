@@ -17,11 +17,12 @@ use crate::{
     error::OndaSocialError,
     state::*,
 };
-
 pub mod error;
 pub mod state;
 
-declare_id!("ondac1bD7BYSbqf2jifdthJYADkGuN4NkMZNYjuopn3");
+declare_id!("ondaV4qqTUGbPR3m4XGi3YXf1NAXYCJEtuMKzVWBbSy");
+
+pub const MAX_URI_LEN: usize = 128;
 
 #[derive(Accounts)]
 pub struct InitForum<'info> {
@@ -139,6 +140,25 @@ pub mod onda_compression {
         let mint = &ctx.accounts.mint;
         let metadata = &ctx.accounts.metadata;
         let token_account = &ctx.accounts.token_account;
+
+        match data.clone() {
+            DataV1::TextPost { uri, .. } => {
+                require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
+            },
+            DataV1::ImagePost { uri, .. } => {
+                require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
+            },
+            DataV1::LinkPost { uri, .. } => {
+                require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
+            },
+            DataV1::VideoPost { uri, .. } => {
+                require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
+            },
+            DataV1::Comment { uri, .. } => {
+                require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
+            },
+        }
+
         // Check if the forum is restricted to a collection.
         match forum_config.restriction {
             RestrictionType::None => (),

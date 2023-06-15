@@ -7,11 +7,6 @@ import {
   SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
   SPL_NOOP_PROGRAM_ID,
 } from "@solana/spl-account-compression";
-import {
-  Metaplex,
-  keypairIdentity,
-  NftWithToken,
-} from "@metaplex-foundation/js";
 import assert from "assert";
 import base58 from "bs58";
 import { keccak_256 } from "js-sha3";
@@ -43,13 +38,6 @@ function findForumConfigPda(merkleTree: anchor.web3.PublicKey) {
   )[0];
 }
 
-function findProfilePda(author: anchor.web3.PublicKey) {
-  return anchor.web3.PublicKey.findProgramAddressSync(
-    [Buffer.from("profile"), author.toBuffer()],
-    program.programId
-  )[0];
-}
-
 async function createAnchorProgram(
   keypair: anchor.web3.Keypair = anchor.web3.Keypair.generate()
 ) {
@@ -76,13 +64,13 @@ describe.only("onda_compression", () => {
   const leafSchemaV1: LeafSchemaV1[] = [];
   const dataArgs: DataV1[] = [];
 
-  async function createPost(title: string, body: string) {
+  async function createPost(title: string, uri: string) {
     const author = anchor.web3.Keypair.generate();
     const program = await createAnchorProgram(author);
     authors.push(author);
     return program.methods
       .addEntry({
-        textPost: { title, body },
+        textPost: { title, uri },
       })
       .accounts({
         forumConfig,
@@ -180,15 +168,15 @@ describe.only("onda_compression", () => {
       await Promise.all([
         createPost(
           "Hello World!",
-          "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
+          "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
         ),
         createPost(
           "Hello World 2!",
-          "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
+          "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
         ),
         createPost(
           "Hello World 3!",
-          "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
+          "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
         ),
       ]);
       assert.ok(true);

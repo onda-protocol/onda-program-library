@@ -80,10 +80,11 @@ impl Version {
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
 pub enum DataV1 {
-    TextPost { title: String, body: String },
-    ImagePost { title: String, src: String },
-    LinkPost { title: String, url: String },
-    Comment { post: Pubkey, parent: Option<Pubkey>, body: String },
+    TextPost { title: String, uri: String },
+    ImagePost { title: String, uri: String },
+    LinkPost { title: String, uri: String },
+    VideoPost { title: String, uri: String },
+    Comment { post: Pubkey, parent: Option<Pubkey>, uri: String },
 }
 
 #[derive(BorshSerialize, BorshDeserialize, PartialEq, Eq, Debug, Clone)]
