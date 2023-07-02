@@ -415,7 +415,7 @@ function getSiblingIndex(index: number) {
 }
 
 function getParentIndex(index: number) {
-  return Math.floor((index - 1) / 2);
+  return Math.floor((index - 2) / 2);
 }
 
 function generatePathNodesFromIndex(
