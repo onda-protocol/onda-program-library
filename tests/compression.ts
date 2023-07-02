@@ -121,10 +121,6 @@ describe.only("onda_compression", () => {
       });
   }
 
-  it.only("Generates the required proof", async () => {
-    generateProof(2, 3);
-  });
-
   it("Creates a new tree", async () => {
     const program = await createAnchorProgram();
     const payer = program.provider.publicKey;
@@ -258,24 +254,30 @@ describe.only("onda_compression", () => {
         merkleTree
       );
     const leaves = computeLeaves(leafSchemaV1, dataArgs);
-    const tree = MerkleTree.sparseMerkleTreeFromLeaves(
-      leaves,
-      merkleTreeAccount.getMaxDepth()
-    );
 
-    const proof = [
-      new PublicKey(
-        leaves[leafIndex % 2 === 0 ? leafIndex + 1 : leafIndex - 1]
-      ),
-      new PublicKey(hash(leaves[2], leaves[3])),
-    ].map((pubkey) => ({
-      pubkey,
-      isWritable: false,
-      isSigner: false,
-    }));
+    console.log("getRequiredLeavesForProof: ", { leafIndex, maxDepth });
+    const nodeIndex = getNodeIndexFromLeafIndex(leafIndex, maxDepth);
+    const nodes: Node[] = generatePathNodesFromIndex(nodeIndex, maxDepth);
+    console.log("nodes: ", JSON.stringify(nodes));
+    const leafIndexes = nodes.map((node) => node.getLeafIndexesFromPath());
+    console.log("leafIndexes: ", JSON.stringify(leafIndexes));
+
+    const proof = leafIndexes
+      .map((path) => {
+        if (typeof path === "number") {
+          return new PublicKey(leaves[path]);
+        } else {
+          return new PublicKey(recursiveHash(leaves, path));
+        }
+      })
+      .map((pubkey) => ({
+        pubkey,
+        isWritable: false,
+        isSigner: false,
+      }));
     console.log(
       "here is the proof: ",
-      proof.map((n) => new PublicKey(n.pubkey).toBase58())
+      proof.map((n) => n.pubkey.toBase58())
     );
 
     try {
@@ -289,7 +291,7 @@ describe.only("onda_compression", () => {
        **/
       await program.methods
         .deleteEntry(
-          Array.from(tree.root),
+          Array.from(merkleTreeAccount.getCurrentRoot()),
           leafSchemaV1[leafIndex].createdAt,
           leafSchemaV1[leafIndex].editedAt,
           leafSchemaV1[leafIndex].dataHash,
@@ -376,22 +378,19 @@ class Node {
     this._path = this._generatePath(this.index, this.depth);
   }
 
-  public getLeafIndexesFromPath() {
-    const leafIndexes: Array<number | NestedPath> = [];
+  private _getLeafIndexesFromPath(path: number | NestedPath) {
+    if (typeof path === "number") {
+      return getLeafIndexFromNodeIndex(path, this.maxDepth);
+    }
 
-    const traverse = (path: number | NestedPath) => {
-      if (typeof path === "number") {
-        const index = getLeafIndexFromNodeIndex(path, this.maxDepth);
-        console.log("Path ", path, " has leaf index: ", index);
-        leafIndexes.push(index);
-      } else {
-        path.forEach((p) => traverse(p));
-      }
-    };
+    return [
+      this._getLeafIndexesFromPath(path[0]),
+      this._getLeafIndexesFromPath(path[1]),
+    ];
+  }
 
-    traverse(this._path);
-
-    return leafIndexes;
+  public getLeafIndexesFromPath(): number | NestedPath {
+    return this._getLeafIndexesFromPath(this._path);
   }
 
   get path() {
@@ -431,23 +430,29 @@ function generatePathNodesFromIndex(
   nodes.push(node);
 
   if (depth + 1 < maxDepth) {
-    console.log("node index: ", index);
-    const parentIdx = getParentIndex(index);
-    console.log("parent index: ", parentIdx);
-    nodes.push(...generatePathNodesFromIndex(parentIdx, maxDepth, depth + 1));
+    const parentIndex = getParentIndex(index);
+    nodes.push(...generatePathNodesFromIndex(parentIndex, maxDepth, depth + 1));
   }
 
   return nodes;
 }
 
-function generateProof(leafIndex: number, maxDepth: number): number[] {
-  console.log("getRequiredLeavesForProof: ", { leafIndex, maxDepth });
-  const nodeIdx = getNodeIndexFromLeafIndex(leafIndex, maxDepth);
-  const nodes: Node[] = generatePathNodesFromIndex(nodeIdx, maxDepth);
-  console.log("nodes: ", JSON.stringify(nodes));
-  const leafIndexes = nodes.map((node) => node.getLeafIndexesFromPath());
-  console.log("leafIndexes: ", JSON.stringify(leafIndexes));
-  return [];
+function recursiveHash(leaves: Buffer[], path: NestedPath): Buffer {
+  console.log("recursiveHash");
+  const [left, right] = path;
+  console.log({ left, right });
+
+  if (left instanceof Array && right instanceof Array) {
+    return hash(recursiveHash(leaves, left), recursiveHash(leaves, right));
+  }
+
+  if (typeof left === "number" && typeof right === "number") {
+    const leftBuffer = leaves[left] ?? Buffer.alloc(32);
+    const rightBuffer = leaves[right] ?? Buffer.alloc(32);
+    return hash(leftBuffer, rightBuffer);
+  }
+
+  throw new Error("Invalid path");
 }
 
 function computeLeaves(events: LeafSchemaV1[], dataArgs: DataV1[]) {
