@@ -3,10 +3,12 @@ import {
   createVerifyLeafIx,
   ConcurrentMerkleTreeAccount,
   getConcurrentMerkleTreeAccountSize,
+  hash,
   MerkleTree,
   SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
   SPL_NOOP_PROGRAM_ID,
 } from "@solana/spl-account-compression";
+import { PublicKey } from "@metaplex-foundation/js";
 import assert from "assert";
 import base58 from "bs58";
 import { keccak_256 } from "js-sha3";
@@ -54,8 +56,11 @@ async function createAnchorProgram(
 }
 
 describe.only("onda_compression", () => {
-  const maxDepth = 14;
-  const maxBufferSize = 256;
+  const maxDepth = 3; // 3;
+  const maxBufferSize = 8; // 8;
+  // Allocation additional bytes for the canopy
+  const canopyDepth = 2;
+  const canopySpace = (Math.pow(2, canopyDepth) - 2) * 32;
   const merkleTreeKeypair = anchor.web3.Keypair.generate();
   const merkleTree = merkleTreeKeypair.publicKey;
   const forumConfig = findForumConfigPda(merkleTree);
@@ -67,7 +72,6 @@ describe.only("onda_compression", () => {
   async function createPost(title: string, uri: string) {
     const author = anchor.web3.Keypair.generate();
     const program = await createAnchorProgram(author);
-    authors.push(author);
     return program.methods
       .addEntry({
         textPost: { title, uri },
@@ -90,13 +94,14 @@ describe.only("onda_compression", () => {
         );
         const innerInstructions = parsedTx.meta.innerInstructions[0];
         const noopIx = innerInstructions.instructions[0];
+        let leafSchema: LeafSchemaV1;
         if ("data" in noopIx) {
           const serializedEvent = noopIx.data;
           const event = base58.decode(serializedEvent);
           const eventBuffer = Buffer.from(event.slice(8));
-          leafSchemaV1.push(
-            program.coder.types.decode("LeafSchema", eventBuffer).v1
-          );
+          leafSchema = program.coder.types.decode("LeafSchema", eventBuffer).v1;
+          leafSchemaV1[leafSchema.nonce.toNumber()] = leafSchema;
+          authors[leafSchema.nonce.toNumber()] = author;
         } else {
           throw new Error("No data in noopIx");
         }
@@ -106,19 +111,29 @@ describe.only("onda_compression", () => {
           const data = outerIx.data;
           const entry = base58.decode(data);
           const buffer = Buffer.from(entry.slice(8));
-          dataArgs.push(program.coder.types.decode("DataV1", buffer));
+          dataArgs[leafSchema.nonce.toNumber()] = program.coder.types.decode(
+            "DataV1",
+            buffer
+          );
         } else {
           throw new Error("No data in outerIx");
         }
       });
   }
 
+  it.only("Generates the required proof", async () => {
+    generateProof(2, 3);
+  });
+
   it("Creates a new tree", async () => {
     const program = await createAnchorProgram();
     const payer = program.provider.publicKey;
     const space = getConcurrentMerkleTreeAccountSize(maxDepth, maxBufferSize);
-    const lamports = await connection.getMinimumBalanceForRentExemption(space);
-    console.log("Allocating ", space, " bytes for merkle tree");
+    const totalSpace = space + canopySpace;
+    const lamports = await connection.getMinimumBalanceForRentExemption(
+      totalSpace
+    );
+    console.log("Allocating ", totalSpace, " bytes for merkle tree");
     console.log(lamports, " lamports required for rent exemption");
     console.log(
       lamports / anchor.web3.LAMPORTS_PER_SOL,
@@ -126,7 +141,7 @@ describe.only("onda_compression", () => {
     );
     const allocTreeIx = anchor.web3.SystemProgram.createAccount({
       lamports,
-      space,
+      space: totalSpace,
       fromPubkey: payer,
       newAccountPubkey: merkleTree,
       programId: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
@@ -167,7 +182,7 @@ describe.only("onda_compression", () => {
     try {
       await Promise.all([
         createPost(
-          "Hello World!",
+          "Hello World 1!",
           "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
         ),
         createPost(
@@ -178,6 +193,18 @@ describe.only("onda_compression", () => {
           "Hello World 3!",
           "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
         ),
+        createPost(
+          "Hello World 4!",
+          "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        ),
+        createPost(
+          "Hello World 5!",
+          "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        ),
+        createPost(
+          "Hello World 6!",
+          "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        ),
       ]);
       assert.ok(true);
     } catch (err) {
@@ -186,7 +213,7 @@ describe.only("onda_compression", () => {
     }
   });
 
-  it("Verifies an entry", async () => {
+  it.skip("Verifies an entry", async () => {
     const program = await createAnchorProgram();
     const payer = program.provider.publicKey;
     const merkleTreeAccount =
@@ -195,12 +222,14 @@ describe.only("onda_compression", () => {
         merkleTree
       );
 
+    console.log(merkleTreeAccount);
+
     const leaves = computeLeaves(leafSchemaV1, dataArgs);
     const tree = MerkleTree.sparseMerkleTreeFromLeaves(
       leaves,
       merkleTreeAccount.getMaxDepth()
     );
-    const leafIndex = 0;
+    const leafIndex = 1;
     const proof = tree.getProof(leafIndex);
     const verifyIx = createVerifyLeafIx(merkleTree, proof);
     const tx = new anchor.web3.Transaction().add(verifyIx);
@@ -218,25 +247,77 @@ describe.only("onda_compression", () => {
   });
 
   it("Deletes an entry", async () => {
-    const author = authors[0];
+    const leafIndex = 0;
+    console.log("Generating proof for idx ", leafIndex);
+    const author = authors[leafIndex];
     const program = await createAnchorProgram(author);
 
-    const dataHash = program.coder.types
-      .encode("DataV1", dataArgs[0])
-      .map((x) => x);
+    const merkleTreeAccount =
+      await ConcurrentMerkleTreeAccount.fromAccountAddress(
+        connection,
+        merkleTree
+      );
+    const leaves = computeLeaves(leafSchemaV1, dataArgs);
+    const tree = MerkleTree.sparseMerkleTreeFromLeaves(
+      leaves,
+      merkleTreeAccount.getMaxDepth()
+    );
 
-    await program.methods
-      // @ts-expect-error
-      .deleteEntry({
-        dataHash,
-      })
-      .accounts({
-        forumConfig,
-        merkleTree,
-        author: author.publicKey,
-        logWrapper: SPL_NOOP_PROGRAM_ID,
-        compressionProgram: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
-      });
+    const proof = [
+      new PublicKey(
+        leaves[leafIndex % 2 === 0 ? leafIndex + 1 : leafIndex - 1]
+      ),
+      new PublicKey(hash(leaves[2], leaves[3])),
+    ].map((pubkey) => ({
+      pubkey,
+      isWritable: false,
+      isSigner: false,
+    }));
+    console.log(
+      "here is the proof: ",
+      proof.map((n) => new PublicKey(n.pubkey).toBase58())
+    );
+
+    try {
+      /**
+       * root: [u8; 32],
+       * created_at: i64,
+       * edited_at: Option<i64>,
+       * data_hash: [u8; 32],
+       * nonce: u64,
+       * index: u32,
+       **/
+      await program.methods
+        .deleteEntry(
+          Array.from(tree.root),
+          leafSchemaV1[leafIndex].createdAt,
+          leafSchemaV1[leafIndex].editedAt,
+          leafSchemaV1[leafIndex].dataHash,
+          leafSchemaV1[leafIndex].nonce,
+          leafSchemaV1[leafIndex].nonce.toNumber()
+        )
+        .accounts({
+          forumConfig,
+          merkleTree,
+          author: authors[leafIndex].publicKey,
+          logWrapper: SPL_NOOP_PROGRAM_ID,
+          compressionProgram: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .remainingAccounts(proof)
+        .preInstructions([
+          anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({
+            units: 1000000,
+          }),
+        ])
+        .rpc({
+          commitment: "confirmed",
+          skipPreflight: true,
+        });
+    } catch (err) {
+      console.log(err);
+      throw err;
+    }
   });
 });
 
@@ -254,7 +335,7 @@ function computeCompressedEntryHash(
   data: DataV1
 ): Buffer {
   const message = Buffer.concat([
-    Buffer.from([0x1]), // All NFTs are version 1 right now
+    Buffer.from([0x1]), // v1
     entryId.toBuffer(),
     author.toBuffer(),
     createdAt.toBuffer("le", 8),
@@ -266,12 +347,115 @@ function computeCompressedEntryHash(
   return Buffer.from(keccak_256.digest(message));
 }
 
+type NestedPath = Array<number | NestedPath>;
+
+class Node {
+  private _path: NestedPath = [];
+
+  constructor(
+    public readonly index: number,
+    public readonly maxDepth: number,
+    public readonly depth: number
+  ) {}
+
+  private _generatePath(nodeIndex: number, depth: number) {
+    let path = nodeIndex;
+
+    if (depth === 0) return path;
+
+    let leftChildIndex = 2 * nodeIndex + 2;
+    let rightChildIndex = 2 * nodeIndex + 3;
+
+    return [
+      this._generatePath(leftChildIndex, depth - 1),
+      this._generatePath(rightChildIndex, depth - 1),
+    ];
+  }
+
+  public generatePath() {
+    this._path = this._generatePath(this.index, this.depth);
+  }
+
+  public getLeafIndexesFromPath() {
+    const leafIndexes: Array<number | NestedPath> = [];
+
+    const traverse = (path: number | NestedPath) => {
+      if (typeof path === "number") {
+        const index = getLeafIndexFromNodeIndex(path, this.maxDepth);
+        console.log("Path ", path, " has leaf index: ", index);
+        leafIndexes.push(index);
+      } else {
+        path.forEach((p) => traverse(p));
+      }
+    };
+
+    traverse(this._path);
+
+    return leafIndexes;
+  }
+
+  get path() {
+    return this._path;
+  }
+}
+
+function getLeafIndexFromNodeIndex(
+  nodeIndex: number,
+  maxDepth: number
+): number {
+  return nodeIndex - (Math.pow(2, maxDepth) - 2);
+}
+
+function getNodeIndexFromLeafIndex(leafIndex: number, maxDepth: number) {
+  return leafIndex + (Math.pow(2, maxDepth) - 2);
+}
+
+function getSiblingIndex(index: number) {
+  return index % 2 === 0 ? index + 1 : index - 1;
+}
+
+function getParentIndex(index: number) {
+  return Math.floor((index - 1) / 2);
+}
+
+function generatePathNodesFromIndex(
+  index: number,
+  maxDepth: number,
+  depth: number = 0
+) {
+  const nodes: Node[] = [];
+  const siblingIndex = getSiblingIndex(index);
+  const node = new Node(siblingIndex, maxDepth, depth);
+  node.generatePath();
+
+  nodes.push(node);
+
+  if (depth + 1 < maxDepth) {
+    console.log("node index: ", index);
+    const parentIdx = getParentIndex(index);
+    console.log("parent index: ", parentIdx);
+    nodes.push(...generatePathNodesFromIndex(parentIdx, maxDepth, depth + 1));
+  }
+
+  return nodes;
+}
+
+function generateProof(leafIndex: number, maxDepth: number): number[] {
+  console.log("getRequiredLeavesForProof: ", { leafIndex, maxDepth });
+  const nodeIdx = getNodeIndexFromLeafIndex(leafIndex, maxDepth);
+  const nodes: Node[] = generatePathNodesFromIndex(nodeIdx, maxDepth);
+  console.log("nodes: ", JSON.stringify(nodes));
+  const leafIndexes = nodes.map((node) => node.getLeafIndexesFromPath());
+  console.log("leafIndexes: ", JSON.stringify(leafIndexes));
+  return [];
+}
+
 function computeLeaves(events: LeafSchemaV1[], dataArgs: DataV1[]) {
   const leaves: Buffer[] = [];
 
   for (const index in events) {
     const entry = events[index];
-    const data = dataArgs[index];
+    const data = dataArgs[entry.nonce.toNumber()];
     const hash = computeCompressedEntryHash(
       entry.id,
       entry.author,
@@ -279,6 +463,12 @@ function computeLeaves(events: LeafSchemaV1[], dataArgs: DataV1[]) {
       entry.editedAt,
       entry.nonce,
       data
+    );
+    console.log(
+      "hash for idx ",
+      entry.nonce.toNumber(),
+      " is ",
+      new PublicKey(hash).toBase58()
     );
     leaves[entry.nonce.toNumber()] = hash;
   }

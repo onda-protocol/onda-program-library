@@ -190,6 +190,7 @@ pub mod onda_compression {
                 require_keys_eq!(token_account.owner, author, OndaSocialError::Unauthorized);
             }
         }
+        
         let entry_id = get_entry_id(&merkle_tree.key(), forum_config.post_count);
         let created_at = Clock::get()?.unix_timestamp;
         let data_hash = keccak::hashv(&[&data.try_to_vec()?]);
@@ -228,8 +229,13 @@ pub mod onda_compression {
         nonce: u64,
         index: u32,
     ) -> Result<()> {
-        let author = &ctx.accounts.author;
+        msg!("root: {:?}", root);
 
+        for proof in ctx.remaining_accounts.iter() {
+            msg!("proof: {:?}", proof.key());
+        }
+
+        let author = &ctx.accounts.author;
         let entry_id = get_entry_id(&ctx.accounts.merkle_tree.key(), nonce);
         let previous_leaf = LeafSchema::new_v0(
             entry_id,

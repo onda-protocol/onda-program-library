@@ -60,7 +60,7 @@ export async function requestAirdrop(
   const blockhashWithExpiryBlockHeight = await connection.getLatestBlockhash();
   const signature = await connection.requestAirdrop(
     publicKey,
-    anchor.web3.LAMPORTS_PER_SOL * 2
+    anchor.web3.LAMPORTS_PER_SOL * 10
   );
   await connection.confirmTransaction({
     signature,
