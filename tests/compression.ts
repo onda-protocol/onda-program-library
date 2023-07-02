@@ -56,10 +56,10 @@ async function createAnchorProgram(
 }
 
 describe.only("onda_compression", () => {
-  const maxDepth = 3; // 3;
-  const maxBufferSize = 8; // 8;
+  const maxDepth = 20; // 3;
+  const maxBufferSize = 64; // 8;
   // Allocation additional bytes for the canopy
-  const canopyDepth = 2;
+  const canopyDepth = 14;
   const canopySpace = (Math.pow(2, canopyDepth) - 2) * 32;
   const merkleTreeKeypair = anchor.web3.Keypair.generate();
   const merkleTree = merkleTreeKeypair.publicKey;
@@ -126,11 +126,15 @@ describe.only("onda_compression", () => {
     const payer = program.provider.publicKey;
     const space = getConcurrentMerkleTreeAccountSize(maxDepth, maxBufferSize);
     const totalSpace = space + canopySpace;
+    const canopyCost = await connection.getMinimumBalanceForRentExemption(
+      canopySpace
+    );
     const lamports = await connection.getMinimumBalanceForRentExemption(
       totalSpace
     );
     console.log("Allocating ", totalSpace, " bytes for merkle tree");
     console.log(lamports, " lamports required for rent exemption");
+    console.log("Canopy cost: ", canopyCost / anchor.web3.LAMPORTS_PER_SOL);
     console.log(
       lamports / anchor.web3.LAMPORTS_PER_SOL,
       " SOL required for rent exemption"
@@ -218,8 +222,6 @@ describe.only("onda_compression", () => {
         merkleTree
       );
 
-    console.log(merkleTreeAccount);
-
     const leaves = computeLeaves(leafSchemaV1, dataArgs);
     const tree = MerkleTree.sparseMerkleTreeFromLeaves(
       leaves,
@@ -255,17 +257,23 @@ describe.only("onda_compression", () => {
       );
     const leaves = computeLeaves(leafSchemaV1, dataArgs);
 
-    console.log("getRequiredLeavesForProof: ", { leafIndex, maxDepth });
-    const nodeIndex = getNodeIndexFromLeafIndex(leafIndex, maxDepth);
-    const nodes: Node[] = generatePathNodesFromIndex(nodeIndex, maxDepth);
-    console.log("nodes: ", JSON.stringify(nodes));
+    const nodeIndex = getNodeIndexFromLeafIndex(
+      leafIndex,
+      merkleTreeAccount.getMaxDepth()
+    );
+    const nodes: Node[] = generatePathNodesFromIndex(
+      nodeIndex,
+      merkleTreeAccount.getMaxDepth(),
+      merkleTreeAccount.getCanopyDepth()
+    );
     const leafIndexes = nodes.map((node) => node.getLeafIndexesFromPath());
-    console.log("leafIndexes: ", JSON.stringify(leafIndexes));
+    console.log("leafIndexes required: ", flatten(leafIndexes).length);
 
     const proof = leafIndexes
       .map((path) => {
         if (typeof path === "number") {
-          return new PublicKey(leaves[path]);
+          const leafHash = leaves[path] ?? Buffer.alloc(32);
+          return new PublicKey(leafHash);
         } else {
           return new PublicKey(recursiveHash(leaves, path));
         }
@@ -322,6 +330,20 @@ describe.only("onda_compression", () => {
     }
   });
 });
+
+function flatten(items) {
+  const flat = [];
+
+  items.forEach((item) => {
+    if (Array.isArray(item)) {
+      flat.push(...flatten(item));
+    } else {
+      flat.push(item);
+    }
+  });
+
+  return flat;
+}
 
 function computeDataHash(data: DataV1): Buffer {
   const encoded = program.coder.types.encode<DataV1>("DataV1", data);
@@ -420,6 +442,7 @@ function getParentIndex(index: number) {
 function generatePathNodesFromIndex(
   index: number,
   maxDepth: number,
+  canopyDepth: number,
   depth: number = 0
 ) {
   const nodes: Node[] = [];
@@ -429,18 +452,23 @@ function generatePathNodesFromIndex(
 
   nodes.push(node);
 
-  if (depth + 1 < maxDepth) {
+  if (depth + 1 < maxDepth - canopyDepth) {
     const parentIndex = getParentIndex(index);
-    nodes.push(...generatePathNodesFromIndex(parentIndex, maxDepth, depth + 1));
+    nodes.push(
+      ...generatePathNodesFromIndex(
+        parentIndex,
+        maxDepth,
+        canopyDepth,
+        depth + 1
+      )
+    );
   }
 
   return nodes;
 }
 
 function recursiveHash(leaves: Buffer[], path: NestedPath): Buffer {
-  console.log("recursiveHash");
   const [left, right] = path;
-  console.log({ left, right });
 
   if (left instanceof Array && right instanceof Array) {
     return hash(recursiveHash(leaves, left), recursiveHash(leaves, right));
