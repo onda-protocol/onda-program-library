@@ -3,11 +3,10 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use spl_account_compression::Node;
 
 pub const ENTRY_PREFIX: &str = "entry";
-pub const FORUM_CONFIG_SIZE: usize = 8 + 8 + 8 + 1 + 32 + 60; // 60 bytes padding
+pub const BASE_FORUM_CONFIG_SIZE: usize = 8 + 8 + 8 + 1;
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
 pub enum RestrictionType {
-    None,
     Collection { address: Pubkey },
     Mint { address: Pubkey },
 }
@@ -16,10 +15,14 @@ pub enum RestrictionType {
 pub struct ForumConfig {
     pub total_capacity: u64,
     pub post_count: u64,
-    pub restriction: RestrictionType,
+    pub gate: Option<Vec<RestrictionType>>,
 }
 
 impl ForumConfig {
+    pub fn get_size(gate: Option<Vec<RestrictionType>>) -> usize {
+        BASE_FORUM_CONFIG_SIZE + gate.map(|g| g.len() * 33).map_or(0, |l| if l == 0 { l } else { l + 4 })
+    }
+
     pub fn increment_post_count(&mut self) {
         self.post_count = self.post_count.saturating_add(1);
     }

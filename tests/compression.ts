@@ -56,10 +56,10 @@ async function createAnchorProgram(
 }
 
 describe.only("onda_compression", () => {
-  const maxDepth = 20; // 3;
-  const maxBufferSize = 64; // 8;
+  const maxDepth = 5; // 3;
+  const maxBufferSize = 8; // 8;
   // Allocation additional bytes for the canopy
-  const canopyDepth = 14;
+  const canopyDepth = 3;
   const canopySpace = (Math.pow(2, canopyDepth) - 2) * 32;
   const merkleTreeKeypair = anchor.web3.Keypair.generate();
   const merkleTree = merkleTreeKeypair.publicKey;
@@ -148,10 +148,7 @@ describe.only("onda_compression", () => {
     });
 
     const initForumIx = await program.methods
-      .initForum(maxDepth, maxBufferSize, {
-        // collection: { collection: anchor.web3.Keypair.generate().publicKey },
-        none: {},
-      })
+      .initForum(maxDepth, maxBufferSize, null)
       .accounts({
         payer,
         forumConfig,
@@ -213,7 +210,7 @@ describe.only("onda_compression", () => {
     }
   });
 
-  it.skip("Verifies an entry", async () => {
+  it("Verifies an entry", async () => {
     const program = await createAnchorProgram();
     const payer = program.provider.publicKey;
     const merkleTreeAccount =
@@ -246,7 +243,6 @@ describe.only("onda_compression", () => {
 
   it("Deletes an entry", async () => {
     const leafIndex = 0;
-    console.log("Generating proof for idx ", leafIndex);
     const author = authors[leafIndex];
     const program = await createAnchorProgram(author);
 
@@ -267,7 +263,6 @@ describe.only("onda_compression", () => {
       merkleTreeAccount.getCanopyDepth()
     );
     const leafIndexes = nodes.map((node) => node.getLeafIndexesFromPath());
-    console.log("leafIndexes required: ", flatten(leafIndexes).length);
 
     const proof = leafIndexes
       .map((path) => {
@@ -283,10 +278,6 @@ describe.only("onda_compression", () => {
         isWritable: false,
         isSigner: false,
       }));
-    console.log(
-      "here is the proof: ",
-      proof.map((n) => n.pubkey.toBase58())
-    );
 
     try {
       /**
@@ -330,20 +321,6 @@ describe.only("onda_compression", () => {
     }
   });
 });
-
-function flatten(items) {
-  const flat = [];
-
-  items.forEach((item) => {
-    if (Array.isArray(item)) {
-      flat.push(...flatten(item));
-    } else {
-      flat.push(item);
-    }
-  });
-
-  return flat;
-}
 
 function computeDataHash(data: DataV1): Buffer {
   const encoded = program.coder.types.encode<DataV1>("DataV1", data);
@@ -497,12 +474,7 @@ function computeLeaves(events: LeafSchemaV1[], dataArgs: DataV1[]) {
       entry.nonce,
       data
     );
-    console.log(
-      "hash for idx ",
-      entry.nonce.toNumber(),
-      " is ",
-      new PublicKey(hash).toBase58()
-    );
+
     leaves[entry.nonce.toNumber()] = hash;
   }
 

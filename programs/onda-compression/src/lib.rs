@@ -25,6 +25,7 @@ declare_id!("ondaV4qqTUGbPR3m4XGi3YXf1NAXYCJEtuMKzVWBbSy");
 pub const MAX_URI_LEN: usize = 128;
 
 #[derive(Accounts)]
+#[instruction(max_depth: u32, max_buffer_size: u32, gate: Option<Vec<RestrictionType>>)]
 pub struct InitForum<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -32,7 +33,7 @@ pub struct InitForum<'info> {
         init,
         seeds = [merkle_tree.key().as_ref()],
         payer = payer,
-        space = FORUM_CONFIG_SIZE,
+        space = ForumConfig::get_size(gate),
         bump,
     )]
     pub forum_config: Account<'info, ForumConfig>,
@@ -97,7 +98,7 @@ pub mod onda_compression {
         ctx: Context<InitForum>,
         max_depth: u32,
         max_buffer_size: u32,
-        restriction: RestrictionType,
+        gate: Option<Vec<RestrictionType>>,
     ) -> Result<()> {
         let forum_config = &mut ctx.accounts.forum_config;
         let merkle_tree = &ctx.accounts.merkle_tree;
@@ -107,7 +108,7 @@ pub mod onda_compression {
         forum_config.set_inner(ForumConfig {
             total_capacity: 1 << max_depth,
             post_count: 0,
-            restriction,
+            gate,
         });
         let authority_pda_signer = &[&seeds[..]];
         let cpi_ctx = CpiContext::new_with_signer(
@@ -160,34 +161,61 @@ pub mod onda_compression {
         }
 
         // Check if the forum is restricted to a collection.
-        match forum_config.restriction {
-            RestrictionType::None => (),
-            RestrictionType::Mint { address } => {
-                // TODO: Check the mint is the same as the one in the forum config
-            },
-            RestrictionType::Collection { address } => {
-                let mint = mint.clone().ok_or(OndaSocialError::Unauthorized)?;
-                let metadata_info = metadata.clone().ok_or(OndaSocialError::Unauthorized)?;
-                let metadata = Metadata::deserialize(
-                    &mut metadata_info.data.borrow_mut().as_ref()
-                )?;
-                let token_account = token_account.clone().ok_or(OndaSocialError::Unauthorized)?;
+        if forum_config.gate.is_some() {
+            let gates = forum_config.gate.clone().unwrap();
+            let mut allow_access = false;
 
-                // Check the metadata address is valid pda for this mint
-                let (metadata_pda, _) = find_metadata_account(
-                    &mint.key()
-                  );
-                require_keys_eq!(metadata_info.key(), metadata_pda, OndaSocialError::Unauthorized);
+            for gate in gates {
+                match gate {
+                    RestrictionType::Mint { address } => {
+                        // TODO: Check the mint is the same as the one in the forum config
+                    },
+                    RestrictionType::Collection { address } => {
+                        let mint = mint.clone().ok_or(OndaSocialError::Unauthorized)?;
+                        let metadata_info = metadata.clone().ok_or(OndaSocialError::Unauthorized)?;
+                        let metadata = Metadata::deserialize(
+                            &mut metadata_info.data.borrow_mut().as_ref()
+                        )?;
+                        let token_account = token_account.clone().ok_or(OndaSocialError::Unauthorized)?;
+        
+                        // Check the metadata address is valid pda for this mint
+                        let (metadata_pda, _) = find_metadata_account(
+                            &mint.key()
+                          );
 
-                // Check the metadata is verified for this collection
-                let metadata_collection = metadata.collection.ok_or(OndaSocialError::Unauthorized)?;
-                require!(metadata_collection.verified, OndaSocialError::Unauthorized);
-                require_keys_eq!(metadata_collection.key, address, OndaSocialError::Unauthorized);
+                        if metadata_pda.eq(&metadata_info.key()) == false {
+                            continue;
+                        }
+        
+                        // Check the metadata is verified for this collection
+                        let metadata_collection = metadata.collection.ok_or(OndaSocialError::Unauthorized)?;
 
-                // Check the token account is owned by the author and has correct balance
-                require_eq!(token_account.amount, 1, OndaSocialError::Unauthorized);
-                require_eq!(token_account.mint, mint.key(), OndaSocialError::Unauthorized);
-                require_keys_eq!(token_account.owner, author, OndaSocialError::Unauthorized);
+                        if metadata_collection.verified == false {
+                            continue;
+                        }
+                        if metadata_collection.key.eq(&address) == false {
+                            continue;
+                        }
+        
+                        // Check the token account is owned by the author and has correct balance
+                        if token_account.amount != 1 {
+                            continue;
+                        }
+                        if token_account.mint.eq(&mint.key()) == false {
+                            continue;
+                        }
+                        if token_account.owner.eq(&author) == false {
+                            continue;
+                        }
+                        
+                        allow_access = true;
+                        break;
+                    }
+                }
+            }
+        
+            if allow_access == false {
+                return err!(OndaSocialError::Unauthorized);
             }
         }
         
