@@ -12,6 +12,7 @@ use mpl_token_metadata::{
     state::Metadata,
     pda::find_metadata_account
 };
+use gpl_session::{SessionError, SessionToken, session_auth_or, Session};
 
 use crate::{
     error::OndaSocialError,
@@ -20,9 +21,10 @@ use crate::{
 pub mod error;
 pub mod state;
 
-declare_id!("ondaV4qqTUGbPR3m4XGi3YXf1NAXYCJEtuMKzVWBbSy");
+declare_id!("ondaUaJpDBZZQzpGe5Tr391CbuJH1UpZuRcS7sZU2GB");
 
 pub const MAX_URI_LEN: usize = 128;
+pub const MAX_TITLE_LEN: usize = 300;
 
 #[derive(Accounts)]
 #[instruction(max_depth: u32, max_buffer_size: u32, gate: Option<Vec<RestrictionType>>)]
@@ -45,10 +47,20 @@ pub struct InitForum<'info> {
     pub system_program: Program<'info, System>,
 }
 
-#[derive(Accounts)]
+#[derive(Accounts, Session)]
 pub struct AddEntry<'info> {
+    /// CHECK: session auth
+    pub author: AccountInfo<'info>,
+    #[session(
+        // The ephemeral keypair signing the transaction
+        signer = signer,
+        // The authority of the user account which must have created the session
+        authority = author.key()
+    )]
+    // Session Tokens are passed as optional accounts
+    pub session_token: Option<Account<'info, SessionToken>>,
     #[account(mut)]
-    pub author: Signer<'info>,
+    pub signer: Signer<'info>,
     #[account(
         mut,
         seeds = [merkle_tree.key().as_ref()],
@@ -106,6 +118,7 @@ pub mod onda_compression {
         let seeds = &[seed.as_ref(), &[*ctx.bumps.get("forum_config").unwrap()]];
         let wrapper = &ctx.accounts.log_wrapper;
         forum_config.set_inner(ForumConfig {
+            admin: ctx.accounts.payer.key(),
             total_capacity: 1 << max_depth,
             post_count: 0,
             gate,
@@ -127,6 +140,11 @@ pub mod onda_compression {
         )
     }
 
+    // Handler to update a Post account
+    #[session_auth_or(
+        ctx.accounts.author.key() == ctx.accounts.signer.key(),
+        OndaSocialError::Unauthorized
+    )]
     pub fn add_entry(
         ctx: Context<AddEntry>,
         data: DataV1,
@@ -144,15 +162,19 @@ pub mod onda_compression {
 
         match data.clone() {
             DataV1::TextPost { uri, .. } => {
+                require_gte!(MAX_TITLE_LEN, uri.len(), OndaSocialError::TitleTooLong);
                 require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
             },
             DataV1::ImagePost { uri, .. } => {
+                require_gte!(MAX_TITLE_LEN, uri.len(), OndaSocialError::TitleTooLong);
                 require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
             },
             DataV1::LinkPost { uri, .. } => {
+                require_gte!(MAX_TITLE_LEN, uri.len(), OndaSocialError::TitleTooLong);
                 require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
             },
             DataV1::VideoPost { uri, .. } => {
+                require_gte!(MAX_TITLE_LEN, uri.len(), OndaSocialError::TitleTooLong);
                 require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
             },
             DataV1::Comment { uri, .. } => {
@@ -257,12 +279,6 @@ pub mod onda_compression {
         nonce: u64,
         index: u32,
     ) -> Result<()> {
-        msg!("root: {:?}", root);
-
-        for proof in ctx.remaining_accounts.iter() {
-            msg!("proof: {:?}", proof.key());
-        }
-
         let author = &ctx.accounts.author;
         let entry_id = get_entry_id(&ctx.accounts.merkle_tree.key(), nonce);
         let previous_leaf = LeafSchema::new_v0(
@@ -273,7 +289,7 @@ pub mod onda_compression {
             nonce,
             data_hash,
         );
-
+        msg!("previous_leaf: {:?}", previous_leaf.to_node());
         let new_leaf = Node::default();
 
         replace_leaf(

@@ -5,6 +5,8 @@ use anchor_lang::prelude::*;
 pub enum OndaSocialError {
   #[msg("Invalid uri.")]
   InvalidUri,
+  #[msg("Title too long.")]
+  TitleTooLong,
   #[msg("Insufficient post capacity.")]
   InsufficientPostCapacity,
   #[msg("Unauthorized.")]

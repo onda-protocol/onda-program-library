@@ -3,18 +3,19 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use spl_account_compression::Node;
 
 pub const ENTRY_PREFIX: &str = "entry";
-pub const BASE_FORUM_CONFIG_SIZE: usize = 8 + 8 + 8 + 1;
+pub const BASE_FORUM_CONFIG_SIZE: usize = 8 + 8 + 8 + 32 + 1;
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
 pub enum RestrictionType {
     Collection { address: Pubkey },
     Mint { address: Pubkey },
-}
+}   
 
 #[account]
 pub struct ForumConfig {
     pub total_capacity: u64,
     pub post_count: u64,
+    pub admin: Pubkey,
     pub gate: Option<Vec<RestrictionType>>,
 }
 
@@ -83,10 +84,10 @@ impl Version {
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
 pub enum DataV1 {
-    TextPost { title: String, uri: String },
-    ImagePost { title: String, uri: String },
-    LinkPost { title: String, uri: String },
-    VideoPost { title: String, uri: String },
+    TextPost { title: String, uri: String, nsfw: bool },
+    ImagePost { title: String, uri: String, nsfw: bool },
+    LinkPost { title: String, uri: String, nsfw: bool },
+    VideoPost { title: String, uri: String, nsfw: bool },
     Comment { post: Pubkey, parent: Option<Pubkey>, uri: String },
 }
 

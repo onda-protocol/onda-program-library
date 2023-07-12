@@ -74,12 +74,14 @@ describe.only("onda_compression", () => {
     const program = await createAnchorProgram(author);
     return program.methods
       .addEntry({
-        textPost: { title, uri },
+        textPost: { title, uri, nsfw: false },
       })
       .accounts({
         forumConfig,
         merkleTree,
         author: program.provider.publicKey,
+        sessionToken: null,
+        signer: program.provider.publicKey,
         mint: null,
         tokenAccount: null,
         metadata: null,
