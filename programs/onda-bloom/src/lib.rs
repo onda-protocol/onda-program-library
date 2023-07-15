@@ -1,4 +1,4 @@
-use anchor_lang::{prelude::*};
+use anchor_lang::prelude::*;
 use solana_program::{pubkey, pubkey::Pubkey};
 use anchor_spl::{
     token::{self, TokenAccount, Transfer, Token, Mint},
@@ -51,11 +51,13 @@ pub struct FeedPlankton<'info> {
     pub author: UncheckedAccount<'info>,
     #[account(
         init_if_needed,
-        associated_token::mint = mint,
-        associated_token::authority = author,
+        seeds=[BLOOM_PREFIX.as_ref(), author.key().as_ref()],
+        bump,
+        token::mint = mint,
+        token::authority = author,
         payer = payer,
     )]
-    pub author_token_account: Box<Account<'info, TokenAccount>>,
+    pub escrow_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
         init_if_needed,
         seeds = [BLOOM_PREFIX.as_ref(), entry_id.as_ref(), author.key().as_ref()],
@@ -102,15 +104,24 @@ pub mod onda_bloom {
         let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
         token::transfer(cpi_ctx, protocol_fee)?;
 
+        let author_key = ctx.accounts.author.key();
+        let seeds = &[
+            BLOOM_PREFIX.as_ref(),
+            author_key.as_ref(),
+            &[*ctx.bumps.get("escrow_token_account").unwrap()]
+        ];
+        let signer = &[&seeds[..]];
         let cpi_accounts = Transfer {
             from: ctx.accounts.deposit_token_account.to_account_info(),
-            to: ctx.accounts.author_token_account.to_account_info(),
+            to: ctx.accounts.escrow_token_account.to_account_info(),
             authority: payer.to_account_info(),
         };
         let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
         token::transfer(cpi_ctx, remaining_amount)?;
 
         Ok(())
     }
+
+    fn claim_plankton()
 }
