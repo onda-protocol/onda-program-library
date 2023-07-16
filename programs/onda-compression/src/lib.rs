@@ -1,10 +1,8 @@
 use anchor_lang::{
     prelude::*,
-    solana_program::{keccak},
+    solana_program::keccak,
 };
-use anchor_spl::{
-    token::{Mint, TokenAccount},
-};
+use anchor_spl::token::{Mint, TokenAccount};
 use spl_account_compression::{
     program::SplAccountCompression, wrap_application_data_v1, Node, Noop,
 };
@@ -50,7 +48,7 @@ pub struct InitForum<'info> {
 #[derive(Accounts, Session)]
 pub struct AddEntry<'info> {
     /// CHECK: session auth
-    pub author: AccountInfo<'info>,
+    pub author: UncheckedAccount<'info>,
     #[session(
         // The ephemeral keypair signing the transaction
         signer = signer,

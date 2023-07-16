@@ -19,3 +19,5 @@ default = []
 anchor-lang = { version="0.26.0", features = ["init-if-needed"] }
 anchor-spl = "0.26.0"
 solana-program = "1.15.2"
+gpl-session = { version = "0.2.0", features = ["no-entrypoint"] }
+

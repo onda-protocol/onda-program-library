@@ -4,10 +4,14 @@ use anchor_spl::{
     token::{self, TokenAccount, Transfer, Token, Mint},
     associated_token::AssociatedToken
 };
+use gpl_session::{SessionError, SessionToken, session_auth_or, Session};
 
 declare_id!("onda3Sxku2NT88Ho8WfEgbkavNEELWzaguvh4itdn3C");
 
 pub const BLOOM_PREFIX: &str = "bloom";
+pub const ESCROW_PREFIX: &str = "escrow";
+pub const REWARD_PREFIX: &str = "reward_escrow";
+pub const CLAIM_MARKER_PREFIX: &str = "claim_marker";
 pub const BLOOM_SIZE: usize = 8 + 8;
 pub const PLANKTON_MINT: Pubkey = pubkey!("pktnre2sUNQZXwHicZj6njpShhSazmzQz5rJtcqnkG5");
 pub const PROTOCOL_FEE_PLANKTON_ATA: Pubkey = pubkey!("EneovF7KrWHBC6QKmoiwC2S6PUFBZnpYcuyUTdD59iYp");
@@ -33,15 +37,37 @@ impl Bloom {
     }
 }
 
-#[derive(Accounts)]
+
+#[account]
+pub struct ClaimMarker {
+    pub marker: u8,
+}
+
+impl ClaimMarker {
+    pub const SIZE: usize = 8 + std::mem::size_of::<Self>();
+}
+
+#[derive(Accounts, Session)]
 #[instruction(entry_id: Pubkey, amount: u64)]
 pub struct FeedPlankton<'info> {
     #[account(mut)]
-    pub payer: Signer<'info>,
+    pub payer: UncheckedAccount<'info>,
+    #[session(
+        // The ephemeral keypair signing the transaction
+        signer = signer,
+        // The authority of the user account which must have created the session
+        authority = author.key()
+    )]
+    // Session Tokens are passed as optional accounts
+    pub session_token: Option<Account<'info, SessionToken>>,
+    #[account(mut)]
+    pub signer: Signer<'info>,
     #[account(
         mut,
-        associated_token::mint = mint,
-        associated_token::authority = payer,
+        seeds=[ESCROW_PREFIX.as_ref(), mint.key().as_ref(), payer.key().as_ref()],
+        bump,
+        token::mint = mint,
+        token::authority = deposit_token_account,
     )]
     deposit_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
@@ -51,10 +77,10 @@ pub struct FeedPlankton<'info> {
     pub author: UncheckedAccount<'info>,
     #[account(
         init_if_needed,
-        seeds=[BLOOM_PREFIX.as_ref(), author.key().as_ref()],
+        seeds=[ESCROW_PREFIX.as_ref(),  mint.key().as_ref(), author.key().as_ref()],
         bump,
         token::mint = mint,
-        token::authority = author,
+        token::authority = escrow_token_account,
         payer = payer,
     )]
     pub escrow_token_account: Box<Account<'info, TokenAccount>>,
@@ -81,12 +107,54 @@ pub struct FeedPlankton<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
+#[derive(Accounts)]
+pub struct ClaimPlankton<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    #[account(
+        init_if_needed,
+        seeds=[ESCROW_PREFIX.as_ref(), mint.key().as_ref(), signer.key().as_ref()],
+        bump,
+        token::mint = mint,
+        token::authority = escrow_token_account,
+        payer = signer,
+    )]
+    pub escrow_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(
+        init_if_needed,
+        seeds=[REWARD_PREFIX.as_ref(), mint.key().as_ref()],
+        bump,
+        token::mint = mint,
+        token::authority = reward_token_account,
+        payer = signer,
+    )]
+    pub reward_token_account: Box<Account<'info, TokenAccount>>,
+    #[account(
+        init,
+        seeds=[BLOOM_PREFIX.as_ref(), signer.key().as_ref()],
+        bump,
+        payer = signer,
+        space = ClaimMarker::SIZE
+    )]
+    pub claim_marker: Box<Account<'info, ClaimMarker>>, 
+    #[account(
+        constraint = mint.key() == PLANKTON_MINT @OndaBloomError::InvalidMint,
+    )]
+    pub mint: Account<'info, Mint>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+}
+
 #[program]
 pub mod onda_bloom {
     use super::*;
 
+    #[session_auth_or(
+        ctx.accounts.author.key() == ctx.accounts.signer.key(),
+        OndaBloomError::Unauthorized
+    )]
     pub fn feed_plankton(ctx: Context<FeedPlankton>, _entry_id: Pubkey, amount: u64) -> Result<()> {
-        let payer = &ctx.accounts.payer;
         let bloom = &mut ctx.accounts.bloom;
 
         bloom.increment_plankton_count();
@@ -95,33 +163,54 @@ pub mod onda_bloom {
         let protocol_fee = amount.checked_div(50).ok_or(OndaBloomError::NumericOverflow).unwrap();
         let remaining_amount = amount.checked_sub(protocol_fee).ok_or(OndaBloomError::NumericOverflow).unwrap();
 
+        let payer_key = ctx.accounts.payer.key();
+        let mint_key = ctx.accounts.mint.key();
+        let seeds = &[
+            ESCROW_PREFIX.as_ref(),
+            mint_key.as_ref(),
+            payer_key.as_ref(),
+            &[*ctx.bumps.get("deposit_token_account").unwrap()]
+        ];
+        let signer_seeds = &[&seeds[..]];
+
         let cpi_accounts = Transfer {
             from: ctx.accounts.deposit_token_account.to_account_info(),
             to: ctx.accounts.protocol_fee_token_account.to_account_info(),
-            authority: payer.to_account_info(),
+            authority: ctx.accounts.deposit_token_account.to_account_info(),
         };
         let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
+        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
         token::transfer(cpi_ctx, protocol_fee)?;
 
-        let author_key = ctx.accounts.author.key();
-        let seeds = &[
-            BLOOM_PREFIX.as_ref(),
-            author_key.as_ref(),
-            &[*ctx.bumps.get("escrow_token_account").unwrap()]
-        ];
-        let signer = &[&seeds[..]];
         let cpi_accounts = Transfer {
             from: ctx.accounts.deposit_token_account.to_account_info(),
             to: ctx.accounts.escrow_token_account.to_account_info(),
-            authority: payer.to_account_info(),
+            authority: ctx.accounts.deposit_token_account.to_account_info(),
         };
         let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
+        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
         token::transfer(cpi_ctx, remaining_amount)?;
 
         Ok(())
     }
 
-    fn claim_plankton()
+    pub fn claim_plankton(ctx: Context<ClaimPlankton>) -> Result<()> {
+        let mint_key = ctx.accounts.mint.key();
+        let seeds = &[
+            REWARD_PREFIX.as_ref(),
+            mint_key.as_ref(),
+            &[*ctx.bumps.get("reward_token_account").unwrap()]
+        ];
+        let signer_seeds = &[&seeds[..]];
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.reward_token_account.to_account_info(),
+            to: ctx.accounts.escrow_token_account.to_account_info(),
+            authority: ctx.accounts.reward_token_account.to_account_info(),
+        };
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
+        token::transfer(cpi_ctx, 1000)?;
+
+        Ok(())
+    }
 }
