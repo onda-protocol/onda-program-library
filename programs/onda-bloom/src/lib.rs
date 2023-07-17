@@ -50,13 +50,14 @@ impl ClaimMarker {
 #[derive(Accounts, Session)]
 #[instruction(entry_id: Pubkey, amount: u64)]
 pub struct FeedPlankton<'info> {
+    /// CHECK: session token
     #[account(mut)]
     pub payer: UncheckedAccount<'info>,
     #[session(
         // The ephemeral keypair signing the transaction
         signer = signer,
         // The authority of the user account which must have created the session
-        authority = author.key()
+        authority = payer.key()
     )]
     // Session Tokens are passed as optional accounts
     pub session_token: Option<Account<'info, SessionToken>>,
@@ -121,12 +122,10 @@ pub struct ClaimPlankton<'info> {
     )]
     pub escrow_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
-        init_if_needed,
         seeds=[REWARD_PREFIX.as_ref(), mint.key().as_ref()],
         bump,
         token::mint = mint,
         token::authority = reward_token_account,
-        payer = signer,
     )]
     pub reward_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
@@ -144,6 +143,27 @@ pub struct ClaimPlankton<'info> {
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
+}
+
+#[derive(Accounts)]
+pub struct Init<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    #[account(
+        constraint = mint.key() == PLANKTON_MINT @OndaBloomError::InvalidMint,
+    )]
+    pub mint: Account<'info, Mint>,
+    #[account(
+        init,
+        seeds=[REWARD_PREFIX.as_ref(), mint.key().as_ref()],
+        bump,
+        token::mint = mint,
+        token::authority = reward_token_account,
+        payer = signer,
+    )]
+    pub reward_token_account: Box<Account<'info, TokenAccount>>,
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
 }
 
 #[program]
@@ -211,6 +231,10 @@ pub mod onda_bloom {
         let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
         token::transfer(cpi_ctx, 1000)?;
 
+        Ok(())
+    }
+
+    pub fn init(ctx: Context<Init>) -> Result<()> {
         Ok(())
     }
 }

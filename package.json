@@ -3,7 +3,7 @@
   "scripts": {
     "sync": "node sync-idl.js",
     "get-mints": "node ./scripts/fetch-mints-by-update-authority.js",
-    "snapshot": "ts-node ./scripts/snapshot.ts"
+    "init": "ts-node ./scripts/initTokenAccount.ts"
   },
   "dependencies": {
     "ts-node": "^10.7.0"
