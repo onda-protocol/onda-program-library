@@ -2,7 +2,6 @@ use anchor_lang::prelude::*;
 use solana_program::{pubkey, pubkey::Pubkey};
 use anchor_spl::{
     token::{self, TokenAccount, Transfer, Token, Mint},
-    associated_token::AssociatedToken
 };
 use gpl_session::{SessionError, SessionToken, session_auth_or, Session};
 
@@ -81,10 +80,10 @@ pub struct FeedPlankton<'info> {
         seeds=[ESCROW_PREFIX.as_ref(),  mint.key().as_ref(), author.key().as_ref()],
         bump,
         token::mint = mint,
-        token::authority = escrow_token_account,
+        token::authority = author_token_account,
         payer = payer,
     )]
-    pub escrow_token_account: Box<Account<'info, TokenAccount>>,
+    pub author_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
         init_if_needed,
         seeds = [BLOOM_PREFIX.as_ref(), entry_id.as_ref(), author.key().as_ref()],
@@ -105,7 +104,6 @@ pub struct FeedPlankton<'info> {
     pub mint: Account<'info, Mint>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
 #[derive(Accounts)]
@@ -130,7 +128,7 @@ pub struct ClaimPlankton<'info> {
     pub reward_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
         init,
-        seeds=[BLOOM_PREFIX.as_ref(), signer.key().as_ref()],
+        seeds=[CLAIM_MARKER_PREFIX.as_ref(), signer.key().as_ref()],
         bump,
         payer = signer,
         space = ClaimMarker::SIZE
@@ -140,28 +138,6 @@ pub struct ClaimPlankton<'info> {
         constraint = mint.key() == PLANKTON_MINT @OndaBloomError::InvalidMint,
     )]
     pub mint: Account<'info, Mint>,
-    pub system_program: Program<'info, System>,
-    pub token_program: Program<'info, Token>,
-    pub associated_token_program: Program<'info, AssociatedToken>,
-}
-
-#[derive(Accounts)]
-pub struct Init<'info> {
-    #[account(mut)]
-    pub signer: Signer<'info>,
-    #[account(
-        constraint = mint.key() == PLANKTON_MINT @OndaBloomError::InvalidMint,
-    )]
-    pub mint: Account<'info, Mint>,
-    #[account(
-        init,
-        seeds=[REWARD_PREFIX.as_ref(), mint.key().as_ref()],
-        bump,
-        token::mint = mint,
-        token::authority = reward_token_account,
-        payer = signer,
-    )]
-    pub reward_token_account: Box<Account<'info, TokenAccount>>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
 }
@@ -204,7 +180,7 @@ pub mod onda_bloom {
 
         let cpi_accounts = Transfer {
             from: ctx.accounts.deposit_token_account.to_account_info(),
-            to: ctx.accounts.escrow_token_account.to_account_info(),
+            to: ctx.accounts.author_token_account.to_account_info(),
             authority: ctx.accounts.deposit_token_account.to_account_info(),
         };
         let cpi_program = ctx.accounts.token_program.to_account_info();
@@ -231,10 +207,6 @@ pub mod onda_bloom {
         let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
         token::transfer(cpi_ctx, 1000)?;
 
-        Ok(())
-    }
-
-    pub fn init(ctx: Context<Init>) -> Result<()> {
         Ok(())
     }
 }
