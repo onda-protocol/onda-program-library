@@ -10,7 +10,9 @@ const PROGRAM_ID = new web3.PublicKey(
   "onda3Sxku2NT88Ho8WfEgbkavNEELWzaguvh4itdn3C"
 );
 
-const connection = new web3.Connection("");
+const connection = new web3.Connection(
+  "https://rpc.helius.xyz/?api-key=a4184ebc-516f-4432-a449-78b8dd47e6bf"
+);
 
 async function main() {
   const keypairJson = fs.readFileSync(

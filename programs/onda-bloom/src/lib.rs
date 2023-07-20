@@ -120,6 +120,7 @@ pub struct ClaimPlankton<'info> {
     )]
     pub escrow_token_account: Box<Account<'info, TokenAccount>>,
     #[account(
+        mut,
         seeds=[REWARD_PREFIX.as_ref(), mint.key().as_ref()],
         bump,
         token::mint = mint,
@@ -147,7 +148,7 @@ pub mod onda_bloom {
     use super::*;
 
     #[session_auth_or(
-        ctx.accounts.author.key() == ctx.accounts.signer.key(),
+        ctx.accounts.payer.key() == ctx.accounts.signer.key(),
         OndaBloomError::Unauthorized
     )]
     pub fn feed_plankton(ctx: Context<FeedPlankton>, _entry_id: Pubkey, amount: u64) -> Result<()> {
@@ -205,7 +206,7 @@ pub mod onda_bloom {
         };
         let cpi_program = ctx.accounts.token_program.to_account_info();
         let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
-        token::transfer(cpi_ctx, 1000)?;
+        token::transfer(cpi_ctx, 100_000_000)?;
 
         Ok(())
     }
