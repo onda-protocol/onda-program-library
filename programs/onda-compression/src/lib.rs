@@ -287,7 +287,6 @@ pub mod onda_compression {
             nonce,
             data_hash,
         );
-        msg!("previous_leaf: {:?}", previous_leaf.to_node());
         let new_leaf = Node::default();
 
         replace_leaf(
