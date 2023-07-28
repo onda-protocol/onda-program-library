@@ -45,6 +45,23 @@ pub struct InitForum<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct SetAdmin<'info> {
+    /// CHECK: forum admin
+    pub admin: UncheckedAccount<'info>,
+    /// CHECK: new admin
+    pub new_admin: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        seeds = [merkle_tree.key().as_ref()],
+        bump,
+        constraint = forum_config.admin == *admin.key @OndaSocialError::Unauthorized,
+    )]
+    pub forum_config: Account<'info, ForumConfig>,
+    /// CHECK: forum config
+    pub merkle_tree: UncheckedAccount<'info>,
+}
+
 #[derive(Accounts, Session)]
 pub struct AddEntry<'info> {
     /// CHECK: session auth
@@ -83,8 +100,10 @@ pub struct AddEntry<'info> {
 
 #[derive(Accounts)]
 pub struct DeleteEntry<'info> {
+    /// CHECK: matches post author
+    pub author: UncheckedAccount<'info>,
     #[account(mut)]
-    pub author: Signer<'info>,
+    pub signer: Signer<'info>,
     #[account(
         mut,
         seeds = [merkle_tree.key().as_ref()],
@@ -97,7 +116,6 @@ pub struct DeleteEntry<'info> {
     pub log_wrapper: Program<'info, Noop>,
     pub compression_program: Program<'info, SplAccountCompression>,
     pub system_program: Program<'info, System>,
-
 }
 
 #[program]
@@ -136,6 +154,12 @@ pub mod onda_compression {
             max_depth,
             max_buffer_size
         )
+    }
+
+    pub fn set_admin(ctx: Context<SetAdmin>) -> Result<()> {
+        let forum_config = &mut ctx.accounts.forum_config;
+        forum_config.set_admin(ctx.accounts.new_admin.key());
+        Ok(())
     }
 
     // Handler to update a Post account
@@ -188,7 +212,25 @@ pub mod onda_compression {
             for gate in gates {
                 match gate {
                     RestrictionType::Mint { address } => {
-                        // TODO: Check the mint is the same as the one in the forum config
+                        let mint = mint.clone().ok_or(OndaSocialError::Unauthorized)?;
+                        let token_account = token_account.clone().ok_or(OndaSocialError::Unauthorized)?;
+
+                        if mint.key().eq(&address) == false {
+                            continue;
+                        }
+                        if token_account.mint.eq(&mint.key()) == false {
+                            continue;
+                        }
+                        if token_account.owner.eq(&author) == false {
+                            continue;
+                        }
+                        if token_account.amount.ge(&1) == false {
+                            continue;
+                        }
+
+                        allow_access = true;
+                        break;
+
                     },
                     RestrictionType::Collection { address } => {
                         let mint = mint.clone().ok_or(OndaSocialError::Unauthorized)?;
@@ -277,7 +319,14 @@ pub mod onda_compression {
         nonce: u64,
         index: u32,
     ) -> Result<()> {
+        let forum_config = &mut ctx.accounts.forum_config;
+        let signer = &ctx.accounts.signer;
         let author = &ctx.accounts.author;
+
+        if signer.key().eq(&author.key()) == false && forum_config.admin.eq(&signer.key()) == false {
+            return err!(OndaSocialError::Unauthorized);
+        }
+
         let entry_id = get_entry_id(&ctx.accounts.merkle_tree.key(), nonce);
         let previous_leaf = LeafSchema::new_v0(
             entry_id,
