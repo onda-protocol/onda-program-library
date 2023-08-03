@@ -32,6 +32,31 @@ impl ForumConfig {
         let remaining_posts = self.total_capacity.saturating_sub(self.post_count);
         requested_capacity <= remaining_posts
     }
+
+    pub fn set_admin(&mut self, admin: Pubkey) {
+        self.admin = admin;
+    }
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
+pub enum DelegateActionType {
+    Delete,
+}
+
+#[account]
+pub struct DelegateAction {
+    pub delegate: Pubkey,
+    pub action: DelegateActionType,
+    pub expiry: i64,
+    pub nonce: u64,
+}
+
+impl DelegateAction {
+    pub const PREFIX: &'static str = "delegate_action";
+
+    pub fn get_size() -> usize {
+        8 + 32 + 1
+    }
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]

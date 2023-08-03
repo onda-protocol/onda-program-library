@@ -1,3 +1,4 @@
+use url::Url;
 use anchor_lang::{
     prelude::*,
     solana_program::keccak,
@@ -99,11 +100,52 @@ pub struct AddEntry<'info> {
 }
 
 #[derive(Accounts)]
+pub struct InitDelegate<'info> {
+    pub admin: Signer<'info>,
+    #[account(mut)]
+    pub delegate: Signer<'info>,
+    #[account(
+        init_if_needed,
+        seeds = [
+            DelegateAction::PREFIX.as_bytes(),
+            merkle_tree.key().as_ref(),
+            delegate.key().as_ref()
+        ],
+        payer = delegate,
+        space = DelegateAction::get_size(),
+        bump,
+        constraint = forum_config.admin.key().eq(&admin.key()) @OndaSocialError::Unauthorized,
+    )]
+    pub delegate_action: Account<'info, DelegateAction>,
+    #[account(
+        mut,
+        seeds = [merkle_tree.key().as_ref()],
+        bump,
+    )]
+    pub forum_config: Account<'info, ForumConfig>,
+    #[account(mut)]
+    /// CHECK: constrained by seeds
+    pub merkle_tree: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct DeleteEntry<'info> {
     /// CHECK: matches post author
     pub author: UncheckedAccount<'info>,
     #[account(mut)]
     pub signer: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [
+            DelegateAction::PREFIX.as_bytes(),
+            merkle_tree.key().as_ref(),
+            signer.key().as_ref()
+        ],
+        bump,
+        close = signer,
+    )]
+    pub delegate_action: Option<Account<'info, DelegateAction>>,
     #[account(
         mut,
         seeds = [merkle_tree.key().as_ref()],
@@ -162,6 +204,18 @@ pub mod onda_compression {
         Ok(())
     }
 
+    pub fn init_delegate(ctx: Context<InitDelegate>, nonce: u64) -> Result<()> {
+        let delegate_action = &mut ctx.accounts.delegate_action;
+
+        // Valid for 1 minute
+        delegate_action.expiry = Clock::get()?.unix_timestamp + 60;
+        delegate_action.action = DelegateActionType::Delete;
+        delegate_action.delegate = ctx.accounts.delegate.key();
+        delegate_action.nonce = nonce;
+
+        Ok(())
+    }
+
     // Handler to update a Post account
     #[session_auth_or(
         ctx.accounts.author.key() == ctx.accounts.signer.key(),
@@ -184,22 +238,27 @@ pub mod onda_compression {
 
         match data.clone() {
             DataV1::TextPost { uri, .. } => {
+                require!(is_valid_url(&uri), OndaSocialError::InvalidUri);
                 require_gte!(MAX_TITLE_LEN, uri.len(), OndaSocialError::TitleTooLong);
                 require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
             },
             DataV1::ImagePost { uri, .. } => {
+                require!(is_valid_url(&uri), OndaSocialError::InvalidUri);
                 require_gte!(MAX_TITLE_LEN, uri.len(), OndaSocialError::TitleTooLong);
                 require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
             },
             DataV1::LinkPost { uri, .. } => {
+                require!(is_valid_url(&uri), OndaSocialError::InvalidUri);
                 require_gte!(MAX_TITLE_LEN, uri.len(), OndaSocialError::TitleTooLong);
                 require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
             },
             DataV1::VideoPost { uri, .. } => {
+                require!(is_valid_url(&uri), OndaSocialError::InvalidUri);
                 require_gte!(MAX_TITLE_LEN, uri.len(), OndaSocialError::TitleTooLong);
                 require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
             },
             DataV1::Comment { uri, .. } => {
+                require!(is_valid_url(&uri), OndaSocialError::InvalidUri);
                 require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
             },
         }
@@ -322,9 +381,23 @@ pub mod onda_compression {
         let forum_config = &mut ctx.accounts.forum_config;
         let signer = &ctx.accounts.signer;
         let author = &ctx.accounts.author;
+        let delegate = &ctx.accounts.delegate_action;
 
         if signer.key().eq(&author.key()) == false && forum_config.admin.eq(&signer.key()) == false {
-            return err!(OndaSocialError::Unauthorized);
+            if delegate.is_some() {
+                let unwrapped_delegate = delegate.clone().unwrap();
+                if unwrapped_delegate.delegate.eq(&signer.key()) == false {
+                    return err!(OndaSocialError::Unauthorized);
+                }
+                if Clock::get()?.unix_timestamp > unwrapped_delegate.expiry {
+                    return err!(OndaSocialError::Unauthorized);
+                }
+                if unwrapped_delegate.nonce != nonce {
+                    return err!(OndaSocialError::Unauthorized);
+                }
+            } else {
+                return err!(OndaSocialError::Unauthorized);
+            }
         }
 
         let entry_id = get_entry_id(&ctx.accounts.merkle_tree.key(), nonce);
@@ -444,4 +517,11 @@ pub fn user_owns_nft<'info>(
     }
 
     true
+}
+
+pub fn is_valid_url(input: &str) -> bool {
+    match Url::parse(input) {
+        Ok(_) => true,  // The URL is valid.
+        Err(_) => false, // The URL is not valid.
+    }
 }
