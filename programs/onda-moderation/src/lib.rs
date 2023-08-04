@@ -5,7 +5,7 @@ use crate::{state::*, error::*};
 pub mod state;
 pub mod error;
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("5o1PS9vW57YUezjCuN7aycLnACKkaxGyb7Ak7pdcK6sw");
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -21,6 +21,7 @@ pub struct Initialize<'info> {
     pub team: Account<'info, Team>,
     /// CHECK: checked in cpi
     pub merkle_tree: UncheckedAccount<'info>,
+    #[account(mut)]
     /// CHECK: checked in cpi
     pub forum_config: UncheckedAccount<'info>,
     pub onda_compression: Program<'info, OndaCompression>,
@@ -87,6 +88,31 @@ pub struct InitDeleteAction<'info> {
     pub system_program: Program<'info, System>,
 }
 
+#[derive(Accounts)]
+pub struct DeleteEntry<'info> {
+    #[account(mut)]
+    pub member: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [Team::PREFIX.as_bytes(), merkle_tree.key().as_ref()],
+        bump,
+    )]
+    pub team: Account<'info, Team>,
+    /// CHECK: checked in cpi
+    pub author: UncheckedAccount<'info>,
+    /// CHECK: checked in cpi
+    pub forum_config: UncheckedAccount<'info>,
+    #[account(mut)]
+    /// CHECK: constrained by seeds
+    pub merkle_tree: UncheckedAccount<'info>,
+    /// CHECK: checked in cpi
+    pub log_wrapper: UncheckedAccount<'info>,
+    pub onda_compression: Program<'info, OndaCompression>,
+    /// CHECK: checked in cpi
+    pub compression_program: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+}
+
 #[program]
 pub mod onda_moderation {
     use super::*;
@@ -94,9 +120,9 @@ pub mod onda_moderation {
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         let team = &mut ctx.accounts.team;
 
-        team.forum = *ctx.accounts.forum_config.key;
+        team.forum = ctx.accounts.merkle_tree.key();
         team.members.push(Member {
-            address: *ctx.accounts.admin.key,
+            address: ctx.accounts.admin.key(),
             role: Role::Owner,
         });
 
@@ -205,4 +231,62 @@ pub mod onda_moderation {
 
         Ok(())
     }
+
+    pub fn delete_entry<'info>(
+        ctx: Context<'_, '_, '_, 'info, DeleteEntry<'info>>,
+        root: [u8; 32],
+        created_at: i64,
+        edited_at: Option<i64>,
+        data_hash: [u8; 32],
+        nonce: u64,
+        index: u32,
+    ) -> Result<()> {
+        let team = &mut ctx.accounts.team;
+        let member = &ctx.accounts.member;
+
+        assert_member(team, member)?;
+
+        let cpi_program = ctx.accounts.compression_program.to_account_info();
+        let cpi_accounts = onda_compression::cpi::accounts::DeleteEntry {
+                signer: team.to_account_info(),
+                author: ctx.accounts.author.to_account_info(),
+                forum_config: ctx.accounts.forum_config.to_account_info(),
+                merkle_tree: ctx.accounts.merkle_tree.to_account_info(),
+                log_wrapper: ctx.accounts.log_wrapper.to_account_info(),
+                compression_program: ctx.accounts.compression_program.to_account_info(),
+                system_program: ctx.accounts.system_program.to_account_info(),  
+        };
+
+        let bump = *ctx.bumps.get("team").unwrap();
+        let merkle_tree_key = ctx.accounts.merkle_tree.key();
+        let seeds = &[
+            Team::PREFIX.as_bytes(),
+            merkle_tree_key.as_ref(),
+            &[bump]
+        ];
+        let signer_seeds = &[&seeds[..]];
+        let mut cpi_ctx = CpiContext::new_with_signer(
+            cpi_program,
+            cpi_accounts,
+            signer_seeds
+        );
+        cpi_ctx.remaining_accounts.append(&mut ctx.remaining_accounts.to_vec());
+
+        onda_compression::cpi::delete_entry(
+            cpi_ctx,
+            root,
+            created_at,
+            edited_at,
+            data_hash,
+            nonce,
+            index,
+        )?;
+
+        Ok(())
+    }
+}
+
+pub fn assert_member(team: &Team, member: &AccountInfo) -> Result<()> {
+    team.members.iter().find(|m| m.address.eq(&member.key())).ok_or(ErrorCodes::MemberNotFound)?;
+    Ok(())
 }

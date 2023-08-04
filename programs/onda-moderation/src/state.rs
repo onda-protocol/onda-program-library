@@ -20,7 +20,7 @@ pub struct Team {
 }
 
 impl Team {
-    pub const PREFIX:&str = "team";
+    pub const PREFIX:&'static str = "team";
 
     pub fn get_size(members: usize) -> usize {
         8 + 32 + 4 + members * std::mem::size_of::<Member>()

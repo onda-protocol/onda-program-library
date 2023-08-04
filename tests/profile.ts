@@ -33,7 +33,7 @@ async function createAnchorProgram(
   );
 }
 
-describe.only("onda_profile", () => {
+describe("onda_profile", () => {
   let nft: NftWithToken;
   let user = anchor.web3.Keypair.generate();
   const profilePda = findProfilePda(user.publicKey);

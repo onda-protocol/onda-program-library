@@ -7,19 +7,17 @@ url = "https://anchor.projectserum.com"
 seeds = false
 
 [programs.localnet]
-onda_listings = "CKUdSYh8hQp8WYXDbWDFks5AUKopeS5D336PMqePh5bs"
 onda_compression = "ondaUaJpDBZZQzpGe5Tr391CbuJH1UpZuRcS7sZU2GB"
+onda_moderation = "5o1PS9vW57YUezjCuN7aycLnACKkaxGyb7Ak7pdcK6sw"
 onda_bloom = "onda3Sxku2NT88Ho8WfEgbkavNEELWzaguvh4itdn3C"
 onda_profile = "ondapcq2qXTSynRieMCE9BjRsZ2XALEEZZunkwbhCPF"
 
 [programs.devnet]
-onda_listings = "CKUdSYh8hQp8WYXDbWDFks5AUKopeS5D336PMqePh5bs"
 onda_compression = "ondaUaJpDBZZQzpGe5Tr391CbuJH1UpZuRcS7sZU2GB"
 onda_bloom = "onda3Sxku2NT88Ho8WfEgbkavNEELWzaguvh4itdn3C"
 onda_profile = "ondapcq2qXTSynRieMCE9BjRsZ2XALEEZZunkwbhCPF"
 
 [programs.mainnet]
-onda_listings = "CKUdSYh8hQp8WYXDbWDFks5AUKopeS5D336PMqePh5bs"
 onda_compression = "ondaUaJpDBZZQzpGe5Tr391CbuJH1UpZuRcS7sZU2GB"
 onda_bloom = "onda3Sxku2NT88Ho8WfEgbkavNEELWzaguvh4itdn3C"
 onda_profile = "ondapcq2qXTSynRieMCE9BjRsZ2XALEEZZunkwbhCPF"

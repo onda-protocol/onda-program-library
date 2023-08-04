@@ -48,8 +48,8 @@ pub struct InitForum<'info> {
 
 #[derive(Accounts)]
 pub struct SetAdmin<'info> {
-    /// CHECK: forum admin
-    pub admin: UncheckedAccount<'info>,
+    #[account(mut)]
+    pub admin: Signer<'info>,
     /// CHECK: new admin
     pub new_admin: UncheckedAccount<'info>,
     #[account(
@@ -135,19 +135,18 @@ pub struct DeleteEntry<'info> {
     pub author: UncheckedAccount<'info>,
     #[account(mut)]
     pub signer: Signer<'info>,
+    // #[account(
+    //     mut,
+    //     seeds = [
+    //         DelegateAction::PREFIX.as_bytes(),
+    //         merkle_tree.key().as_ref(),
+    //         signer.key().as_ref()
+    //     ],
+    //     bump,
+    //     close = signer,
+    // )]
+    // pub delegate_action: Option<Account<'info, DelegateAction>>,
     #[account(
-        mut,
-        seeds = [
-            DelegateAction::PREFIX.as_bytes(),
-            merkle_tree.key().as_ref(),
-            signer.key().as_ref()
-        ],
-        bump,
-        close = signer,
-    )]
-    pub delegate_action: Option<Account<'info, DelegateAction>>,
-    #[account(
-        mut,
         seeds = [merkle_tree.key().as_ref()],
         bump,
     )]
@@ -352,6 +351,8 @@ pub mod onda_compression {
             data_hash.to_bytes(),
         );
 
+        msg!("leaf hash: {:?}", leaf.to_node());
+
         wrap_application_data_v1(leaf.to_event().try_to_vec()?, log_wrapper)?;
 
         append_leaf(
@@ -381,23 +382,25 @@ pub mod onda_compression {
         let forum_config = &mut ctx.accounts.forum_config;
         let signer = &ctx.accounts.signer;
         let author = &ctx.accounts.author;
-        let delegate = &ctx.accounts.delegate_action;
+        // let delegate = &ctx.accounts.delegate_action;
 
         if signer.key().eq(&author.key()) == false && forum_config.admin.eq(&signer.key()) == false {
-            if delegate.is_some() {
-                let unwrapped_delegate = delegate.clone().unwrap();
-                if unwrapped_delegate.delegate.eq(&signer.key()) == false {
-                    return err!(OndaSocialError::Unauthorized);
-                }
-                if Clock::get()?.unix_timestamp > unwrapped_delegate.expiry {
-                    return err!(OndaSocialError::Unauthorized);
-                }
-                if unwrapped_delegate.nonce != nonce {
-                    return err!(OndaSocialError::Unauthorized);
-                }
-            } else {
-                return err!(OndaSocialError::Unauthorized);
-            }
+            // if delegate.is_some() {
+            //     let unwrapped_delegate = delegate.clone().unwrap();
+            //     if unwrapped_delegate.delegate.eq(&signer.key()) == false {
+            //         return err!(OndaSocialError::Unauthorized);
+            //     }
+            //     if Clock::get()?.unix_timestamp > unwrapped_delegate.expiry {
+            //         return err!(OndaSocialError::Unauthorized);
+            //     }
+            //     if unwrapped_delegate.nonce != nonce {
+            //         return err!(OndaSocialError::Unauthorized);
+            //     }
+            // } else {
+            //     return err!(OndaSocialError::Unauthorized);
+            // }
+            return err!(OndaSocialError::Unauthorized);
+
         }
 
         let entry_id = get_entry_id(&ctx.accounts.merkle_tree.key(), nonce);

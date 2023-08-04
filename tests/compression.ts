@@ -43,7 +43,7 @@ function findForumConfigPda(merkleTree: anchor.web3.PublicKey) {
 async function createAnchorProgram(
   keypair: anchor.web3.Keypair = anchor.web3.Keypair.generate()
 ) {
-  await requestAirdrop(connection, keypair.publicKey);
+  await requestAirdrop(keypair.publicKey);
   return new anchor.Program<OndaCompression>(
     IDL,
     program.programId,
@@ -55,7 +55,7 @@ async function createAnchorProgram(
   );
 }
 
-describe.only("onda_compression", () => {
+describe("onda_compression", () => {
   const maxDepth = 5; // 3;
   const maxBufferSize = 8; // 8;
   // Allocation additional bytes for the canopy
@@ -163,7 +163,7 @@ describe.only("onda_compression", () => {
     const tx = new anchor.web3.Transaction().add(allocTreeIx).add(initForumIx);
     tx.feePayer = payer;
 
-    await requestAirdrop(connection, payer);
+    await requestAirdrop(payer);
 
     try {
       await program.provider.sendAndConfirm(tx, [merkleTreeKeypair], {
@@ -253,6 +253,7 @@ describe.only("onda_compression", () => {
         connection,
         merkleTree
       );
+
     const leaves = computeLeaves(leafSchemaV1, dataArgs);
 
     const nodeIndex = getNodeIndexFromLeafIndex(
