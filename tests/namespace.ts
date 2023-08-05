@@ -2,7 +2,7 @@ import assert from "assert";
 import * as anchor from "@project-serum/anchor";
 import * as helpers from "./helpers";
 
-describe.only("Namespace", () => {
+describe("Namespace", () => {
   it("creates a namespace", async () => {
     const name = "test";
     const uri = "https://test.com";
@@ -17,7 +17,6 @@ describe.only("Namespace", () => {
 
     await helpers.requestAirdrop(admin.publicKey);
     await helpers.initForum(admin, merkleTree);
-
     await namespaceProgram.methods
       .createNamespace(name, uri)
       .accounts({
@@ -31,5 +30,12 @@ describe.only("Namespace", () => {
       .rpc({
         skipPreflight: true,
       });
+
+    const account = await namespaceProgram.account.namespace.fetch(
+      namespacePda
+    );
+    assert.equal(account.name.replace(/\0/g, ""), name, "name");
+    assert.equal(account.uri.replace(/\0/g, ""), uri, "uri");
+    assert.ok(account.merkleTree.equals(merkleTree.publicKey), "merkleTree");
   });
 });
