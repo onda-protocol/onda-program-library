@@ -1381,6 +1381,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "onda-namespace"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "onda-compression",
+]
+
+[[package]]
 name = "onda-profile"
 version = "0.1.0"
 dependencies = [

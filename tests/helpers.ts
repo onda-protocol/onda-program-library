@@ -15,6 +15,10 @@ import {
   OndaModeration,
   IDL as MODERATION_IDL,
 } from "../target/types/onda_moderation";
+import {
+  OndaNamespace,
+  IDL as NAMESPACE_IDL,
+} from "../target/types/onda_namespace";
 
 type SnakeToCamelCase<S extends string> = S extends `${infer T}_${infer U}`
   ? `${T}${Capitalize<SnakeToCamelCase<U>>}`
@@ -34,6 +38,8 @@ export const compressionProgram = anchor.workspace
   .OndaCompression as anchor.Program<OndaCompression>;
 export const moderationProgram = anchor.workspace
   .OndaModeration as anchor.Program<OndaModeration>;
+export const namespaceProgram = anchor.workspace
+  .OndaNamespace as anchor.Program<OndaNamespace>;
 export const connection = compressionProgram.provider.connection;
 
 export async function requestAirdrop(
@@ -78,6 +84,20 @@ export async function getModerationProgram(
   );
 }
 
+export async function getNamespaceProgram(
+  keypair: anchor.web3.Keypair = anchor.web3.Keypair.generate()
+) {
+  return new anchor.Program<OndaNamespace>(
+    NAMESPACE_IDL,
+    namespaceProgram.programId,
+    new anchor.AnchorProvider(
+      connection,
+      new anchor.Wallet(keypair),
+      anchor.AnchorProvider.defaultOptions()
+    )
+  );
+}
+
 export function findForumConfigPda(merkleTree: anchor.web3.PublicKey) {
   return anchor.web3.PublicKey.findProgramAddressSync(
     [merkleTree.toBuffer()],
@@ -89,6 +109,20 @@ export function findTeamPda(merkleTree: anchor.web3.PublicKey) {
   return anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from("team"), merkleTree.toBuffer()],
     moderationProgram.programId
+  )[0];
+}
+
+export function findNamespacePda(name: string) {
+  return anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("namespace"), Buffer.from(name)],
+    namespaceProgram.programId
+  )[0];
+}
+
+export function findTreeMarkerPda(merkleTree: anchor.web3.PublicKey) {
+  return anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("tree_marker"), merkleTree.toBuffer()],
+    namespaceProgram.programId
   )[0];
 }
 

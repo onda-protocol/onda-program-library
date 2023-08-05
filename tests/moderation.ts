@@ -8,7 +8,7 @@ import {
   SPL_NOOP_PROGRAM_ID,
 } from "@solana/spl-account-compression";
 
-describe.only("Moderation", () => {
+describe("Moderation", () => {
   it("initializes a team", async () => {
     const admin = anchor.web3.Keypair.generate();
     const merkleTree = anchor.web3.Keypair.generate();

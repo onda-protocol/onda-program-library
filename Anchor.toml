@@ -11,16 +11,22 @@ onda_compression = "ondaUaJpDBZZQzpGe5Tr391CbuJH1UpZuRcS7sZU2GB"
 onda_moderation = "5o1PS9vW57YUezjCuN7aycLnACKkaxGyb7Ak7pdcK6sw"
 onda_bloom = "onda3Sxku2NT88Ho8WfEgbkavNEELWzaguvh4itdn3C"
 onda_profile = "ondapcq2qXTSynRieMCE9BjRsZ2XALEEZZunkwbhCPF"
+onda_namespace = "GCZ4prh8BBkoTePCNF7VfWuNPhRVgwDKfxy8Uv4ERC8V"
 
 [programs.devnet]
 onda_compression = "ondaUaJpDBZZQzpGe5Tr391CbuJH1UpZuRcS7sZU2GB"
+onda_moderation = "5o1PS9vW57YUezjCuN7aycLnACKkaxGyb7Ak7pdcK6sw"
 onda_bloom = "onda3Sxku2NT88Ho8WfEgbkavNEELWzaguvh4itdn3C"
 onda_profile = "ondapcq2qXTSynRieMCE9BjRsZ2XALEEZZunkwbhCPF"
+onda_namespace = "GCZ4prh8BBkoTePCNF7VfWuNPhRVgwDKfxy8Uv4ERC8V"
+
 
 [programs.mainnet]
 onda_compression = "ondaUaJpDBZZQzpGe5Tr391CbuJH1UpZuRcS7sZU2GB"
+onda_moderation = "5o1PS9vW57YUezjCuN7aycLnACKkaxGyb7Ak7pdcK6sw"
 onda_bloom = "onda3Sxku2NT88Ho8WfEgbkavNEELWzaguvh4itdn3C"
 onda_profile = "ondapcq2qXTSynRieMCE9BjRsZ2XALEEZZunkwbhCPF"
+onda_namespace = "GCZ4prh8BBkoTePCNF7VfWuNPhRVgwDKfxy8Uv4ERC8V"
 
 [provider]
 cluster = "localnet"
