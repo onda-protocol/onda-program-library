@@ -69,26 +69,6 @@ pub struct RemoveMember<'info> {
 }
 
 #[derive(Accounts)]
-pub struct InitDeleteAction<'info> {
-    #[account(mut)]
-    pub member: Signer<'info>,
-    #[account(
-        mut,
-        seeds = [Team::PREFIX.as_bytes(), merkle_tree.key().as_ref()],
-        bump,
-    )]
-    pub team: Account<'info, Team>,
-    /// CHECK: checked in cpi
-    pub delegate_action: UncheckedAccount<'info>,
-    /// CHECK: checked in cpi
-    pub merkle_tree: UncheckedAccount<'info>,
-    /// CHECK: checked in cpi
-    pub forum_config: UncheckedAccount<'info>,
-    pub onda_compression: Program<'info, OndaCompression>,
-    pub system_program: Program<'info, System>,
-}
-
-#[derive(Accounts)]
 pub struct DeleteEntry<'info> {
     #[account(mut)]
     pub member: Signer<'info>,
@@ -195,39 +175,6 @@ pub mod onda_moderation {
         }
 
         team.members.retain(|m| !m.address.eq(&member.key()));
-
-        Ok(())
-    }
-
-    pub fn init_delete_action(ctx: Context<InitDeleteAction>, nonce: u64) -> Result<()> {    
-        let team = &mut ctx.accounts.team;
-        let member = &ctx.accounts.member;
-        let _member_role = team.members.iter().find(|m| m.address.eq(&member.key())).ok_or(ErrorCodes::MemberNotFound)?;
-        
-        
-        let cpi_program = ctx.accounts.onda_compression.to_account_info();
-        let cpi_accounts = onda_compression::cpi::accounts::InitDelegate {
-                admin: ctx.accounts.team.to_account_info(),
-                delegate: ctx.accounts.member.to_account_info(),
-                delegate_action: ctx.accounts.delegate_action.to_account_info(),
-                forum_config: ctx.accounts.forum_config.to_account_info(),
-                merkle_tree: ctx.accounts.merkle_tree.to_account_info(),
-                system_program: ctx.accounts.system_program.to_account_info(),
-        };
-        let bump = *ctx.bumps.get("team").unwrap();
-        let merkle_tree_key = ctx.accounts.merkle_tree.key();
-        let seeds = &[
-            Team::PREFIX.as_bytes(),
-            merkle_tree_key.as_ref(),
-            &[bump]
-        ];
-        let signer_seeds = &[&seeds[..]];
-        let cpi_ctx = CpiContext::new_with_signer(
-            cpi_program,
-            cpi_accounts,
-            signer_seeds
-        );
-        onda_compression::cpi::init_delegate(cpi_ctx, nonce)?;
 
         Ok(())
     }

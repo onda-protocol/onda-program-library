@@ -35,6 +35,77 @@ describe.only("Moderation", () => {
     );
   });
 
+  it("adds a member", async () => {
+    const admin = anchor.web3.Keypair.generate();
+    const merkleTree = anchor.web3.Keypair.generate();
+    const member = anchor.web3.Keypair.generate();
+    const teamPda = await helpers.findTeamPda(merkleTree.publicKey);
+
+    await helpers.requestAirdrop(admin.publicKey);
+    await helpers.initForum(admin, merkleTree);
+    await helpers.initTeam(admin, merkleTree.publicKey);
+    const moderationProgram = await helpers.getModerationProgram(admin);
+
+    await moderationProgram.methods
+      .addMember({
+        moderator: {},
+      })
+      .accounts({
+        admin: admin.publicKey,
+        newMember: member.publicKey,
+        team: teamPda,
+        merkleTree: merkleTree.publicKey,
+      })
+      .rpc();
+
+    const teamAccount = await helpers.moderationProgram.account.team.fetch(
+      teamPda
+    );
+    assert.ok(
+      teamAccount.members[1].address.equals(member.publicKey),
+      "team.members"
+    );
+  });
+
+  it("remove a member", async () => {
+    const admin = anchor.web3.Keypair.generate();
+    const merkleTree = anchor.web3.Keypair.generate();
+    const member = anchor.web3.Keypair.generate();
+    const teamPda = await helpers.findTeamPda(merkleTree.publicKey);
+
+    await helpers.requestAirdrop(admin.publicKey);
+    await helpers.initForum(admin, merkleTree);
+    await helpers.initTeam(admin, merkleTree.publicKey);
+    const moderationProgram = await helpers.getModerationProgram(admin);
+
+    await moderationProgram.methods
+      .addMember({
+        moderator: {},
+      })
+      .accounts({
+        admin: admin.publicKey,
+        newMember: member.publicKey,
+        team: teamPda,
+        merkleTree: merkleTree.publicKey,
+      })
+      .rpc();
+
+    await moderationProgram.methods
+      .removeMember()
+      .accounts({
+        admin: admin.publicKey,
+        member: member.publicKey,
+        team: teamPda,
+        merkleTree: merkleTree.publicKey,
+      })
+      .rpc();
+
+    const teamAccount = await helpers.moderationProgram.account.team.fetch(
+      teamPda
+    );
+    assert.equal(teamAccount.members[1], undefined, "team.members");
+  });
+
   it("deletes an entry", async () => {
     const admin = anchor.web3.Keypair.generate();
     const merkleTree = anchor.web3.Keypair.generate();
