@@ -3,12 +3,34 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use spl_account_compression::Node;
 
 pub const ENTRY_PREFIX: &str = "entry";
-pub const BASE_FORUM_CONFIG_SIZE: usize = 8 + 8 + 8 + 32 + 1;
+pub const BASE_FORUM_CONFIG_SIZE: usize = 8 + 8 + 8 + 32 + 4;
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
-pub enum RestrictionType {
-    Collection { address: Pubkey },
-    Mint { address: Pubkey },
+pub enum Rule {
+    Token,
+    NFT,
+    /// Passes can be used to verify ownership of cNFTs and support cold storage
+    Pass,
+    AdditionalSigner,
+}
+
+pub struct OperationResult {
+    pub operator: Operator,
+    pub result: bool,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
+pub enum Operator {
+    AND,
+    OR,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
+pub struct Gate {
+    pub amount: u64,
+    pub rule_type: Rule,
+    pub operator: Operator,
+    pub address: Vec<Pubkey>,
 }   
 
 #[account]
@@ -16,12 +38,12 @@ pub struct ForumConfig {
     pub total_capacity: u64,
     pub post_count: u64,
     pub admin: Pubkey,
-    pub gate: Option<Vec<RestrictionType>>,
+    pub gate: Vec<Gate>
 }
 
 impl ForumConfig {
-    pub fn get_size(gate: Option<Vec<RestrictionType>>) -> usize {
-        BASE_FORUM_CONFIG_SIZE + gate.map(|g| g.len() * 33).map_or(0, |l| if l == 0 { l } else { l + 4 })
+    pub fn get_size(gate: Option<Vec<Gate>>) -> usize {
+        BASE_FORUM_CONFIG_SIZE + gate.map(|g| g.len() * std::mem::size_of::<Gate>()).unwrap_or(0)
     }
 
     pub fn increment_post_count(&mut self) {

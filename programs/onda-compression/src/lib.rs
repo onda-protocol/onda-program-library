@@ -26,7 +26,7 @@ pub const MAX_URI_LEN: usize = 128;
 pub const MAX_TITLE_LEN: usize = 300;
 
 #[derive(Accounts)]
-#[instruction(max_depth: u32, max_buffer_size: u32, gate: Option<Vec<RestrictionType>>)]
+#[instruction(max_depth: u32, max_buffer_size: u32, gate: Option<Vec<Gate>>)]
 pub struct InitForum<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -77,6 +77,7 @@ pub struct AddEntry<'info> {
     pub session_token: Option<Account<'info, SessionToken>>,
     #[account(mut)]
     pub signer: Signer<'info>,
+    pub additional_signer: Option<Signer<'info>>,
     #[account(
         mut,
         seeds = [merkle_tree.key().as_ref()],
@@ -126,19 +127,21 @@ pub mod onda_compression {
         ctx: Context<InitForum>,
         max_depth: u32,
         max_buffer_size: u32,
-        gate: Option<Vec<RestrictionType>>,
+        gate: Option<Vec<Gate>>,
     ) -> Result<()> {
         let forum_config = &mut ctx.accounts.forum_config;
         let merkle_tree = &ctx.accounts.merkle_tree;
         let seed = merkle_tree.key();
         let seeds = &[seed.as_ref(), &[*ctx.bumps.get("forum_config").unwrap()]];
         let wrapper = &ctx.accounts.log_wrapper;
+        
         forum_config.set_inner(ForumConfig {
             admin: ctx.accounts.payer.key(),
             total_capacity: 1 << max_depth,
             post_count: 0,
-            gate,
+            gate: gate.unwrap_or(vec![]),
         });
+        
         let authority_pda_signer = &[&seeds[..]];
         let cpi_ctx = CpiContext::new_with_signer(
             ctx.accounts.compression_program.to_account_info(),
@@ -162,7 +165,6 @@ pub mod onda_compression {
         Ok(())
     }
 
-    // Handler to update a Post account
     #[session_auth_or(
         ctx.accounts.author.key() == ctx.accounts.signer.key(),
         OndaSocialError::Unauthorized
@@ -209,81 +211,88 @@ pub mod onda_compression {
             },
         }
 
-        // Check if the forum is restricted to a collection.
-        if forum_config.gate.is_some() {
-            let gates = forum_config.gate.clone().unwrap();
-            let mut allow_access = false;
+        // Check if user is allowed to add an entry to this forum
+        let gates = forum_config.gate.clone();
+        let operation_results = gates.iter().map(|gate| {
+            let addresses = gate.address.clone();
+            let mut operation = OperationResult {
+                operator: gate.operator.clone(),
+                result: false,
+            };
 
-            for gate in gates {
-                match gate {
-                    RestrictionType::Mint { address } => {
-                        let mint = mint.clone().ok_or(OndaSocialError::Unauthorized)?;
-                        let token_account = token_account.clone().ok_or(OndaSocialError::Unauthorized)?;
+            match gate.rule_type {
+                Rule::Token => {
+                    let mint = mint.clone().ok_or(OndaSocialError::Unauthorized).unwrap();
+                    let token_account = token_account.clone().ok_or(OndaSocialError::Unauthorized).unwrap();
 
-                        if mint.key().eq(&address) == false {
-                            continue;
+                    for address in addresses {
+                        let is_valid = is_valid_token(
+                            &address,
+                            &author,
+                            &mint,
+                            &token_account,
+                            gate.amount
+                        );
+
+                        if is_valid {
+                            operation.result = true;
+                            break;
                         }
-                        if token_account.mint.eq(&mint.key()) == false {
-                            continue;
-                        }
-                        if token_account.owner.eq(&author) == false {
-                            continue;
-                        }
-                        if token_account.amount.ge(&1) == false {
-                            continue;
+                    }
+
+                },
+                Rule::NFT => {
+                    let mint = mint.clone().ok_or(OndaSocialError::Unauthorized).unwrap();
+                    let token_account = token_account.clone().ok_or(OndaSocialError::Unauthorized).unwrap();
+                    let metadata_info = metadata.clone().ok_or(OndaSocialError::Unauthorized).unwrap();
+
+                    for address in addresses {
+                        let is_valid = is_valid_token(
+                            &address,
+                            &author,
+                            &mint,
+                            &token_account,
+                            gate.amount
+                        );
+
+                        if is_valid == false {
+                            break;
                         }
 
-                        allow_access = true;
-                        break;
+                        let is_valid = is_valid_nft(
+                            &address,
+                            &mint,
+                            &metadata_info
+                        );
 
-                    },
-                    RestrictionType::Collection { address } => {
-                        let mint = mint.clone().ok_or(OndaSocialError::Unauthorized)?;
-                        let metadata_info = metadata.clone().ok_or(OndaSocialError::Unauthorized)?;
-                        let metadata = Metadata::deserialize(
-                            &mut metadata_info.data.borrow_mut().as_ref()
-                        )?;
-                        let token_account = token_account.clone().ok_or(OndaSocialError::Unauthorized)?;
-        
-                        // Check the metadata address is valid pda for this mint
-                        let (metadata_pda, _) = find_metadata_account(
-                            &mint.key()
-                          );
-
-                        if metadata_pda.eq(&metadata_info.key()) == false {
-                            continue;
+                        if is_valid {
+                            operation.result = true;
+                            break;
                         }
-        
-                        // Check the metadata is verified for this collection
-                        let metadata_collection = metadata.collection.ok_or(OndaSocialError::Unauthorized)?;
-
-                        if metadata_collection.verified == false {
-                            continue;
+                    }
+                },
+                Rule::Pass => {
+                    // TODO: Implement pass
+                },
+                Rule::AdditionalSigner => {
+                    let additional_signer = &ctx.accounts.additional_signer.clone().ok_or(OndaSocialError::Unauthorized).unwrap();
+                    
+                    for address in addresses {
+                        if additional_signer.key().eq(&address) {
+                            operation.result = true;
+                            break;
                         }
-                        if metadata_collection.key.eq(&address) == false {
-                            continue;
-                        }
-        
-                        // Check the token account is owned by the author and has correct balance
-                        if token_account.amount != 1 {
-                            continue;
-                        }
-                        if token_account.mint.eq(&mint.key()) == false {
-                            continue;
-                        }
-                        if token_account.owner.eq(&author) == false {
-                            continue;
-                        }
-                        
-                        allow_access = true;
-                        break;
                     }
                 }
             }
+
+            operation
+        }).collect::<Vec<OperationResult>>();
+                
+        let allow_access = evaluate_operations(operation_results);
         
-            if allow_access == false {
-                return err!(OndaSocialError::Unauthorized);
-            }
+        if allow_access == false {
+            return err!(OndaSocialError::Unauthorized);
         }
         
         let entry_id = get_entry_id(&merkle_tree.key(), forum_config.post_count);
@@ -459,4 +468,78 @@ pub fn is_valid_url(input: &str) -> bool {
         Ok(_) => true,  // The URL is valid.
         Err(_) => false, // The URL is not valid.
     }
+}
+
+pub fn is_valid_token(
+    address: &Pubkey,
+    owner: &Pubkey,
+    mint: &Account<Mint>,
+    token_account: &Account<TokenAccount>,
+    amount: u64,
+) -> bool {
+    if mint.key().eq(&address) == false {
+        return false;
+    }
+    if token_account.mint.eq(&mint.key()) == false {
+        return false;
+    }
+    if token_account.owner.eq(&owner) == false {
+        return false;
+    }
+    if token_account.amount.ge(&1) == false {
+        return false;
+    }
+    if amount < token_account.amount {
+        return false;
+    }
+    true
+} 
+
+pub fn is_valid_nft(
+    address: &Pubkey,
+    mint: &Account<Mint>,
+    metadata_info: &AccountInfo,
+) -> bool {
+    let metadata = Metadata::deserialize(
+        &mut metadata_info.data.borrow_mut().as_ref()
+    ).unwrap();
+
+    // Check the metadata address is valid pda for this mint
+    let (metadata_pda, _) = find_metadata_account(
+        &mint.key()
+    );
+
+    if metadata_pda.eq(&metadata_info.key()) == false {
+        return false
+    }
+
+    // Check the metadata is verified for this collection
+    let is_valid_collection = match metadata.collection {
+        Some(collection) => collection.verified == true && collection.key.eq(&address),
+        None => false,
+    };
+
+    is_valid_collection
+}
+
+pub fn evaluate_operations(operations: Vec<OperationResult>) -> bool {
+    let mut overall_result = true;
+    let mut or_case_result = true;
+    
+    for op in operations {
+        match op.operator {
+            Operator::AND => {
+                overall_result &= op.result;
+                or_case_result &= op.result;
+            }
+            Operator::OR => {
+                if or_case_result {
+                    overall_result |= op.result;
+                }
+                or_case_result = true;
+            }
+        }
+    }
+    
+    overall_result
 }
