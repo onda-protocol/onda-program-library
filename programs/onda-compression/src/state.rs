@@ -4,6 +4,7 @@ use spl_account_compression::Node;
 
 pub const ENTRY_PREFIX: &str = "entry";
 pub const BASE_FORUM_CONFIG_SIZE: usize = 8 + 8 + 8 + 32 + 4;
+pub const BASE_GATE_SIZE: usize = 8 + 1 + 1 + 4;
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
 pub enum Rule {
@@ -23,6 +24,7 @@ pub struct OperationResult {
 pub enum Operator {
     AND,
     OR,
+    NOT,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
@@ -43,7 +45,13 @@ pub struct ForumConfig {
 
 impl ForumConfig {
     pub fn get_size(gate: Option<Vec<Gate>>) -> usize {
-        BASE_FORUM_CONFIG_SIZE + gate.map(|g| g.len() * std::mem::size_of::<Gate>()).unwrap_or(0)
+        let base_size = BASE_FORUM_CONFIG_SIZE;
+
+        let size = gate.unwrap_or(Vec::new()).iter().fold(base_size, |acc, gate| {
+            acc + BASE_GATE_SIZE + gate.address.len() * 32
+        });
+    
+        size
     }
 
     pub fn increment_post_count(&mut self) {

@@ -279,8 +279,15 @@ pub mod onda_compression {
                     
                     for address in addresses {
                         if additional_signer.key().eq(&address) {
-                            operation.result = true;
-                            break;
+                            match gate.operator {
+                                Operator::NOT => {
+                                    operation.result = false;
+                                    break;
+                                },
+                                _ => {
+                                    operation.result = true;
+                                }
+                            }
                         }
                     }
                 }
@@ -537,6 +544,12 @@ pub fn evaluate_operations(operations: Vec<OperationResult>) -> bool {
                     overall_result |= op.result;
                 }
                 or_case_result = true;
+            },
+            Operator::NOT => {
+                if op.result == false {
+                    overall_result = false;
+                    break;
+                }
             }
         }
     }

@@ -21,7 +21,7 @@ function findProfilePda(author: anchor.web3.PublicKey) {
 async function createAnchorProgram(
   keypair: anchor.web3.Keypair = anchor.web3.Keypair.generate()
 ) {
-  await requestAirdrop(connection, keypair.publicKey);
+  await requestAirdrop(keypair.publicKey);
   return new anchor.Program<OndaProfile>(
     IDL,
     program.programId,
@@ -33,7 +33,7 @@ async function createAnchorProgram(
   );
 }
 
-describe("onda_profile", () => {
+describe("Profile", () => {
   let nft: NftWithToken;
   let user = anchor.web3.Keypair.generate();
   const profilePda = findProfilePda(user.publicKey);

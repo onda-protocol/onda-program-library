@@ -175,18 +175,15 @@ export async function initForum(
 
 export async function addEntry(
   merkleTree: anchor.web3.PublicKey,
-  title: string,
-  uri: string
+  data: DataV1,
+  author: anchor.web3.Keypair = anchor.web3.Keypair.generate()
 ): Promise<LeafSchemaV1> {
-  const author = anchor.web3.Keypair.generate();
   const program = await getCompressionProgram(author);
   const forumConfig = findForumConfigPda(merkleTree);
   await requestAirdrop(author.publicKey);
 
   return program.methods
-    .addEntry({
-      textPost: { title, uri, nsfw: false },
-    })
+    .addEntry(data)
     .accounts({
       forumConfig,
       merkleTree,

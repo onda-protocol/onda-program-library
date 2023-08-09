@@ -1,12 +1,12 @@
 import assert from "assert";
-import * as anchor from "@project-serum/anchor";
-import * as helpers from "./helpers";
 import {
   ConcurrentMerkleTreeAccount,
   MerkleTree,
   SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
   SPL_NOOP_PROGRAM_ID,
 } from "@solana/spl-account-compression";
+import * as anchor from "@project-serum/anchor";
+import * as helpers from "./helpers";
 
 describe("Moderation", () => {
   it("initializes a team", async () => {
@@ -115,11 +115,13 @@ describe("Moderation", () => {
     await helpers.requestAirdrop(admin.publicKey);
     await helpers.initForum(admin, merkleTree);
     await helpers.initTeam(admin, merkleTree.publicKey);
-    const leafEvent = await helpers.addEntry(
-      merkleTree.publicKey,
-      "test",
-      "https://example.com"
-    );
+    const leafEvent = await helpers.addEntry(merkleTree.publicKey, {
+      textPost: {
+        title: "test",
+        uri: "https://example.com",
+        nsfw: false,
+      },
+    });
 
     const leafHash = helpers.computeCompressedEntryHash(
       leafEvent.id,
