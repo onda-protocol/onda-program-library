@@ -1,4 +1,7 @@
 import * as anchor from "@project-serum/anchor";
+import { keypairIdentity, Metaplex } from "@metaplex-foundation/js";
+import { PROGRAM_ID as METADATA_PROGRAM_ID } from "@metaplex-foundation/mpl-token-metadata";
+import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "@metaplex-foundation/mpl-bubblegum";
 import {
   getConcurrentMerkleTreeAccountSize,
   SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
@@ -19,6 +22,7 @@ import {
   OndaNamespace,
   IDL as NAMESPACE_IDL,
 } from "../target/types/onda_namespace";
+import { OndaRewards, IDL as REWARDS_IDL } from "../target/types/onda_rewards";
 
 type SnakeToCamelCase<S extends string> = S extends `${infer T}_${infer U}`
   ? `${T}${Capitalize<SnakeToCamelCase<U>>}`
@@ -40,6 +44,8 @@ export const moderationProgram = anchor.workspace
   .OndaModeration as anchor.Program<OndaModeration>;
 export const namespaceProgram = anchor.workspace
   .OndaNamespace as anchor.Program<OndaNamespace>;
+export const rewardsProgram = anchor.workspace
+  .OndaRewards as anchor.Program<OndaRewards>;
 export const connection = compressionProgram.provider.connection;
 
 export async function requestAirdrop(
@@ -98,6 +104,20 @@ export async function getNamespaceProgram(
   );
 }
 
+export async function getRewardsProgram(
+  keypair: anchor.web3.Keypair = anchor.web3.Keypair.generate()
+) {
+  return new anchor.Program<OndaRewards>(
+    REWARDS_IDL,
+    rewardsProgram.programId,
+    new anchor.AnchorProvider(
+      connection,
+      new anchor.Wallet(keypair),
+      anchor.AnchorProvider.defaultOptions()
+    )
+  );
+}
+
 export function findForumConfigPda(merkleTree: anchor.web3.PublicKey) {
   return anchor.web3.PublicKey.findProgramAddressSync(
     [merkleTree.toBuffer()],
@@ -123,6 +143,27 @@ export function findTreeMarkerPda(merkleTree: anchor.web3.PublicKey) {
   return anchor.web3.PublicKey.findProgramAddressSync(
     [Buffer.from("tree_marker"), merkleTree.toBuffer()],
     namespaceProgram.programId
+  )[0];
+}
+
+export function findRewardPda(merkleTree: anchor.web3.PublicKey) {
+  return anchor.web3.PublicKey.findProgramAddressSync(
+    [merkleTree.toBuffer()],
+    rewardsProgram.programId
+  )[0];
+}
+
+export function findTreeAuthorityPda(merkleTree: anchor.web3.PublicKey) {
+  return anchor.web3.PublicKey.findProgramAddressSync(
+    [merkleTree.toBuffer()],
+    BUBBLEGUM_PROGRAM_ID
+  )[0];
+}
+
+export function findBubblegumSignerPda() {
+  return anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("collection_cpi")],
+    BUBBLEGUM_PROGRAM_ID
   )[0];
 }
 
@@ -260,4 +301,94 @@ export function computeCompressedEntryHash(
   ]);
 
   return Buffer.from(keccak_256.digest(message));
+}
+
+export async function createReward(authority: anchor.web3.Keypair) {
+  const maxDepth = 14;
+  const bufferSize = 64;
+  const canopyDepth = maxDepth - 3;
+  const merkleTree = anchor.web3.Keypair.generate();
+  const space = getConcurrentMerkleTreeAccountSize(
+    maxDepth,
+    bufferSize,
+    canopyDepth
+  );
+  const lamports = await connection.getMinimumBalanceForRentExemption(space);
+  const allocTreeIx = anchor.web3.SystemProgram.createAccount({
+    lamports,
+    space: space,
+    fromPubkey: authority.publicKey,
+    newAccountPubkey: merkleTree.publicKey,
+    programId: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
+  });
+
+  const program = await getRewardsProgram(authority);
+  const rewardPda = findRewardPda(merkleTree.publicKey);
+  const treeAuthorityPda = findTreeAuthorityPda(merkleTree.publicKey);
+
+  const metaplex = new Metaplex(connection).use(keypairIdentity(authority));
+
+  const { mintAddress, masterEditionAddress } = await metaplex.nfts().create({
+    symbol: "ONDA",
+    name: "Onda",
+    uri: "https://example.com",
+    sellerFeeBasisPoints: 0,
+    isCollection: true,
+  });
+
+  const metadataPda = await metaplex
+    .nfts()
+    .pdas()
+    .metadata({ mint: mintAddress });
+  const collectionAuthorityRecordPda = await metaplex
+    .nfts()
+    .pdas()
+    .collectionAuthorityRecord({
+      mint: mintAddress,
+      collectionAuthority: rewardPda,
+    });
+
+  const createRewardIx = await program.methods
+    .createReward(maxDepth, bufferSize, {
+      symbol: "ONDA",
+      name: "Onda",
+      uri: "https://example.com",
+    })
+    .accounts({
+      reward: rewardPda,
+      collectionMint: mintAddress,
+      collectionMetadata: metadataPda,
+      collectionAuthorityRecord: collectionAuthorityRecordPda,
+      merkleTree: merkleTree.publicKey,
+      treeAuthority: treeAuthorityPda,
+      payer: authority.publicKey,
+      logWrapper: SPL_NOOP_PROGRAM_ID,
+      bubblegumProgram: BUBBLEGUM_PROGRAM_ID,
+      tokenMetadataProgram: METADATA_PROGRAM_ID,
+      compressionProgram: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
+    })
+    .instruction();
+
+  const tx = new anchor.web3.Transaction().add(allocTreeIx).add(createRewardIx);
+  tx.feePayer = authority.publicKey;
+
+  try {
+    await program.provider.sendAndConfirm(tx, [merkleTree], {
+      commitment: "confirmed",
+      skipPreflight: true,
+    });
+  } catch (err) {
+    console.log(err);
+    throw err;
+  }
+
+  return {
+    rewardPda,
+    treeAuthorityPda,
+    collectionAuthorityRecordPda,
+    collectionMetadata: metadataPda,
+    collectionMint: mintAddress,
+    editionPda: masterEditionAddress,
+    merkleTree: merkleTree.publicKey,
+  };
 }

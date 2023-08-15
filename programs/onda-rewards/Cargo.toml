@@ -1,12 +1,12 @@
 [package]
-name = "onda-profile"
+name = "onda-rewards"
 version = "0.1.0"
 description = "Created with Anchor"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "onda_profile"
+name = "onda_rewards"
 
 [features]
 no-entrypoint = []
@@ -17,6 +17,7 @@ default = []
 
 [dependencies]
 anchor-lang = { version="0.28.0", features = ["init-if-needed"] }
-anchor-spl = "0.28.0"
+mpl-bubblegum = { version="0.10.1", features = ["cpi"] }
 mpl-token-metadata = { version = "2.0.0-beta.1", features = ["no-entrypoint"] }
+gpl-session = { version = "2.0.0", features = ["no-entrypoint"] }
 

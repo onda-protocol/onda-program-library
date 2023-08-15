@@ -20,7 +20,7 @@ use crate::{
 pub mod error;
 pub mod state;
 
-declare_id!("ondaUaJpDBZZQzpGe5Tr391CbuJH1UpZuRcS7sZU2GB");
+declare_id!("D3eGvVzSzcZZARAfxARQoEHiySYa1aMdkd4djc7LRQRC");
 
 pub const MAX_URI_LEN: usize = 128;
 pub const MAX_TITLE_LEN: usize = 300;
@@ -77,7 +77,8 @@ pub struct AddEntry<'info> {
     pub session_token: Option<Account<'info, SessionToken>>,
     #[account(mut)]
     pub signer: Signer<'info>,
-    pub additional_signer: Option<Signer<'info>>,
+    /// CHECK: check is signer
+    pub additional_signer: Option<AccountInfo<'info>>,
     #[account(
         mut,
         seeds = [merkle_tree.key().as_ref()],
@@ -277,19 +278,24 @@ pub mod onda_compression {
                 Rule::AdditionalSigner => {
                     let additional_signer = &ctx.accounts.additional_signer.clone().ok_or(OndaSocialError::Unauthorized).unwrap();
                     
-                    for address in addresses {
-                        if additional_signer.key().eq(&address) {
-                            match gate.operator {
-                                Operator::NOT => {
-                                    operation.result = false;
-                                    break;
-                                },
-                                _ => {
-                                    operation.result = true;
+                    if additional_signer.is_signer == false {
+                        operation.result = false;
+                    } else {
+                        for address in addresses {
+                            if additional_signer.key().eq(&address) {
+                                match gate.operator {
+                                    Operator::NOT => {
+                                        operation.result = false;
+                                        break;
+                                    },
+                                    _ => {
+                                        operation.result = true;
+                                    }
                                 }
                             }
                         }
                     }
+
                 }
             }
 
