@@ -1,4 +1,4 @@
-anchor_version = "0.26.0"
+anchor_version = "0.28.0"
 
 [registry]
 url = "https://anchor.projectserum.com"
@@ -7,13 +7,26 @@ url = "https://anchor.projectserum.com"
 seeds = false
 
 [programs.localnet]
-onda_listings = "F2BTn5cmYkTzo52teXhG6jyLS3y2BujdE56yZaGyvxwC"
+onda_compression = "ondaUaJpDBZZQzpGe5Tr391CbuJH1UpZuRcS7sZU2GB"
+onda_moderation = "5o1PS9vW57YUezjCuN7aycLnACKkaxGyb7Ak7pdcK6sw"
+onda_rewards = "HPQxJSGNpSGJuEp4Qs3dch8X7GvyxZADGRcw8iqqSuCg"
+onda_profile = "ondapcq2qXTSynRieMCE9BjRsZ2XALEEZZunkwbhCPF"
+onda_namespace = "GCZ4prh8BBkoTePCNF7VfWuNPhRVgwDKfxy8Uv4ERC8V"
 
 [programs.devnet]
-onda_listings = "F2BTn5cmYkTzo52teXhG6jyLS3y2BujdE56yZaGyvxwC"
+onda_compression = "ondaUaJpDBZZQzpGe5Tr391CbuJH1UpZuRcS7sZU2GB"
+onda_moderation = "5o1PS9vW57YUezjCuN7aycLnACKkaxGyb7Ak7pdcK6sw"
+onda_rewards = "HPQxJSGNpSGJuEp4Qs3dch8X7GvyxZADGRcw8iqqSuCg"
+onda_profile = "ondapcq2qXTSynRieMCE9BjRsZ2XALEEZZunkwbhCPF"
+onda_namespace = "GCZ4prh8BBkoTePCNF7VfWuNPhRVgwDKfxy8Uv4ERC8V"
+
 
 [programs.mainnet]
-onda_listings = "F2BTn5cmYkTzo52teXhG6jyLS3y2BujdE56yZaGyvxwC"
+onda_compression = "ondaUaJpDBZZQzpGe5Tr391CbuJH1UpZuRcS7sZU2GB"
+onda_moderation = "5o1PS9vW57YUezjCuN7aycLnACKkaxGyb7Ak7pdcK6sw"
+onda_rewards = "HPQxJSGNpSGJuEp4Qs3dch8X7GvyxZADGRcw8iqqSuCg"
+onda_profile = "ondapcq2qXTSynRieMCE9BjRsZ2XALEEZZunkwbhCPF"
+onda_namespace = "GCZ4prh8BBkoTePCNF7VfWuNPhRVgwDKfxy8Uv4ERC8V"
 
 [provider]
 cluster = "localnet"
@@ -30,3 +43,15 @@ url = "https://api.mainnet-beta.solana.com"
 
 [[test.validator.clone]]
 address = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+
+[[test.validator.clone]]
+address = "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY"
+
+[[test.validator.clone]]
+address = "cmtDvXumGCrqC1Age74AVPhSRVXJMd8PJS91L8KbNCK"
+
+[[test.validator.clone]]
+address = "noopb9bkMVfRPU8AsbpTUg8AQkHtKwMYZiFUjNRtMmV"
+
+[[test.validator.clone]]
+address = "6MhUAJtKdJx3RDCffUsJsQm8xy9YhhywjEmMYrxRc5j6"
