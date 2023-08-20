@@ -3,7 +3,7 @@ On-chain community moderated forums
 
 ## Programs
 This project contains the following programs:
-- [onda_compression](https://github.com/onda-protocol/onda-program-library/tree/main/programs/onda-compression) `program_id`
+- [onda_compression](https://github.com/onda-protocol/onda-program-library/tree/main/programs/onda-compression) `onda1FgCsQMC4zBhsjGjKoHDgGp6q7pK48HQaVXf28d`
 - [onda_namespace](https://github.com/onda-protocol/onda-program-library/tree/main/programs/onda-namespace) `ona67gSygPUkb34U5sgPZK7AkgXDJJrNoi5nrraEHvE`
 - onda_awards `program_id`
 - [onda_moderation](https://github.com/onda-protocol/onda-program-library/tree/main/programs/onda-moderation) (TBD)
