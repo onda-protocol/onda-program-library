@@ -7,4 +7,3 @@ target
 test-ledger
 **/*.rs.bk
 node_modules
-/outputs
