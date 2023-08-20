@@ -7,31 +7,31 @@ import {
   SPL_NOOP_PROGRAM_ID,
 } from "@solana/spl-account-compression";
 
-describe.only("Rewards", () => {
-  it("Creates a new reward", async () => {
+describe("Awards", () => {
+  it("Creates a new award", async () => {
     const authority = anchor.web3.Keypair.generate();
 
     await helpers.requestAirdrop(authority.publicKey);
-    await helpers.createReward(authority);
+    await helpers.createAward(authority);
   });
 
   it("Mints a reward to the provied address", async () => {
     const authority = anchor.web3.Keypair.generate();
     const entryId = anchor.web3.Keypair.generate().publicKey;
-    const program = await helpers.getRewardsProgram(authority);
+    const program = await helpers.getAwardsProgram(authority);
 
     await helpers.requestAirdrop(authority.publicKey);
-    const accounts = await helpers.createReward(authority);
+    const accounts = await helpers.createAward(authority);
     const bubblegumSignerPda = await helpers.findBubblegumSignerPda();
 
     try {
       await program.methods
-        .giveReward()
+        .giveAward()
         .accounts({
           payer: authority.publicKey,
           sessionToken: null,
           signer: authority.publicKey,
-          reward: accounts.rewardPda,
+          award: accounts.awardPda,
           leafOwner: entryId,
           merkleTree: accounts.merkleTree,
           treeAuthority: accounts.treeAuthorityPda,

@@ -27,9 +27,7 @@ describe("Namespace", () => {
         forumConfig: forumConfigPda,
         merkleTree: merkleTree.publicKey,
       })
-      .rpc({
-        skipPreflight: true,
-      });
+      .rpc();
 
     const account = await namespaceProgram.account.namespace.fetch(
       namespacePda

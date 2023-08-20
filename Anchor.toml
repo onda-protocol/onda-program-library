@@ -3,30 +3,12 @@ anchor_version = "0.28.0"
 [registry]
 url = "https://anchor.projectserum.com"
 
-[features]
-seeds = false
-
 [programs.localnet]
-onda_compression = "ondaUaJpDBZZQzpGe5Tr391CbuJH1UpZuRcS7sZU2GB"
+onda_compression = "onda1FgCsQMC4zBhsjGjKoHDgGp6q7pK48HQaVXf28d"
 onda_moderation = "5o1PS9vW57YUezjCuN7aycLnACKkaxGyb7Ak7pdcK6sw"
-onda_rewards = "HPQxJSGNpSGJuEp4Qs3dch8X7GvyxZADGRcw8iqqSuCg"
+onda_awards = "AwrdSLTcfNkVSARz8YoNYcVhknD7oxm7t3EqyYZ9bPK5"
 onda_profile = "ondapcq2qXTSynRieMCE9BjRsZ2XALEEZZunkwbhCPF"
-onda_namespace = "GCZ4prh8BBkoTePCNF7VfWuNPhRVgwDKfxy8Uv4ERC8V"
-
-[programs.devnet]
-onda_compression = "ondaUaJpDBZZQzpGe5Tr391CbuJH1UpZuRcS7sZU2GB"
-onda_moderation = "5o1PS9vW57YUezjCuN7aycLnACKkaxGyb7Ak7pdcK6sw"
-onda_rewards = "HPQxJSGNpSGJuEp4Qs3dch8X7GvyxZADGRcw8iqqSuCg"
-onda_profile = "ondapcq2qXTSynRieMCE9BjRsZ2XALEEZZunkwbhCPF"
-onda_namespace = "GCZ4prh8BBkoTePCNF7VfWuNPhRVgwDKfxy8Uv4ERC8V"
-
-
-[programs.mainnet]
-onda_compression = "ondaUaJpDBZZQzpGe5Tr391CbuJH1UpZuRcS7sZU2GB"
-onda_moderation = "5o1PS9vW57YUezjCuN7aycLnACKkaxGyb7Ak7pdcK6sw"
-onda_rewards = "HPQxJSGNpSGJuEp4Qs3dch8X7GvyxZADGRcw8iqqSuCg"
-onda_profile = "ondapcq2qXTSynRieMCE9BjRsZ2XALEEZZunkwbhCPF"
-onda_namespace = "GCZ4prh8BBkoTePCNF7VfWuNPhRVgwDKfxy8Uv4ERC8V"
+onda_namespace = "ona67gSygPUkb34U5sgPZK7AkgXDJJrNoi5nrraEHvE"
 
 [provider]
 cluster = "localnet"

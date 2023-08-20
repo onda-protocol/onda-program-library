@@ -22,7 +22,7 @@ import {
   OndaNamespace,
   IDL as NAMESPACE_IDL,
 } from "../target/types/onda_namespace";
-import { OndaRewards, IDL as REWARDS_IDL } from "../target/types/onda_rewards";
+import { OndaAwards, IDL as AWARDS_IDL } from "../target/types/onda_awards";
 
 type SnakeToCamelCase<S extends string> = S extends `${infer T}_${infer U}`
   ? `${T}${Capitalize<SnakeToCamelCase<U>>}`
@@ -44,8 +44,8 @@ export const moderationProgram = anchor.workspace
   .OndaModeration as anchor.Program<OndaModeration>;
 export const namespaceProgram = anchor.workspace
   .OndaNamespace as anchor.Program<OndaNamespace>;
-export const rewardsProgram = anchor.workspace
-  .OndaRewards as anchor.Program<OndaRewards>;
+export const awardsProgram = anchor.workspace
+  .OndaAwards as anchor.Program<OndaAwards>;
 export const connection = compressionProgram.provider.connection;
 
 export async function requestAirdrop(
@@ -104,12 +104,12 @@ export async function getNamespaceProgram(
   );
 }
 
-export async function getRewardsProgram(
+export async function getAwardsProgram(
   keypair: anchor.web3.Keypair = anchor.web3.Keypair.generate()
 ) {
-  return new anchor.Program<OndaRewards>(
-    REWARDS_IDL,
-    rewardsProgram.programId,
+  return new anchor.Program<OndaAwards>(
+    AWARDS_IDL,
+    awardsProgram.programId,
     new anchor.AnchorProvider(
       connection,
       new anchor.Wallet(keypair),
@@ -146,10 +146,10 @@ export function findTreeMarkerPda(merkleTree: anchor.web3.PublicKey) {
   )[0];
 }
 
-export function findRewardPda(merkleTree: anchor.web3.PublicKey) {
+export function findAwardPda(merkleTree: anchor.web3.PublicKey) {
   return anchor.web3.PublicKey.findProgramAddressSync(
     [merkleTree.toBuffer()],
-    rewardsProgram.programId
+    awardsProgram.programId
   )[0];
 }
 
@@ -231,6 +231,7 @@ export async function addEntry(
       author: program.provider.publicKey,
       sessionToken: null,
       signer: program.provider.publicKey,
+      additionalSigner: null,
       mint: null,
       tokenAccount: null,
       metadata: null,
@@ -303,7 +304,7 @@ export function computeCompressedEntryHash(
   return Buffer.from(keccak_256.digest(message));
 }
 
-export async function createReward(authority: anchor.web3.Keypair) {
+export async function createAward(authority: anchor.web3.Keypair) {
   const maxDepth = 14;
   const bufferSize = 64;
   const canopyDepth = maxDepth - 3;
@@ -322,8 +323,8 @@ export async function createReward(authority: anchor.web3.Keypair) {
     programId: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
   });
 
-  const program = await getRewardsProgram(authority);
-  const rewardPda = findRewardPda(merkleTree.publicKey);
+  const program = await getAwardsProgram(authority);
+  const awardPda = findAwardPda(merkleTree.publicKey);
   const treeAuthorityPda = findTreeAuthorityPda(merkleTree.publicKey);
 
   const metaplex = new Metaplex(connection).use(keypairIdentity(authority));
@@ -345,17 +346,17 @@ export async function createReward(authority: anchor.web3.Keypair) {
     .pdas()
     .collectionAuthorityRecord({
       mint: mintAddress,
-      collectionAuthority: rewardPda,
+      collectionAuthority: awardPda,
     });
 
   const createRewardIx = await program.methods
-    .createReward(maxDepth, bufferSize, {
+    .createAward(maxDepth, bufferSize, {
       symbol: "ONDA",
       name: "Onda",
       uri: "https://example.com",
     })
     .accounts({
-      reward: rewardPda,
+      award: awardPda,
       collectionMint: mintAddress,
       collectionMetadata: metadataPda,
       collectionAuthorityRecord: collectionAuthorityRecordPda,
@@ -383,7 +384,7 @@ export async function createReward(authority: anchor.web3.Keypair) {
   }
 
   return {
-    rewardPda,
+    awardPda,
     treeAuthorityPda,
     collectionAuthorityRecordPda,
     collectionMetadata: metadataPda,
