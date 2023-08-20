@@ -3,7 +3,7 @@ use gpl_session::{SessionError, SessionToken, session_auth_or, Session};
 use mpl_bubblegum::{program::Bubblegum};
 use mpl_token_metadata::{instruction::approve_collection_authority};
 
-declare_id!("EcbMFkBrsdtj1Q2KE1TCt8aQ7eLDVFQwvdsTF3XrP2RS");
+declare_id!("AwrdSLTcfNkVSARz8YoNYcVhknD7oxm7t3EqyYZ9bPK5");
 
 pub const MAX_NAME_LENGTH: usize = 32;
 pub const MAX_SYMBOL_LENGTH: usize = 10;

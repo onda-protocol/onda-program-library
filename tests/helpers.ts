@@ -231,6 +231,7 @@ export async function addEntry(
       author: program.provider.publicKey,
       sessionToken: null,
       signer: program.provider.publicKey,
+      additionalSigner: null,
       mint: null,
       tokenAccount: null,
       metadata: null,
