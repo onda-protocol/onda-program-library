@@ -3,24 +3,22 @@ use gpl_session::{SessionError, SessionToken, session_auth_or, Session};
 use mpl_bubblegum::{program::Bubblegum};
 use mpl_token_metadata::{instruction::approve_collection_authority};
 
-declare_id!("HPQxJSGNpSGJuEp4Qs3dch8X7GvyxZADGRcw8iqqSuCg");
+declare_id!("EcbMFkBrsdtj1Q2KE1TCt8aQ7eLDVFQwvdsTF3XrP2RS");
 
 pub const MAX_NAME_LENGTH: usize = 32;
 pub const MAX_SYMBOL_LENGTH: usize = 10;
 pub const MAX_URI_LENGTH: usize = 200;
 
 #[error_code]
-pub enum OndaBloomError {
+pub enum OndaAwardsError {
     #[msg("Unauthorized.")]
     Unauthorized,
-    #[msg("Invalid mint.")]
-    InvalidMint,
     #[msg("Numeric overflow.")]
     NumericOverflow,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
-pub struct RewardMetadata {
+pub struct AwardMetadata {
     /// The name of the asset
     pub name: String,
     /// The symbol for the asset
@@ -30,7 +28,7 @@ pub struct RewardMetadata {
 }
 
 #[account]
-pub struct Reward {
+pub struct Award {
     /// The cost in lamports to mint a reward
     pub amount: u64,
     /// The tree's authority
@@ -38,23 +36,23 @@ pub struct Reward {
     /// The reward's collection mint
     pub collection_mint: Pubkey,
     /// The reward metadata
-    pub metadata: RewardMetadata,
+    pub metadata: AwardMetadata,
 }
 
-impl Reward {    
+impl Award {    
     pub const SIZE: usize = 8 + 8 + 32 + 32 + 4 + MAX_NAME_LENGTH + 4 + MAX_SYMBOL_LENGTH + 4 + MAX_URI_LENGTH;
 }
 
 #[derive(Accounts)]
-pub struct CreateReward<'info> {
+pub struct CreateAward<'info> {
     #[account(
         init,
         seeds = [merkle_tree.key().as_ref()],
         payer = payer,
-        space = Reward::SIZE,
+        space = Award::SIZE,
         bump,
     )]
-    pub reward: Account<'info, Reward>,
+    pub award: Account<'info, Award>,
     /// CHECK: should add check for collection authority
     pub collection_mint: UncheckedAccount<'info>,
     /// CHECK: checked in cpi
@@ -81,7 +79,7 @@ pub struct CreateReward<'info> {
 }
 
 #[derive(Accounts, Session)]
-pub struct GiveReward<'info> {
+pub struct GiveAward<'info> {
     /// CHECK: session token
     #[account(mut)]
     pub payer: UncheckedAccount<'info>,
@@ -100,7 +98,7 @@ pub struct GiveReward<'info> {
         seeds = [merkle_tree.key().as_ref()],
         bump,
     )]
-    pub reward: Account<'info, Reward>,
+    pub award: Account<'info, Award>,
     /// CHECK: This account is neither written to nor read from.
     pub leaf_owner: AccountInfo<'info>,
     #[account(mut)]
@@ -131,28 +129,28 @@ pub struct GiveReward<'info> {
 }
 
 #[program]
-pub mod onda_rewards {
+pub mod onda_awards {
     use super::*;
 
-    pub fn create_reward(
-        ctx: Context<CreateReward>,
+    pub fn create_award(
+        ctx: Context<CreateAward>,
         max_depth: u32,
         max_buffer_size: u32,
-        metadata_args: RewardMetadata,
+        metadata_args: AwardMetadata,
     ) -> Result<()> {
-        let reward = &mut ctx.accounts.reward;
+        let award = &mut ctx.accounts.award;
 
         // TODO: handle fees 
-        reward.amount = 0;
-        reward.authority = ctx.accounts.payer.key();
-        reward.collection_mint = ctx.accounts.collection_mint.key();
-        reward.metadata = RewardMetadata {
+        award.amount = 0;
+        award.authority = ctx.accounts.payer.key();
+        award.collection_mint = ctx.accounts.collection_mint.key();
+        award.metadata = AwardMetadata {
             name: puffed_out_string(&metadata_args.name, MAX_NAME_LENGTH),
             symbol: puffed_out_string(&metadata_args.symbol, MAX_SYMBOL_LENGTH),
             uri: puffed_out_string(&metadata_args.uri, MAX_URI_LENGTH),
         };
 
-        let bump = *ctx.bumps.get("reward").unwrap();
+        let bump = *ctx.bumps.get("award").unwrap();
         let seed = ctx.accounts.merkle_tree.key();
         let signer_seeds = &[
             seed.as_ref(),
@@ -166,7 +164,7 @@ pub mod onda_rewards {
                 tree_authority: ctx.accounts.tree_authority.to_account_info(),
                 merkle_tree: ctx.accounts.merkle_tree.to_account_info(),
                 payer: ctx.accounts.payer.to_account_info(),
-                tree_creator: reward.to_account_info(),
+                tree_creator: award.to_account_info(),
                 log_wrapper: ctx.accounts.log_wrapper.to_account_info(),
                 compression_program: ctx.accounts.compression_program.to_account_info(),
                 system_program: ctx.accounts.system_program.to_account_info(),
@@ -180,7 +178,7 @@ pub mod onda_rewards {
             &approve_collection_authority(
                 ctx.accounts.token_metadata_program.key(),
                 ctx.accounts.collection_authority_record.key(),
-                reward.key(),
+                award.key(),
                 ctx.accounts.payer.key(),
                 ctx.accounts.payer.key(),
                 ctx.accounts.collection_metadata.key(),
@@ -189,7 +187,7 @@ pub mod onda_rewards {
             &[
                 ctx.accounts.token_metadata_program.to_account_info(),
                 ctx.accounts.collection_authority_record.to_account_info(),
-                reward.to_account_info(),
+                award.to_account_info(),
                 ctx.accounts.payer.to_account_info(),
                 ctx.accounts.collection_metadata.to_account_info(),
                 ctx.accounts.collection_mint.to_account_info(),
@@ -201,12 +199,12 @@ pub mod onda_rewards {
 
     #[session_auth_or(
         ctx.accounts.payer.key() == ctx.accounts.signer.key(),
-        OndaBloomError::Unauthorized
+        OndaAwardsError::Unauthorized
     )]
-    pub fn give_reward(ctx: Context<GiveReward>) -> Result<()> {
-        let reward = &ctx.accounts.reward;
+    pub fn give_award(ctx: Context<GiveAward>) -> Result<()> {
+        let award = &ctx.accounts.award;
 
-        let bump = *ctx.bumps.get("reward").unwrap();
+        let bump = *ctx.bumps.get("award").unwrap();
         let seed = ctx.accounts.merkle_tree.key();
         let signer_seeds = &[
             seed.as_ref(),
@@ -218,11 +216,11 @@ pub mod onda_rewards {
             mpl_bubblegum::cpi::accounts::MintToCollectionV1 {
                 tree_authority: ctx.accounts.tree_authority.to_account_info(), 
                 leaf_owner: ctx.accounts.leaf_owner.to_account_info(),
-                leaf_delegate: reward.to_account_info(),                
+                leaf_delegate: award.to_account_info(),                
                 merkle_tree: ctx.accounts.merkle_tree.to_account_info(),
                 payer: ctx.accounts.signer.to_account_info(),
-                tree_delegate: reward.to_account_info(),
-                collection_authority: ctx.accounts.reward.to_account_info(),
+                tree_delegate: award.to_account_info(),
+                collection_authority: ctx.accounts.award.to_account_info(),
                 collection_authority_record_pda: ctx.accounts.collection_authority_record_pda.to_account_info(),
                 collection_mint: ctx.accounts.collection_mint.to_account_info(),
                 collection_metadata: ctx.accounts.collection_metadata.to_account_info(),
@@ -237,15 +235,15 @@ pub mod onda_rewards {
         );
 
         let creators = vec![mpl_bubblegum::state::metaplex_adapter::Creator {
-            address: ctx.accounts.reward.key(),
+            address: ctx.accounts.payer.key(),
             verified: true,
             share: 100,
         }];
 
         mpl_bubblegum::cpi::mint_to_collection_v1(cpi_ctx, mpl_bubblegum::state::metaplex_adapter::MetadataArgs {
-            name: reward.metadata.name.clone(),
-            symbol: reward.metadata.symbol.clone(),
-            uri: reward.metadata.uri.clone(),
+            name: award.metadata.name.clone(),
+            symbol: award.metadata.symbol.clone(),
+            uri: award.metadata.uri.clone(),
             seller_fee_basis_points: 0,
             primary_sale_happened: true,
             is_mutable: false,
