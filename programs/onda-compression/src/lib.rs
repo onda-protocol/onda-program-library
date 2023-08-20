@@ -223,52 +223,56 @@ pub mod onda_compression {
 
             match gate.rule_type {
                 Rule::Token => {
-                    let mint = mint.clone().ok_or(OndaSocialError::Unauthorized).unwrap();
-                    let token_account = token_account.clone().ok_or(OndaSocialError::Unauthorized).unwrap();
-
-                    for address in addresses {
-                        let is_valid = is_valid_token(
-                            &address,
-                            &author,
-                            &mint,
-                            &token_account,
-                            gate.amount
-                        );
-
-                        if is_valid {
-                            operation.result = true;
-                            break;
+                    if mint.is_some() && token_account.is_some() {
+                        let mint = mint.clone().unwrap();
+                        let token_account = token_account.clone().unwrap();
+    
+                        for address in addresses {
+                            let is_valid = is_valid_token(
+                                &address,
+                                &author,
+                                &mint,
+                                &token_account,
+                                gate.amount
+                            );
+    
+                            if is_valid {
+                                operation.result = true;
+                                break;
+                            }
                         }
                     }
 
                 },
                 Rule::NFT => {
-                    let mint = mint.clone().ok_or(OndaSocialError::Unauthorized).unwrap();
-                    let token_account = token_account.clone().ok_or(OndaSocialError::Unauthorized).unwrap();
-                    let metadata_info = metadata.clone().ok_or(OndaSocialError::Unauthorized).unwrap();
-
-                    for address in addresses {
-                        let is_valid = is_valid_token(
-                            &address,
-                            &author,
-                            &mint,
-                            &token_account,
-                            gate.amount
-                        );
-
-                        if is_valid == false {
-                            break;
-                        }
-
-                        let is_valid = is_valid_nft(
-                            &address,
-                            &mint,
-                            &metadata_info
-                        );
-
-                        if is_valid {
-                            operation.result = true;
-                            break;
+                    if mint.is_some() && token_account.is_some() &&  metadata.is_some() {
+                        let mint = mint.clone().unwrap();
+                        let token_account = token_account.clone().unwrap();
+                        let metadata_info = metadata.clone().unwrap();
+    
+                        for address in addresses {
+                            let is_valid = is_valid_token(
+                                &address,
+                                &author,
+                                &mint,
+                                &token_account,
+                                gate.amount
+                            );
+    
+                            if is_valid == false {
+                                break;
+                            }
+    
+                            let is_valid = is_valid_nft(
+                                &address,
+                                &mint,
+                                &metadata_info
+                            );
+    
+                            if is_valid {
+                                operation.result = true;
+                                break;
+                            }
                         }
                     }
                 },
@@ -276,26 +280,28 @@ pub mod onda_compression {
                     // TODO: Implement pass
                 },
                 Rule::AdditionalSigner => {
-                    let additional_signer = &ctx.accounts.additional_signer.clone().ok_or(OndaSocialError::Unauthorized).unwrap();
-                    
-                    if additional_signer.is_signer == false {
-                        operation.result = false;
-                    } else {
-                        for address in addresses {
-                            if additional_signer.key().eq(&address) {
-                                match gate.operator {
-                                    Operator::NOT => {
-                                        operation.result = false;
-                                        break;
-                                    },
-                                    _ => {
-                                        operation.result = true;
+                    if ctx.accounts.additional_signer.is_some() {
+                        let additional_signer = &ctx.accounts.additional_signer.clone().unwrap();
+                        
+                        if additional_signer.is_signer == false {
+                            operation.result = false;
+                        } else {
+                            for address in addresses {
+                                if additional_signer.key().eq(&address) {
+                                    match gate.operator {
+                                        Operator::NOT => {
+                                            operation.result = false;
+                                            break;
+                                        },
+                                        _ => {
+                                            operation.result = true;
+                                            break;
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-
                 }
             }
 
