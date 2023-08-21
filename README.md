@@ -20,11 +20,11 @@ The program is also built to support moderation and token-gating. The `ForumConf
 Assigns a unique namespace with associated metadata to a merkle-tree and ensures that each merkle-tree can only occupy one namespace.
 
 ### Onda Awards
-Onda Awards is built on top of Bubblegum and provides a simple interface for creating cNFT Awards and minting them to a forum entry. While the forum entryId itself does not exist on-chain, this does not prevent the entryId from "virtually" holding the cNFTs. Onda Awards ensures composability with the virtual address by delegating the Award pda on mint.
+Onda Awards is built on top of Bubblegum and provides a simple interface for creating cNFT Awards and minting them to a forum entry. While the forum entryId itself does not exist on-chain, this does not prevent the entryId from "virtually" holding the cNFTs. Onda Awards ensures composability with the virtual address by delegating authority to the Award pda on mint.
 
 ### Onda Moderation
 Supports team member moderation of Onda Compression entries by setting the ForumConfig authority as the `Team` pda. Members can be added to a team with `Admin` or `Editor` roles.
 
 ### Onda Profile 
-A simple and temporary program to allow users to set an name and a pfp. This program will likely be deprecated and replaced by a shared social-graph.
+A simple and temporary program to allow users to set a username and a pfp. This program will eventually be deprecated and replaced by a shared social-graph.
 
