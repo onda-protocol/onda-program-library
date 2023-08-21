@@ -186,25 +186,17 @@ pub mod onda_compression {
         let token_account = &ctx.accounts.token_account;
 
         match data.clone() {
-            DataV1::TextPost { uri, .. } => {
-                require!(is_valid_url(&uri), OndaSocialError::InvalidUri);
-                require_gte!(MAX_TITLE_LEN, uri.len(), OndaSocialError::TitleTooLong);
-                require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
+            DataV1::TextPost { title, uri, .. } => {
+                validate_post_schema(&title, &uri)?;
             },
-            DataV1::ImagePost { uri, .. } => {
-                require!(is_valid_url(&uri), OndaSocialError::InvalidUri);
-                require_gte!(MAX_TITLE_LEN, uri.len(), OndaSocialError::TitleTooLong);
-                require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
+            DataV1::ImagePost { title, uri, .. } => {
+                validate_post_schema(&title, &uri)?;
             },
-            DataV1::LinkPost { uri, .. } => {
-                require!(is_valid_url(&uri), OndaSocialError::InvalidUri);
-                require_gte!(MAX_TITLE_LEN, uri.len(), OndaSocialError::TitleTooLong);
-                require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
+            DataV1::LinkPost { title, uri, .. } => {
+                validate_post_schema(&title, &uri)?;
             },
-            DataV1::VideoPost { uri, .. } => {
-                require!(is_valid_url(&uri), OndaSocialError::InvalidUri);
-                require_gte!(MAX_TITLE_LEN, uri.len(), OndaSocialError::TitleTooLong);
-                require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
+            DataV1::VideoPost { title, uri, .. } => {
+                validate_post_schema(&title, &uri)?;
             },
             DataV1::Comment { uri, .. } => {
                 require!(is_valid_url(&uri), OndaSocialError::InvalidUri);
@@ -539,6 +531,13 @@ pub fn is_valid_nft(
     };
 
     is_valid_collection
+}
+
+pub fn validate_post_schema(title: &str, uri: &str) -> Result<bool> {
+    require!(is_valid_url(&uri), OndaSocialError::InvalidUri);
+    require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
+    require_gte!(MAX_TITLE_LEN, title.len(), OndaSocialError::TitleTooLong);
+    Ok(true)
 }
 
 pub fn evaluate_operations(operations: Vec<OperationResult>) -> bool {
