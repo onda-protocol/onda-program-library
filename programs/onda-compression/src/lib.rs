@@ -235,7 +235,7 @@ pub mod onda_compression {
                                 &token_account,
                                 gate.amount
                             );
-    
+
                             if is_valid {
                                 operation.result = true;
                                 break;
@@ -325,8 +325,6 @@ pub mod onda_compression {
             forum_config.post_count,
             data_hash.to_bytes(),
         );
-
-        msg!("leaf hash: {:?}", leaf.to_node());
 
         wrap_application_data_v1(leaf.to_event().try_to_vec()?, log_wrapper)?;
 
@@ -542,8 +540,12 @@ pub fn is_valid_nft(
 }
 
 pub fn evaluate_operations(operations: Vec<OperationResult>) -> bool {
-    let mut overall_result = true;
-    let mut or_case_result = true;
+    let mut overall_result = false;
+    let mut or_case_result = false;
+
+    if operations.len() == 0 {
+        return true;
+    }
     
     for op in operations {
         match op.operator {
@@ -552,10 +554,10 @@ pub fn evaluate_operations(operations: Vec<OperationResult>) -> bool {
                 or_case_result &= op.result;
             }
             Operator::OR => {
-                if or_case_result {
-                    overall_result |= op.result;
+                if op.result {
+                    or_case_result = true;
                 }
-                or_case_result = true;
+                overall_result |= or_case_result;
             },
             Operator::NOT => {
                 if op.result == false {

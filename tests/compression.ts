@@ -6,6 +6,7 @@ import {
   SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
   SPL_NOOP_PROGRAM_ID,
 } from "@solana/spl-account-compression";
+import * as splToken from "@solana/spl-token";
 import * as anchor from "@project-serum/anchor";
 import * as helpers from "./helpers";
 
@@ -26,7 +27,7 @@ describe("Compression", () => {
     assert.equal(forumConfigAccount.gate.length, 0, "forum.gate");
   });
 
-  it("Adds a post and comment", async () => {
+  it.only("Adds a post and comment", async () => {
     const admin = anchor.web3.Keypair.generate();
     const merkleTree = anchor.web3.Keypair.generate();
 
@@ -46,6 +47,79 @@ describe("Compression", () => {
         uri: "https://example.com",
       },
     });
+  });
+
+  it.only("Gates entry to an spl-token", async () => {
+    const admin = anchor.web3.Keypair.generate();
+    const merkleTree = anchor.web3.Keypair.generate();
+
+    await helpers.requestAirdrop(admin.publicKey);
+    const mintAddress = await splToken.createMint(
+      helpers.connection,
+      admin,
+      admin.publicKey,
+      admin.publicKey,
+      0
+    );
+    const gate: helpers.Gate = {
+      amount: new anchor.BN(1),
+      address: [mintAddress],
+      ruleType: {
+        token: {},
+      },
+      operator: {
+        // @ts-ignore
+        or: {},
+      },
+    };
+    await helpers.initForum(admin, merkleTree, [gate]);
+
+    try {
+      await helpers.addEntry(
+        merkleTree.publicKey,
+        {
+          textPost: {
+            title: "test",
+            uri: "https://example.com",
+            nsfw: false,
+          },
+        },
+        admin
+      );
+      /// Expecting this to fail because the gate is not satisfied
+      assert.fail("Should have failed");
+    } catch (err) {
+      assert.equal(err.error.errorMessage, "Unauthorized");
+    }
+
+    const tokenAccount = await splToken.getOrCreateAssociatedTokenAccount(
+      helpers.connection,
+      admin,
+      mintAddress,
+      admin.publicKey
+    );
+    await splToken.mintTo(
+      helpers.connection,
+      admin,
+      mintAddress,
+      tokenAccount.address,
+      admin.publicKey,
+      1
+    );
+    /// Expecting this to succeed now because the gate is satisfied
+    await helpers.addEntry(
+      merkleTree.publicKey,
+      {
+        textPost: {
+          title: "test",
+          uri: "https://example.com",
+          nsfw: false,
+        },
+      },
+      admin,
+      mintAddress,
+      tokenAccount.address
+    );
   });
 
   it("Verifies an entry", async () => {

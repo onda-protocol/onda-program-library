@@ -37,6 +37,7 @@ export type DataV1 = OndaCompressionTypes["DataV1"];
 export type LeafSchemaV1 = SnakeToCamelCaseObj<
   OndaCompressionTypes["LeafSchema"]["v1"]
 >;
+export type Gate = OndaCompressionTypes["Gate"];
 
 export const compressionProgram = anchor.workspace
   .OndaCompression as anchor.Program<OndaCompression>;
@@ -169,7 +170,8 @@ export function findBubblegumSignerPda() {
 
 export async function initForum(
   admin: anchor.web3.Keypair,
-  merkleTree: anchor.web3.Keypair
+  merkleTree: anchor.web3.Keypair,
+  gates: Gate[] = null
 ) {
   const program = await getCompressionProgram(admin);
   const forumConfig = findForumConfigPda(merkleTree.publicKey);
@@ -191,7 +193,7 @@ export async function initForum(
   });
 
   const initForumIx = await program.methods
-    .initForum(maxDepth, bufferSize, null)
+    .initForum(maxDepth, bufferSize, gates)
     .accounts({
       payer: admin.publicKey,
       forumConfig,
@@ -217,7 +219,10 @@ export async function initForum(
 export async function addEntry(
   merkleTree: anchor.web3.PublicKey,
   data: DataV1,
-  author: anchor.web3.Keypair = anchor.web3.Keypair.generate()
+  author: anchor.web3.Keypair = anchor.web3.Keypair.generate(),
+  mint: anchor.web3.PublicKey = null,
+  tokenAccount: anchor.web3.PublicKey = null,
+  metadata: anchor.web3.PublicKey = null
 ): Promise<LeafSchemaV1> {
   const program = await getCompressionProgram(author);
   const forumConfig = findForumConfigPda(merkleTree);
@@ -228,13 +233,13 @@ export async function addEntry(
     .accounts({
       forumConfig,
       merkleTree,
+      mint,
+      tokenAccount,
+      metadata,
       author: program.provider.publicKey,
       sessionToken: null,
       signer: program.provider.publicKey,
       additionalSigner: null,
-      mint: null,
-      tokenAccount: null,
-      metadata: null,
       logWrapper: SPL_NOOP_PROGRAM_ID,
       compressionProgram: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
     })
