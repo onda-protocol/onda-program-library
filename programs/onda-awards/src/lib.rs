@@ -1,13 +1,13 @@
 use anchor_lang::prelude::*;
-use gpl_session::{SessionError, SessionToken, session_auth_or, Session};
-use mpl_bubblegum::{program::Bubblegum};
-use mpl_token_metadata::{instruction::approve_collection_authority};
+use mpl_bubblegum::program::Bubblegum;
+use mpl_token_metadata::instruction::approve_collection_authority;
 
 declare_id!("AwrdSLTcfNkVSARz8YoNYcVhknD7oxm7t3EqyYZ9bPK5");
 
 pub const MAX_NAME_LENGTH: usize = 32;
 pub const MAX_SYMBOL_LENGTH: usize = 10;
 pub const MAX_URI_LENGTH: usize = 200;
+pub const SELLER_FEE_BASIS_POINTS: usize = 500;
 
 #[error_code]
 pub enum OndaAwardsError {
@@ -15,6 +15,8 @@ pub enum OndaAwardsError {
     Unauthorized,
     #[msg("Numeric overflow.")]
     NumericOverflow,
+    #[msg("Invalid uri.")]
+    InvalidUri,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
@@ -24,27 +26,59 @@ pub struct AwardMetadata {
     /// The symbol for the asset
     pub symbol: String,
     /// URI pointing to JSON representing the asset
-    pub uri: String,
+    /// If the uri is not provided it must be passed as an argument when creating the award
+    /// Along with the specified signer
+    pub uri: Option<String>,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
+pub enum AwardStandard {
+    Single,
+    /// Awardee receives an duplicate of the award
+    Matching,
 }
 
 #[account]
 pub struct Award {
+    pub standard: AwardStandard,
     /// The cost in lamports to mint a reward
     pub amount: u64,
+    /// The amount which goes to the creator
+    pub fee_basis_points: u16,
     /// The tree's authority
     pub authority: Pubkey,
-    /// The reward's collection mint
+    /// The award's treasury for fees
+    pub treasury: Pubkey,
+    /// The award's collection mint
     pub collection_mint: Pubkey,
-    /// The reward metadata
+    /// (optional) The award's forum
+    pub forum: Option<Pubkey>,
+    /// (optional) Requird signer for minting
+    /// Needs to be provided if the uri is not provided
+    pub signer: Option<Pubkey>,
+    /// The award metadata
     pub metadata: AwardMetadata,
 }
 
 impl Award {    
-    pub const SIZE: usize = 8 + 8 + 32 + 32 + 4 + MAX_NAME_LENGTH + 4 + MAX_SYMBOL_LENGTH + 4 + MAX_URI_LENGTH;
+    pub const SIZE: usize = 8 + 
+        1 + // standard
+        8 + // amount
+        2 + // fee_basis_points
+        32 + // authority
+        32 + // treasury
+        32 + // collection_mint
+        1 + 32 + // forum
+        1 + 32 + // signer
+        4 + MAX_NAME_LENGTH + 
+        4 + MAX_SYMBOL_LENGTH + 
+        1 + 4 + MAX_URI_LENGTH;
 }
 
 #[derive(Accounts)]
 pub struct CreateAward<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
     #[account(
         init,
         seeds = [merkle_tree.key().as_ref()],
@@ -53,7 +87,11 @@ pub struct CreateAward<'info> {
         bump,
     )]
     pub award: Account<'info, Award>,
-    /// CHECK: should add check for collection authority
+    /// CHECK: not dangerous
+    pub treasury: UncheckedAccount<'info>,
+    /// CHECK: not dangerous
+    pub forum: Option<UncheckedAccount<'info>>,
+    /// CHECK: payer must have collection authority
     pub collection_mint: UncheckedAccount<'info>,
     /// CHECK: checked in cpi
     pub collection_metadata: UncheckedAccount<'info>,
@@ -66,8 +104,6 @@ pub struct CreateAward<'info> {
     #[account(mut)]
     /// CHECK: checked in cpi
     pub tree_authority: UncheckedAccount<'info>,
-    #[account(mut)]
-    pub payer: Signer<'info>,
     /// CHECK: checked in cpi
     pub log_wrapper: UncheckedAccount<'info>,
     pub bubblegum_program: Program<'info, Bubblegum>,
@@ -78,21 +114,13 @@ pub struct CreateAward<'info> {
     pub system_program: Program<'info, System>,
 }
 
-#[derive(Accounts, Session)]
+#[derive(Accounts)]
 pub struct GiveAward<'info> {
-    /// CHECK: session token
     #[account(mut)]
-    pub payer: UncheckedAccount<'info>,
-    #[session(
-        // The ephemeral keypair signing the transaction
-        signer = signer,
-        // The authority of the user account which must have created the session
-        authority = payer.key()
-    )]
-    // Session Tokens are passed as optional accounts
-    pub session_token: Option<Account<'info, SessionToken>>,
+    pub payer: Signer<'info>,
+    /// Optional signer if the award requires it
     #[account(mut)]
-    pub signer: Signer<'info>,
+    pub signer: Option<Signer<'info>>,
     #[account(
         mut,
         seeds = [merkle_tree.key().as_ref()],
@@ -100,7 +128,9 @@ pub struct GiveAward<'info> {
     )]
     pub award: Account<'info, Award>,
     /// CHECK: This account is neither written to nor read from.
-    pub leaf_owner: AccountInfo<'info>,
+    pub recipient: UncheckedAccount<'info>,
+    /// CHECK: This account is neither written to nor read from.
+    pub leaf_owner: UncheckedAccount<'info>,
     #[account(mut)]
     /// CHECK: contrained by reward seeds
     pub merkle_tree: UncheckedAccount<'info>,
@@ -136,18 +166,30 @@ pub mod onda_awards {
         ctx: Context<CreateAward>,
         max_depth: u32,
         max_buffer_size: u32,
+        standard: AwardStandard,
+        amount: u64,
+        fee_basis_points: u16,
         metadata_args: AwardMetadata,
     ) -> Result<()> {
         let award = &mut ctx.accounts.award;
 
-        // TODO: handle fees 
-        award.amount = 0;
+        award.standard = standard;
+        award.amount = amount;
+        award.fee_basis_points = fee_basis_points;
         award.authority = ctx.accounts.payer.key();
+        award.treasury = ctx.accounts.treasury.key();
         award.collection_mint = ctx.accounts.collection_mint.key();
+        award.forum = match &ctx.accounts.forum {
+            Some(forum) => Some(forum.key()),
+            None => None,
+        };
         award.metadata = AwardMetadata {
             name: puffed_out_string(&metadata_args.name, MAX_NAME_LENGTH),
             symbol: puffed_out_string(&metadata_args.symbol, MAX_SYMBOL_LENGTH),
-            uri: puffed_out_string(&metadata_args.uri, MAX_URI_LENGTH),
+            uri: match metadata_args.uri {
+                Some(uri) => Some(puffed_out_string(&uri, MAX_URI_LENGTH)),
+                None => None,
+            },
         };
 
         let bump = *ctx.bumps.get("award").unwrap();
@@ -197,69 +239,117 @@ pub mod onda_awards {
         Ok(())
     }
 
-    #[session_auth_or(
-        ctx.accounts.payer.key() == ctx.accounts.signer.key(),
-        OndaAwardsError::Unauthorized
-    )]
-    pub fn give_award(ctx: Context<GiveAward>) -> Result<()> {
-        let award = &ctx.accounts.award;
-
+    pub fn give_award<'info>(
+        ctx: Context<'_, '_, '_, 'info, GiveAward<'info>>,
+        uri: Option<String>
+    ) -> Result<()> {
+        let award = &ctx.accounts.award.clone();
+        let leaf_owner = &ctx.accounts.leaf_owner.clone();
+        let recipient = &ctx.accounts.recipient.clone();
         let bump = *ctx.bumps.get("award").unwrap();
-        let seed = ctx.accounts.merkle_tree.key();
-        let signer_seeds = &[
-            seed.as_ref(),
-            &[bump],
-        ];
-        let signer_seeds = &[&signer_seeds[..]];
-        let cpi_ctx = CpiContext::new_with_signer(
-            ctx.accounts.bubblegum_program.to_account_info(),
-            mpl_bubblegum::cpi::accounts::MintToCollectionV1 {
-                tree_authority: ctx.accounts.tree_authority.to_account_info(), 
-                leaf_owner: ctx.accounts.leaf_owner.to_account_info(),
-                leaf_delegate: award.to_account_info(),                
-                merkle_tree: ctx.accounts.merkle_tree.to_account_info(),
-                payer: ctx.accounts.signer.to_account_info(),
-                tree_delegate: award.to_account_info(),
-                collection_authority: ctx.accounts.award.to_account_info(),
-                collection_authority_record_pda: ctx.accounts.collection_authority_record_pda.to_account_info(),
-                collection_mint: ctx.accounts.collection_mint.to_account_info(),
-                collection_metadata: ctx.accounts.collection_metadata.to_account_info(),
-                edition_account: ctx.accounts.edition_account.to_account_info(),
-                log_wrapper: ctx.accounts.log_wrapper.to_account_info(),
-                bubblegum_signer: ctx.accounts.bubblegum_signer.to_account_info(),
-                compression_program: ctx.accounts.compression_program.to_account_info(),
-                token_metadata_program: ctx.accounts.token_metadata_program.to_account_info(),
-                system_program: ctx.accounts.system_program.to_account_info(),
-            },
-            signer_seeds
-        );
+        let seed = ctx.accounts.merkle_tree.clone().key();
 
-        let creators = vec![mpl_bubblegum::state::metaplex_adapter::Creator {
-            address: ctx.accounts.payer.key(),
-            verified: true,
-            share: 100,
-        }];
+        let metadata_uri = match &award.metadata.uri {
+            Some(uri) => Some(puffed_out_string(&uri, MAX_URI_LENGTH)),
+            None => None,
+        };
+        let metadata_uri = match metadata_uri {
+            Some(uri) => uri,
+            None => {
+                if ctx.accounts.signer.is_none() {
+                    return err!(OndaAwardsError::Unauthorized);
+                }
+                if uri.is_none() {
+                    return err!(OndaAwardsError::InvalidUri);
+                }
+                uri.unwrap()
+            }
+        };
 
-        mpl_bubblegum::cpi::mint_to_collection_v1(cpi_ctx, mpl_bubblegum::state::metaplex_adapter::MetadataArgs {
-            name: award.metadata.name.clone(),
-            symbol: award.metadata.symbol.clone(),
-            uri: award.metadata.uri.clone(),
-            seller_fee_basis_points: 0,
-            primary_sale_happened: true,
-            is_mutable: false,
-            edition_nonce: None,
-            token_standard: Some(mpl_bubblegum::state::metaplex_adapter::TokenStandard::NonFungible),
-            collection: Some(mpl_bubblegum::state::metaplex_adapter::Collection {
-                verified: false,
-                key: ctx.accounts.collection_mint.key(),
-            }),
-            uses: None,
-            token_program_version: mpl_bubblegum::state::metaplex_adapter::TokenProgramVersion::Original,
-            creators,
-        })?;
+        process_mint(
+            &ctx, 
+            metadata_uri.clone(),
+            &leaf_owner.to_account_info(),
+            &seed, 
+            bump
+        )?;
+
+        if award.standard == AwardStandard::Matching {
+            process_mint(
+                &ctx, 
+                metadata_uri.clone(),
+                &recipient.to_account_info(),
+                &seed, 
+                bump
+            )?;
+        }
 
         Ok(())
     }
+}
+
+pub fn process_mint<'info>(
+    ctx: &Context<'_, '_, '_, 'info, GiveAward<'info>>,
+    metadata_uri: String,
+    leaf_owner: &AccountInfo<'info>,
+    seed: &Pubkey,
+    bump: u8,
+) -> Result<()> {
+    let award = &ctx.accounts.award;
+    // let bump = *ctx.bumps.get("award").unwrap();
+    // let seed = ctx.accounts.merkle_tree.key();
+    let signer_seeds = &[
+        seed.as_ref(),
+        &[bump],
+    ];
+    let signer_seeds = &[&signer_seeds[..]];
+
+    let cpi_ctx = CpiContext::new_with_signer(
+        ctx.accounts.bubblegum_program.to_account_info(),
+        mpl_bubblegum::cpi::accounts::MintToCollectionV1 {
+            tree_authority: ctx.accounts.tree_authority.to_account_info(), 
+            leaf_owner: leaf_owner.to_account_info(),
+            leaf_delegate: award.to_account_info(),                
+            merkle_tree: ctx.accounts.merkle_tree.to_account_info(),
+            payer: ctx.accounts.payer.to_account_info(),
+            tree_delegate: award.to_account_info(),
+            collection_authority: ctx.accounts.award.to_account_info(),
+            collection_authority_record_pda: ctx.accounts.collection_authority_record_pda.to_account_info(),
+            collection_mint: ctx.accounts.collection_mint.to_account_info(),
+            collection_metadata: ctx.accounts.collection_metadata.to_account_info(),
+            edition_account: ctx.accounts.edition_account.to_account_info(),
+            log_wrapper: ctx.accounts.log_wrapper.to_account_info(),
+            bubblegum_signer: ctx.accounts.bubblegum_signer.to_account_info(),
+            compression_program: ctx.accounts.compression_program.to_account_info(),
+            token_metadata_program: ctx.accounts.token_metadata_program.to_account_info(),
+            system_program: ctx.accounts.system_program.to_account_info(),
+        },
+        signer_seeds
+    );
+
+    let creators = vec![mpl_bubblegum::state::metaplex_adapter::Creator {
+        address: ctx.accounts.payer.key(),
+        verified: true,
+        share: 100,
+    }];
+
+    mpl_bubblegum::cpi::mint_to_collection_v1(cpi_ctx, mpl_bubblegum::state::metaplex_adapter::MetadataArgs {
+        name: award.metadata.name.clone(),
+        symbol: award.metadata.symbol.clone(),
+        uri: metadata_uri.clone(),
+        seller_fee_basis_points: SELLER_FEE_BASIS_POINTS as u16,
+        primary_sale_happened: true,
+        is_mutable: false,
+        edition_nonce: None,
+        token_standard: Some(mpl_bubblegum::state::metaplex_adapter::TokenStandard::NonFungible),
+        collection: Some(mpl_bubblegum::state::metaplex_adapter::Collection {
+            verified: false,
+            key: ctx.accounts.collection_mint.key(),
+        }),
+        uses: None,
+        token_program_version: mpl_bubblegum::state::metaplex_adapter::TokenProgramVersion::Original,
+        creators,
+    })
 }
 
 pub fn puffed_out_string(s: &str, size: usize) -> String {
