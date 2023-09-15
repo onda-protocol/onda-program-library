@@ -27,7 +27,7 @@ describe("Compression", () => {
     assert.equal(forumConfigAccount.gate.length, 0, "forum.gate");
   });
 
-  it.only("Adds a post and comment", async () => {
+  it("Adds a post and comment", async () => {
     const admin = anchor.web3.Keypair.generate();
     const merkleTree = anchor.web3.Keypair.generate();
 
@@ -49,7 +49,7 @@ describe("Compression", () => {
     });
   });
 
-  it.only("Gates entry to an spl-token", async () => {
+  it("Gates entry to an spl-token", async () => {
     const admin = anchor.web3.Keypair.generate();
     const merkleTree = anchor.web3.Keypair.generate();
 

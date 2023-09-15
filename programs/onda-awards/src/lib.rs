@@ -19,6 +19,15 @@ pub enum OndaAwardsError {
     InvalidUri,
     #[msg("Invalid args")]
     InvalidArgs,
+    #[msg("Invalid treasury")]
+    InvalidTreasury,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
+pub enum AwardStandard {
+    Single,
+    /// Awardee receives a duplicate of the award
+    Matching,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
@@ -30,15 +39,16 @@ pub struct AwardMetadata {
     /// URI pointing to JSON representing the asset
     /// If the uri is not provided it must be passed as an argument when creating the award
     /// Along with the specified signer
-    pub uri: Option<String>,
+    pub uri: String,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
-pub enum AwardStandard {
-    Single,
-    /// Awardee receives an duplicate of the award
-    Matching,
-}
+pub struct CreateAwardArgs {
+    pub amount: u64,
+    pub fee_basis_points: u16,
+    pub standard: AwardStandard,
+    pub metadata: AwardMetadata,
+}   
 
 #[account]
 pub struct Award {
@@ -53,11 +63,9 @@ pub struct Award {
     pub treasury: Pubkey,
     /// The award's collection mint
     pub collection_mint: Pubkey,
-    /// (optional) The award's forum
-    pub forum: Option<Pubkey>,
     /// (optional) Requird signer for minting
     /// Needs to be provided if the uri is not provided
-    pub signer: Option<Pubkey>,
+    pub additional_signer: Option<Pubkey>,
     /// The award metadata
     pub metadata: AwardMetadata,
 }
@@ -70,17 +78,18 @@ impl Award {
         32 + // authority
         32 + // treasury
         32 + // collection_mint
-        1 + 32 + // forum
-        1 + 32 + // signer
+        1 + 32 + // (optional) signer
         4 + MAX_NAME_LENGTH + 
         4 + MAX_SYMBOL_LENGTH + 
-        1 + 4 + MAX_URI_LENGTH;
+        4 + MAX_URI_LENGTH;
 }
 
 #[derive(Accounts)]
 pub struct CreateAward<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
+    /// CHECK: not dangerous
+    pub additional_signer: Option<UncheckedAccount<'info>>,
     #[account(
         init,
         seeds = [merkle_tree.key().as_ref()],
@@ -91,8 +100,6 @@ pub struct CreateAward<'info> {
     pub award: Account<'info, Award>,
     /// CHECK: not dangerous
     pub treasury: UncheckedAccount<'info>,
-    /// CHECK: not dangerous
-    pub forum: Option<UncheckedAccount<'info>>,
     /// CHECK: payer must have collection authority
     pub collection_mint: UncheckedAccount<'info>,
     /// CHECK: checked in cpi
@@ -120,17 +127,18 @@ pub struct CreateAward<'info> {
 pub struct GiveAward<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    /// Optional signer if the award requires it
-    #[account(mut)]
-    pub signer: Option<Signer<'info>>,
+    /// (Optional) Additional signer if the award requires it
+    pub additional_signer: Option<Signer<'info>>,
     #[account(
         seeds = [merkle_tree.key().as_ref()],
         bump,
-        // constraint = award.treasury.key() == treasury.key()
+        constraint = treasury.key.eq(&award.treasury) @ OndaAwardsError::InvalidTreasury
     )]
     pub award: Account<'info, Award>,
+    #[account(mut)]
     /// CHECK: not dangerous
     pub treasury: UncheckedAccount<'info>,
+    #[account(mut)]
     /// CHECK: This account is neither written to nor read from.
     pub recipient: UncheckedAccount<'info>,
     /// CHECK: This account is neither written to nor read from.
@@ -170,34 +178,28 @@ pub mod onda_awards {
         ctx: Context<CreateAward>,
         max_depth: u32,
         max_buffer_size: u32,
-        standard: AwardStandard,
-        amount: u64,
-        fee_basis_points: u16,
-        metadata_args: AwardMetadata,
+        args: CreateAwardArgs,
     ) -> Result<()> {
         let award = &mut ctx.accounts.award;
 
-        if fee_basis_points > 10_000 {
+        if args.fee_basis_points > 10_000 {
             return err!(OndaAwardsError::InvalidArgs);
         }
 
-        award.standard = standard;
-        award.amount = amount;
-        award.fee_basis_points = fee_basis_points;
+        award.amount = args.amount;
+        award.fee_basis_points = args.fee_basis_points;
+        award.standard = args.standard;
         award.authority = ctx.accounts.payer.key();
-        award.treasury = ctx.accounts.treasury.key();
-        award.collection_mint = ctx.accounts.collection_mint.key();
-        award.forum = match &ctx.accounts.forum {
-            Some(forum) => Some(forum.key()),
+        award.additional_signer = match &ctx.accounts.additional_signer {
+            Some(signer) => Some(signer.key()),
             None => None,
         };
+        award.treasury = ctx.accounts.treasury.key();
+        award.collection_mint = ctx.accounts.collection_mint.key();
         award.metadata = AwardMetadata {
-            name: puffed_out_string(&metadata_args.name, MAX_NAME_LENGTH),
-            symbol: puffed_out_string(&metadata_args.symbol, MAX_SYMBOL_LENGTH),
-            uri: match metadata_args.uri {
-                Some(uri) => Some(puffed_out_string(&uri, MAX_URI_LENGTH)),
-                None => None,
-            },
+            name: puffed_out_string(&args.metadata.name, MAX_NAME_LENGTH),
+            symbol: puffed_out_string(&args.metadata.symbol, MAX_SYMBOL_LENGTH),
+            uri: puffed_out_string(&args.metadata.uri, MAX_URI_LENGTH),
         };
 
         let bump = *ctx.bumps.get("award").unwrap();
@@ -257,32 +259,20 @@ pub mod onda_awards {
         let bump = *ctx.bumps.get("award").unwrap();
         let seed = ctx.accounts.merkle_tree.clone().key();
 
-        let metadata_uri = match &award.metadata.uri {
-            Some(uri) => Some(puffed_out_string(&uri, MAX_URI_LENGTH)),
-            None => None,
-        };
-        let metadata_uri = match metadata_uri {
-            Some(uri) => uri,
-            None => {
-                if ctx.accounts.signer.is_none() {
-                    return err!(OndaAwardsError::Unauthorized);
-                }
-                if uri.is_none() {
-                    return err!(OndaAwardsError::InvalidUri);
-                }
-                uri.unwrap()
-            }
-        };
-
         process_mint(
             &ctx, 
-            metadata_uri.clone(),
+            award.metadata.uri.clone(),
             &entry.to_account_info(),
             &seed, 
             bump
         )?;
 
         if award.standard == AwardStandard::Matching {
+            let metadata_uri = match uri {
+                Some(uri) => uri,
+                None => award.metadata.uri.clone(),
+            };
+
             process_mint(
                 &ctx, 
                 metadata_uri.clone(),

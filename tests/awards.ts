@@ -1,3 +1,4 @@
+import assert from "assert";
 import * as anchor from "@project-serum/anchor";
 import * as helpers from "./helpers";
 import { PROGRAM_ID as METADATA_PROGRAM_ID } from "@metaplex-foundation/mpl-token-metadata";
@@ -7,7 +8,7 @@ import {
   SPL_NOOP_PROGRAM_ID,
 } from "@solana/spl-account-compression";
 
-describe("Awards", () => {
+describe.only("Awards", () => {
   it("Creates a new award", async () => {
     const authority = anchor.web3.Keypair.generate();
 
@@ -16,41 +17,54 @@ describe("Awards", () => {
   });
 
   it("Mints a reward to the provied address", async () => {
+    const amount = anchor.web3.LAMPORTS_PER_SOL / 100;
     const authority = anchor.web3.Keypair.generate();
+    const treasury = anchor.web3.Keypair.generate().publicKey;
     const entryId = anchor.web3.Keypair.generate().publicKey;
+    const recipient = anchor.web3.Keypair.generate().publicKey;
     const program = await helpers.getAwardsProgram(authority);
 
     await helpers.requestAirdrop(authority.publicKey);
-    const accounts = await helpers.createAward(authority);
+    const accounts = await helpers.createAward(authority, treasury, amount);
     const bubblegumSignerPda = await helpers.findBubblegumSignerPda();
 
-    try {
-      await program.methods
-        .giveAward()
-        .accounts({
-          payer: authority.publicKey,
-          sessionToken: null,
-          signer: authority.publicKey,
-          award: accounts.awardPda,
-          leafOwner: entryId,
-          merkleTree: accounts.merkleTree,
-          treeAuthority: accounts.treeAuthorityPda,
-          collectionAuthorityRecordPda: accounts.collectionAuthorityRecordPda,
-          collectionMint: accounts.collectionMint,
-          collectionMetadata: accounts.collectionMetadata,
-          editionAccount: accounts.editionPda,
-          logWrapper: SPL_NOOP_PROGRAM_ID,
-          bubblegumSigner: bubblegumSignerPda,
-          compressionProgram: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
-          tokenMetadataProgram: METADATA_PROGRAM_ID,
-          bubblegumProgram: BUBBLEGUM_PROGRAM_ID,
-        })
-        .rpc({
-          skipPreflight: true,
-        });
-    } catch (err) {
-      console.log(err);
-      throw err;
-    }
+    await program.methods
+      .giveAward(null)
+      .accounts({
+        entryId,
+        treasury,
+        recipient,
+        payer: authority.publicKey,
+        additionalSigner: null,
+        award: accounts.awardPda,
+        merkleTree: accounts.merkleTree,
+        treeAuthority: accounts.treeAuthorityPda,
+        collectionAuthorityRecordPda: accounts.collectionAuthorityRecordPda,
+        collectionMint: accounts.collectionMint,
+        collectionMetadata: accounts.collectionMetadata,
+        editionAccount: accounts.editionPda,
+        logWrapper: SPL_NOOP_PROGRAM_ID,
+        bubblegumSigner: bubblegumSignerPda,
+        compressionProgram: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
+        tokenMetadataProgram: METADATA_PROGRAM_ID,
+        bubblegumProgram: BUBBLEGUM_PROGRAM_ID,
+      })
+      .rpc();
+
+    const recipientAccountInfo =
+      await program.provider.connection.getAccountInfo(recipient);
+    const treasuryAccountInfo =
+      await program.provider.connection.getAccountInfo(treasury);
+
+    assert.equal(
+      recipientAccountInfo.lamports,
+      amount / 2,
+      "recipient.balance"
+    );
+    assert.equal(
+      treasuryAccountInfo.lamports,
+      amount / 2,
+      "recipient.accountSize"
+    );
   });
 });

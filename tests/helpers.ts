@@ -309,7 +309,11 @@ export function computeCompressedEntryHash(
   return Buffer.from(keccak_256.digest(message));
 }
 
-export async function createAward(authority: anchor.web3.Keypair) {
+export async function createAward(
+  authority: anchor.web3.Keypair,
+  treasury: anchor.web3.PublicKey = anchor.web3.Keypair.generate().publicKey,
+  amount: number = anchor.web3.LAMPORTS_PER_SOL / 100
+) {
   const maxDepth = 14;
   const bufferSize = 64;
   const canopyDepth = maxDepth - 3;
@@ -354,14 +358,25 @@ export async function createAward(authority: anchor.web3.Keypair) {
       collectionAuthority: awardPda,
     });
 
+  const standard = {
+    single: {},
+  };
+
   const createRewardIx = await program.methods
     .createAward(maxDepth, bufferSize, {
-      symbol: "ONDA",
-      name: "Onda",
-      uri: "https://example.com",
+      standard,
+      amount: new anchor.BN(amount),
+      feeBasisPoints: 5000,
+      metadata: {
+        symbol: "ONDA",
+        name: "Onda",
+        uri: "https://example.com",
+      },
     })
     .accounts({
+      treasury,
       award: awardPda,
+      additionalSigner: null,
       collectionMint: mintAddress,
       collectionMetadata: metadataPda,
       collectionAuthorityRecord: collectionAuthorityRecordPda,
