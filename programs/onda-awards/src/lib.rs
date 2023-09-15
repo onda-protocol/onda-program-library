@@ -11,12 +11,14 @@ pub const SELLER_FEE_BASIS_POINTS: usize = 500;
 
 #[error_code]
 pub enum OndaAwardsError {
-    #[msg("Unauthorized.")]
+    #[msg("Unauthorized")]
     Unauthorized,
-    #[msg("Numeric overflow.")]
+    #[msg("Numeric overflow")]
     NumericOverflow,
-    #[msg("Invalid uri.")]
+    #[msg("Invalid uri")]
     InvalidUri,
+    #[msg("Invalid args")]
+    InvalidArgs,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
@@ -122,15 +124,17 @@ pub struct GiveAward<'info> {
     #[account(mut)]
     pub signer: Option<Signer<'info>>,
     #[account(
-        mut,
         seeds = [merkle_tree.key().as_ref()],
         bump,
+        // constraint = award.treasury.key() == treasury.key()
     )]
     pub award: Account<'info, Award>,
+    /// CHECK: not dangerous
+    pub treasury: UncheckedAccount<'info>,
     /// CHECK: This account is neither written to nor read from.
     pub recipient: UncheckedAccount<'info>,
     /// CHECK: This account is neither written to nor read from.
-    pub leaf_owner: UncheckedAccount<'info>,
+    pub entry_id: UncheckedAccount<'info>,
     #[account(mut)]
     /// CHECK: contrained by reward seeds
     pub merkle_tree: UncheckedAccount<'info>,
@@ -172,6 +176,10 @@ pub mod onda_awards {
         metadata_args: AwardMetadata,
     ) -> Result<()> {
         let award = &mut ctx.accounts.award;
+
+        if fee_basis_points > 10_000 {
+            return err!(OndaAwardsError::InvalidArgs);
+        }
 
         award.standard = standard;
         award.amount = amount;
@@ -244,7 +252,7 @@ pub mod onda_awards {
         uri: Option<String>
     ) -> Result<()> {
         let award = &ctx.accounts.award.clone();
-        let leaf_owner = &ctx.accounts.leaf_owner.clone();
+        let entry = &ctx.accounts.entry_id.clone();
         let recipient = &ctx.accounts.recipient.clone();
         let bump = *ctx.bumps.get("award").unwrap();
         let seed = ctx.accounts.merkle_tree.clone().key();
@@ -269,7 +277,7 @@ pub mod onda_awards {
         process_mint(
             &ctx, 
             metadata_uri.clone(),
-            &leaf_owner.to_account_info(),
+            &entry.to_account_info(),
             &seed, 
             bump
         )?;
@@ -283,6 +291,33 @@ pub mod onda_awards {
                 bump
             )?;
         }
+
+        let amount = u128::from(award.amount);
+        let basis_points = award.fee_basis_points as u128;
+        let fee = amount.checked_mul(basis_points).unwrap().checked_div(10_000).unwrap();
+        let remaining_amount = amount.checked_sub(fee).unwrap();
+
+        anchor_lang::system_program::transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: ctx.accounts.payer.to_account_info(),
+                    to: ctx.accounts.treasury.to_account_info(),
+                },
+            ),
+            fee as u64,
+        )?;
+
+        anchor_lang::system_program::transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: ctx.accounts.payer.to_account_info(),
+                    to: ctx.accounts.recipient.to_account_info(),
+                },
+            ),
+            remaining_amount as u64,
+        )?;
 
         Ok(())
     }
@@ -327,11 +362,18 @@ pub fn process_mint<'info>(
         signer_seeds
     );
 
-    let creators = vec![mpl_bubblegum::state::metaplex_adapter::Creator {
-        address: ctx.accounts.payer.key(),
-        verified: true,
-        share: 100,
-    }];
+    let creators = vec![
+        mpl_bubblegum::state::metaplex_adapter::Creator {
+            address: ctx.accounts.payer.key(),
+            verified: true,
+            share: 0,
+        }, 
+        mpl_bubblegum::state::metaplex_adapter::Creator {
+            address: ctx.accounts.recipient.key(),
+            verified: false,
+            share: 100,
+        }
+    ];
 
     mpl_bubblegum::cpi::mint_to_collection_v1(cpi_ctx, mpl_bubblegum::state::metaplex_adapter::MetadataArgs {
         name: award.metadata.name.clone(),
