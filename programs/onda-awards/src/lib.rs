@@ -256,23 +256,43 @@ pub mod onda_awards {
         let award = &ctx.accounts.award.clone();
         let entry = &ctx.accounts.entry_id.clone();
         let recipient = &ctx.accounts.recipient.clone();
+        let additional_signer = &ctx.accounts.additional_signer;
         let bump = *ctx.bumps.get("award").unwrap();
         let seed = ctx.accounts.merkle_tree.clone().key();
 
+        if award.additional_signer.is_some() {
+            require!(additional_signer.is_some(), OndaAwardsError::Unauthorized);
+            require_keys_eq!(
+                award.additional_signer.unwrap(),
+                additional_signer.clone().unwrap().key(),
+                OndaAwardsError::Unauthorized
+            );
+        }
+
+        let metadata_uri = match uri {
+            Some(uri) => {
+                if uri.len() > MAX_URI_LENGTH {
+                    return err!(OndaAwardsError::InvalidUri);
+                }
+
+                if award.additional_signer.is_none() {
+                    return err!(OndaAwardsError::Unauthorized);
+                }
+
+                uri
+            },
+            None => award.metadata.uri.clone(),
+        };
+
         process_mint(
             &ctx, 
-            award.metadata.uri.clone(),
+            metadata_uri.clone(),
             &entry.to_account_info(),
             &seed, 
             bump
         )?;
 
         if award.standard == AwardStandard::Receipt {
-            let metadata_uri = match uri {
-                Some(uri) => uri,
-                None => award.metadata.uri.clone(),
-            };
-
             process_mint(
                 &ctx, 
                 metadata_uri.clone(),
