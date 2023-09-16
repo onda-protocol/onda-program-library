@@ -25,10 +25,12 @@ describe.only("Awards", () => {
     const program = await helpers.getAwardsProgram(authority);
 
     await helpers.requestAirdrop(authority.publicKey);
-    const accounts = await helpers.createAward(authority, treasury, amount);
+    const accounts = await helpers.createAward(authority, treasury, amount, {
+      receipt: {},
+    });
     const bubblegumSignerPda = await helpers.findBubblegumSignerPda();
 
-    await program.methods
+    const awardIx = await program.methods
       .giveAward(null)
       .accounts({
         entryId,
@@ -49,7 +51,28 @@ describe.only("Awards", () => {
         tokenMetadataProgram: METADATA_PROGRAM_ID,
         bubblegumProgram: BUBBLEGUM_PROGRAM_ID,
       })
-      .rpc();
+      .instruction();
+
+    const modifyComputeUnits =
+      anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({
+        units: 250_000,
+      });
+    const addPriorityFee = anchor.web3.ComputeBudgetProgram.setComputeUnitPrice(
+      {
+        microLamports: 1,
+      }
+    );
+
+    const tx = new anchor.web3.Transaction()
+      .add(modifyComputeUnits)
+      .add(addPriorityFee)
+      .add(awardIx);
+    tx.feePayer = authority.publicKey;
+
+    await program.provider.sendAndConfirm(tx, [authority], {
+      commitment: "confirmed",
+      skipPreflight: true,
+    });
 
     const recipientAccountInfo =
       await program.provider.connection.getAccountInfo(recipient);

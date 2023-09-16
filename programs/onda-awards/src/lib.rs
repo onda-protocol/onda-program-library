@@ -27,7 +27,7 @@ pub enum OndaAwardsError {
 pub enum AwardStandard {
     Single,
     /// Awardee receives a duplicate of the award
-    Matching,
+    Receipt,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
@@ -267,7 +267,7 @@ pub mod onda_awards {
             bump
         )?;
 
-        if award.standard == AwardStandard::Matching {
+        if award.standard == AwardStandard::Receipt {
             let metadata_uri = match uri {
                 Some(uri) => uri,
                 None => award.metadata.uri.clone(),

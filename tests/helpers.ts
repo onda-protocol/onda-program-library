@@ -33,6 +33,8 @@ type SnakeToCamelCaseObj<T> = T extends object
     }
   : T;
 type OndaCompressionTypes = anchor.IdlTypes<OndaCompression>;
+type OndaAwardTypes = anchor.IdlTypes<OndaAwards>;
+export type AwardStandard = OndaAwardTypes["AwardStandard"];
 export type DataV1 = OndaCompressionTypes["DataV1"];
 export type LeafSchemaV1 = SnakeToCamelCaseObj<
   OndaCompressionTypes["LeafSchema"]["v1"]
@@ -309,10 +311,16 @@ export function computeCompressedEntryHash(
   return Buffer.from(keccak_256.digest(message));
 }
 
+const AWARD_STANDARD: AwardStandard = {
+  single: {},
+  receipt: {},
+};
+
 export async function createAward(
   authority: anchor.web3.Keypair,
   treasury: anchor.web3.PublicKey = anchor.web3.Keypair.generate().publicKey,
-  amount: number = anchor.web3.LAMPORTS_PER_SOL / 100
+  amount: number = anchor.web3.LAMPORTS_PER_SOL / 100,
+  standard: Partial<AwardStandard> = { single: {} }
 ) {
   const maxDepth = 14;
   const bufferSize = 64;
@@ -357,10 +365,6 @@ export async function createAward(
       mint: mintAddress,
       collectionAuthority: awardPda,
     });
-
-  const standard = {
-    single: {},
-  };
 
   const createRewardIx = await program.methods
     .createAward(maxDepth, bufferSize, {
