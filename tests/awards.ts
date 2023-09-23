@@ -166,7 +166,7 @@ describe("Awards", () => {
     assert.equal(claim.amount, 1, "claim.amount");
   });
 
-  it.only("Allows the recipient to claim an award", async () => {
+  it("Allows the recipient to claim an award", async () => {
     const amount = anchor.web3.LAMPORTS_PER_SOL / 100;
     const authority = anchor.web3.Keypair.generate();
     const treasury = anchor.web3.Keypair.generate().publicKey;
