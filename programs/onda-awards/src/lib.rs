@@ -25,6 +25,8 @@ pub enum OndaAwardsError {
     ClaimNotProvided,
     #[msg("Invalid claim")]
     InvalidClaim,
+    #[msg("Award amount too low for claim")]
+    AwardAmountTooLowForClaim,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
@@ -137,6 +139,7 @@ pub struct CreateAward<'info> {
     pub token_metadata_program: UncheckedAccount<'info>,
     /// CHECK: checked in cpi
     pub compression_program: UncheckedAccount<'info>,
+    pub rent: Sysvar<'info, Rent>,
     pub system_program: Program<'info, System>,
 }
 
@@ -196,6 +199,7 @@ pub struct GiveAward<'info> {
     /// CHECK: Checked in cpi
     pub token_metadata_program: UncheckedAccount<'info>,
     pub bubblegum_program: Program<'info, Bubblegum>,
+    pub rent: Sysvar<'info, Rent>,
     pub system_program: Program<'info, System>,
 }
 
@@ -267,21 +271,6 @@ pub mod onda_awards {
             return err!(OndaAwardsError::InvalidArgs);
         }
 
-        award.matching = match &ctx.accounts.matching_award {
-            Some(matching_award) => {
-                require_keys_eq!(
-                    matching_award.authority,
-                    ctx.accounts.payer.key(),
-                    OndaAwardsError::Unauthorized
-                );
-
-                Some(AwardClaims {
-                    award: matching_award.key(),
-                })
-            },
-            _ => None,
-        };
-
         award.amount = args.amount;
         award.fee_basis_points = args.fee_basis_points;
         award.authority = ctx.accounts.payer.key();
@@ -296,6 +285,29 @@ pub mod onda_awards {
             name: puffed_out_string(&args.metadata.name, MAX_NAME_LENGTH),
             symbol: puffed_out_string(&args.metadata.symbol, MAX_SYMBOL_LENGTH),
             uri: puffed_out_string(&args.metadata.uri, MAX_URI_LENGTH),
+        };
+
+        award.matching = match &ctx.accounts.matching_award {
+            Some(matching_award) => {
+                require_keys_eq!(
+                    matching_award.authority,
+                    ctx.accounts.payer.key(),
+                    OndaAwardsError::Unauthorized
+                );
+
+                let claim_fee = ctx.accounts.rent.minimum_balance(Claim::SIZE);
+                let (_fee, remaining_amount) = calculate_fee(award);
+
+                if claim_fee > remaining_amount {
+                    msg!("Award amount too low for claim rent exemption");
+                    return err!(OndaAwardsError::AwardAmountTooLowForClaim);
+                }
+
+                Some(AwardClaims {
+                    award: matching_award.key(),
+                })
+            },
+            _ => None,
         };
 
         let bump = *ctx.bumps.get("award").unwrap();
@@ -380,10 +392,8 @@ pub mod onda_awards {
 
 
         // Payment
-        let amount = u128::from(award.amount);
-        let basis_points = award.fee_basis_points as u128;
-        let fee = amount.checked_mul(basis_points).unwrap().checked_div(10_000).unwrap();
-        let remaining_amount = amount.checked_sub(fee).unwrap();
+        let claim_fee = ctx.accounts.rent.minimum_balance(Claim::SIZE);
+        let (fee, remaining_amount) = calculate_fee(award);
 
         anchor_lang::system_program::transfer(
             CpiContext::new(
@@ -393,7 +403,7 @@ pub mod onda_awards {
                     to: treasury.to_account_info(),
                 },
             ),
-            fee as u64,
+            fee,
         )?;
 
         anchor_lang::system_program::transfer(
@@ -404,7 +414,8 @@ pub mod onda_awards {
                     to: recipient.to_account_info(),
                 },
             ),
-            remaining_amount as u64,
+            // Recipient gets the remaining amount when the claim is closed
+            remaining_amount - claim_fee,
         )?;
 
         // Mint award
@@ -565,6 +576,15 @@ pub mod onda_awards {
 
         Ok(())
     }
+}
+
+pub fn calculate_fee(award: &Account<Award>) -> (u64, u64) {
+    let amount = u128::from(award.amount);
+    let basis_points = award.fee_basis_points as u128;
+    let fee = amount.checked_mul(basis_points).unwrap().checked_div(10_000).unwrap();
+    let remaining_amount = amount.checked_sub(fee).unwrap();
+
+    (fee as u64, remaining_amount as u64)
 }
 
 pub fn puffed_out_string(s: &str, size: usize) -> String {

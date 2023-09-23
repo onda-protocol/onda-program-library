@@ -8,7 +8,7 @@ import {
   SPL_NOOP_PROGRAM_ID,
 } from "@solana/spl-account-compression";
 
-describe.only("Awards", () => {
+describe("Awards", () => {
   it("Creates a new award", async () => {
     const authority = anchor.web3.Keypair.generate();
 
