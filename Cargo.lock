@@ -1479,6 +1479,7 @@ name = "onda-awards"
 version = "0.1.0"
 dependencies = [
  "anchor-lang",
+ "anchor-spl",
  "mpl-bubblegum",
  "mpl-token-metadata",
 ]

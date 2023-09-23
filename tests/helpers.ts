@@ -34,7 +34,6 @@ type SnakeToCamelCaseObj<T> = T extends object
   : T;
 type OndaCompressionTypes = anchor.IdlTypes<OndaCompression>;
 type OndaAwardTypes = anchor.IdlTypes<OndaAwards>;
-export type AwardStandard = OndaAwardTypes["AwardStandard"];
 export type DataV1 = OndaCompressionTypes["DataV1"];
 export type LeafSchemaV1 = SnakeToCamelCaseObj<
   OndaCompressionTypes["LeafSchema"]["v1"]
@@ -152,6 +151,16 @@ export function findTreeMarkerPda(merkleTree: anchor.web3.PublicKey) {
 export function findAwardPda(merkleTree: anchor.web3.PublicKey) {
   return anchor.web3.PublicKey.findProgramAddressSync(
     [merkleTree.toBuffer()],
+    awardsProgram.programId
+  )[0];
+}
+
+export function findClaimPda(
+  matchingAward: anchor.web3.PublicKey,
+  recipient: anchor.web3.PublicKey
+) {
+  return anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("claim"), matchingAward.toBuffer(), recipient.toBuffer()],
     awardsProgram.programId
   )[0];
 }
@@ -311,16 +320,11 @@ export function computeCompressedEntryHash(
   return Buffer.from(keccak_256.digest(message));
 }
 
-const AWARD_STANDARD: AwardStandard = {
-  single: {},
-  receipt: {},
-};
-
 export async function createAward(
   authority: anchor.web3.Keypair,
   treasury: anchor.web3.PublicKey = anchor.web3.Keypair.generate().publicKey,
   amount: number = anchor.web3.LAMPORTS_PER_SOL / 100,
-  standard: Partial<AwardStandard> = { single: {} }
+  matchingAward: anchor.web3.PublicKey = null
 ) {
   const maxDepth = 14;
   const bufferSize = 64;
@@ -340,10 +344,6 @@ export async function createAward(
     programId: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
   });
 
-  const program = await getAwardsProgram(authority);
-  const awardPda = findAwardPda(merkleTree.publicKey);
-  const treeAuthorityPda = findTreeAuthorityPda(merkleTree.publicKey);
-
   const metaplex = new Metaplex(connection).use(keypairIdentity(authority));
 
   const { mintAddress, masterEditionAddress } = await metaplex.nfts().create({
@@ -353,6 +353,10 @@ export async function createAward(
     sellerFeeBasisPoints: 0,
     isCollection: true,
   });
+
+  const program = await getAwardsProgram(authority);
+  const awardPda = findAwardPda(merkleTree.publicKey);
+  const treeAuthorityPda = findTreeAuthorityPda(merkleTree.publicKey);
 
   const metadataPda = await metaplex
     .nfts()
@@ -368,7 +372,6 @@ export async function createAward(
 
   const createRewardIx = await program.methods
     .createAward(maxDepth, bufferSize, {
-      standard,
       amount: new anchor.BN(amount),
       feeBasisPoints: 5000,
       metadata: {
@@ -379,6 +382,7 @@ export async function createAward(
     })
     .accounts({
       treasury,
+      matchingAward,
       award: awardPda,
       additionalSigner: null,
       collectionMint: mintAddress,
@@ -400,7 +404,7 @@ export async function createAward(
   try {
     await program.provider.sendAndConfirm(tx, [merkleTree], {
       commitment: "confirmed",
-      skipPreflight: true,
+      // skipPreflight: true,
     });
   } catch (err) {
     console.log(err);
