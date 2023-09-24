@@ -4,11 +4,13 @@ import * as helpers from "./helpers";
 import { PROGRAM_ID as METADATA_PROGRAM_ID } from "@metaplex-foundation/mpl-token-metadata";
 import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "@metaplex-foundation/mpl-bubblegum";
 import {
+  ConcurrentMerkleTreeAccount,
+  MerkleTree,
   SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
   SPL_NOOP_PROGRAM_ID,
 } from "@solana/spl-account-compression";
 
-describe("Awards", () => {
+describe.only("Awards", () => {
   it("Creates a new award", async () => {
     const authority = anchor.web3.Keypair.generate();
 
@@ -27,18 +29,47 @@ describe("Awards", () => {
     await helpers.requestAirdrop(authority.publicKey);
     const accounts = await helpers.createAward(authority, treasury, amount);
     const bubblegumSignerPda = await helpers.findBubblegumSignerPda();
+    const forumMerkleTree = anchor.web3.Keypair.generate();
+    await helpers.initForum(authority, forumMerkleTree);
+    const leafEvent = await helpers.addEntry(forumMerkleTree.publicKey, {
+      textPost: {
+        title: "test",
+        uri: "https://example.com",
+        nsfw: false,
+      },
+    });
+    const leafHash = helpers.computeCompressedEntryHash(
+      leafEvent.id,
+      leafEvent.author,
+      leafEvent.createdAt,
+      leafEvent.editedAt,
+      leafEvent.nonce,
+      Buffer.from(leafEvent.dataHash)
+    );
+    const merkleTreeAccount =
+      await ConcurrentMerkleTreeAccount.fromAccountAddress(
+        helpers.connection,
+        forumMerkleTree.publicKey
+      );
+    const proof = MerkleTree.sparseMerkleTreeFromLeaves([leafHash], 5).getProof(
+      0
+    );
 
-    const awardIx = await program.methods
-      .giveAward(null)
+    await program.methods
+      .giveAward(
+        Array.from(merkleTreeAccount.getCurrentRoot()),
+        Array.from(leafHash),
+        leafEvent.nonce.toNumber()
+      )
       .accounts({
         entryId,
         treasury,
         recipient,
         payer: authority.publicKey,
-        additionalSigner: null,
         award: accounts.awardPda,
         claim: null,
         merkleTree: accounts.merkleTree,
+        forumMerkleTree: forumMerkleTree.publicKey,
         treeAuthority: accounts.treeAuthorityPda,
         collectionAuthorityRecordPda: accounts.collectionAuthorityRecordPda,
         collectionMint: accounts.collectionMint,
@@ -50,28 +81,14 @@ describe("Awards", () => {
         tokenMetadataProgram: METADATA_PROGRAM_ID,
         bubblegumProgram: BUBBLEGUM_PROGRAM_ID,
       })
-      .instruction();
-
-    const modifyComputeUnits =
-      anchor.web3.ComputeBudgetProgram.setComputeUnitLimit({
-        units: 250_000,
-      });
-    const addPriorityFee = anchor.web3.ComputeBudgetProgram.setComputeUnitPrice(
-      {
-        microLamports: 1,
-      }
-    );
-
-    const tx = new anchor.web3.Transaction()
-      .add(modifyComputeUnits)
-      .add(addPriorityFee)
-      .add(awardIx);
-    tx.feePayer = authority.publicKey;
-
-    await program.provider.sendAndConfirm(tx, [authority], {
-      commitment: "confirmed",
-      skipPreflight: true,
-    });
+      .remainingAccounts(
+        proof.proof.map((pubkey) => ({
+          pubkey: new anchor.web3.PublicKey(pubkey),
+          isSigner: false,
+          isWritable: false,
+        }))
+      )
+      .rpc();
 
     const recipientAccountInfo =
       await program.provider.connection.getAccountInfo(recipient);
@@ -135,20 +152,49 @@ describe("Awards", () => {
       matchingAward.awardPda,
       recipient
     );
-
     const bubblegumSignerPda = await helpers.findBubblegumSignerPda();
 
+    const forumMerkleTree = anchor.web3.Keypair.generate();
+    await helpers.initForum(authority, forumMerkleTree);
+    const leafEvent = await helpers.addEntry(forumMerkleTree.publicKey, {
+      textPost: {
+        title: "test",
+        uri: "https://example.com",
+        nsfw: false,
+      },
+    });
+    const leafHash = helpers.computeCompressedEntryHash(
+      leafEvent.id,
+      leafEvent.author,
+      leafEvent.createdAt,
+      leafEvent.editedAt,
+      leafEvent.nonce,
+      Buffer.from(leafEvent.dataHash)
+    );
+    const merkleTreeAccount =
+      await ConcurrentMerkleTreeAccount.fromAccountAddress(
+        helpers.connection,
+        forumMerkleTree.publicKey
+      );
+    const proof = MerkleTree.sparseMerkleTreeFromLeaves([leafHash], 5).getProof(
+      0
+    );
+
     await program.methods
-      .giveAward(null)
+      .giveAward(
+        Array.from(merkleTreeAccount.getCurrentRoot()),
+        Array.from(leafHash),
+        leafEvent.nonce.toNumber()
+      )
       .accounts({
         entryId,
         treasury,
         recipient,
         payer: authority.publicKey,
-        additionalSigner: null,
         award: award.awardPda,
         claim: claimPda,
         merkleTree: award.merkleTree,
+        forumMerkleTree: forumMerkleTree.publicKey,
         treeAuthority: award.treeAuthorityPda,
         collectionAuthorityRecordPda: award.collectionAuthorityRecordPda,
         collectionMint: award.collectionMint,
@@ -160,6 +206,13 @@ describe("Awards", () => {
         tokenMetadataProgram: METADATA_PROGRAM_ID,
         bubblegumProgram: BUBBLEGUM_PROGRAM_ID,
       })
+      .remainingAccounts(
+        proof.proof.map((pubkey) => ({
+          pubkey: new anchor.web3.PublicKey(pubkey),
+          isSigner: false,
+          isWritable: false,
+        }))
+      )
       .rpc();
 
     const claim = await program.account.claim.fetch(claimPda);
@@ -192,20 +245,49 @@ describe("Awards", () => {
       matchingAward.awardPda,
       recipient.publicKey
     );
-
     const bubblegumSignerPda = await helpers.findBubblegumSignerPda();
 
+    const forumMerkleTree = anchor.web3.Keypair.generate();
+    await helpers.initForum(authority, forumMerkleTree);
+    const leafEvent = await helpers.addEntry(forumMerkleTree.publicKey, {
+      textPost: {
+        title: "test",
+        uri: "https://example.com",
+        nsfw: false,
+      },
+    });
+    const leafHash = helpers.computeCompressedEntryHash(
+      leafEvent.id,
+      leafEvent.author,
+      leafEvent.createdAt,
+      leafEvent.editedAt,
+      leafEvent.nonce,
+      Buffer.from(leafEvent.dataHash)
+    );
+    const merkleTreeAccount =
+      await ConcurrentMerkleTreeAccount.fromAccountAddress(
+        helpers.connection,
+        forumMerkleTree.publicKey
+      );
+    const proof = MerkleTree.sparseMerkleTreeFromLeaves([leafHash], 5).getProof(
+      0
+    );
+
     await program.methods
-      .giveAward(null)
+      .giveAward(
+        Array.from(merkleTreeAccount.getCurrentRoot()),
+        Array.from(leafHash),
+        leafEvent.nonce.toNumber()
+      )
       .accounts({
         entryId,
         treasury,
         recipient: recipient.publicKey,
         payer: authority.publicKey,
-        additionalSigner: null,
         award: award.awardPda,
         claim: claimPda,
         merkleTree: award.merkleTree,
+        forumMerkleTree: forumMerkleTree.publicKey,
         treeAuthority: award.treeAuthorityPda,
         collectionAuthorityRecordPda: award.collectionAuthorityRecordPda,
         collectionMint: award.collectionMint,
@@ -217,6 +299,13 @@ describe("Awards", () => {
         tokenMetadataProgram: METADATA_PROGRAM_ID,
         bubblegumProgram: BUBBLEGUM_PROGRAM_ID,
       })
+      .remainingAccounts(
+        proof.proof.map((pubkey) => ({
+          pubkey: new anchor.web3.PublicKey(pubkey),
+          isSigner: false,
+          isWritable: false,
+        }))
+      )
       .rpc();
 
     const newProgram = await helpers.getAwardsProgram(recipient);
@@ -246,7 +335,6 @@ describe("Awards", () => {
     const claimAccountInfo = await program.provider.connection.getAccountInfo(
       claimPda
     );
-    console.log(claimAccountInfo);
     assert.equal(claimAccountInfo, null, "claimAccountInfo");
   });
 });

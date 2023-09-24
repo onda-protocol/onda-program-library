@@ -1482,6 +1482,8 @@ dependencies = [
  "anchor-spl",
  "mpl-bubblegum",
  "mpl-token-metadata",
+ "onda-compression",
+ "spl-account-compression",
 ]
 
 [[package]]

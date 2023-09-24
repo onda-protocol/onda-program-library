@@ -374,17 +374,11 @@ export async function createAward(
     .createAward(maxDepth, bufferSize, {
       amount: new anchor.BN(amount),
       feeBasisPoints: 5000,
-      metadata: {
-        symbol: "ONDA",
-        name: "Onda",
-        uri: "https://example.com",
-      },
     })
     .accounts({
       treasury,
       matchingAward,
       award: awardPda,
-      additionalSigner: null,
       collectionMint: mintAddress,
       collectionMetadata: metadataPda,
       collectionAuthorityRecord: collectionAuthorityRecordPda,
