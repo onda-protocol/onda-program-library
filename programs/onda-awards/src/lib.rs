@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use spl_account_compression;
 use mpl_bubblegum::program::Bubblegum;
 use mpl_token_metadata::instruction::approve_collection_authority;
+use onda_compression::state::LeafSchema;
 
 declare_id!("AwrdSLTcfNkVSARz8YoNYcVhknD7oxm7t3EqyYZ9bPK5");
 
@@ -93,7 +94,7 @@ pub struct CreateAward<'info> {
     )]
     pub award: Box<Account<'info, Award>>,
     /// CHECK: not dangerous
-    pub matching_award: Option<Account<'info, Award>>,
+    pub matching_award: Option<Box<Account<'info, Award>>>,
     /// CHECK: not dangerous
     pub treasury: UncheckedAccount<'info>,
     /// CHECK: checked in cpi
@@ -103,7 +104,7 @@ pub struct CreateAward<'info> {
     #[account(mut)]
     /// CHECK: checked in cpi
     pub collection_authority_record: UncheckedAccount<'info>,
-    #[account(mut)]
+    #[account(zero)]
     /// CHECK: checked in cpi
     pub merkle_tree: UncheckedAccount<'info>,
     #[account(mut)]
@@ -326,7 +327,9 @@ pub mod onda_awards {
     pub fn give_award<'info>(
         ctx: Context<'_, '_, '_, 'info, GiveAward<'info>>,
         root: [u8; 32],
-        leaf: [u8; 32],
+        created_at: i64,
+        edited_at: Option<i64>,
+        data_hash: [u8; 32],
         index: u32,
     ) -> Result<()> {
         let award = &ctx.accounts.award;
@@ -354,6 +357,14 @@ pub mod onda_awards {
                 merkle_tree: ctx.accounts.forum_merkle_tree.to_account_info()
             }
         ).with_remaining_accounts(ctx.remaining_accounts.to_vec());
+        let leaf = LeafSchema::new_v0(
+            entry.key(),
+            recipient.key(),
+            created_at,
+            edited_at,
+            index as u64,
+            data_hash,
+        ).to_node();
         spl_account_compression::cpi::verify_leaf(
             cpi_ctx,
             root,

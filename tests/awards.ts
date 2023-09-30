@@ -22,8 +22,6 @@ describe.only("Awards", () => {
     const amount = anchor.web3.LAMPORTS_PER_SOL / 100;
     const authority = anchor.web3.Keypair.generate();
     const treasury = anchor.web3.Keypair.generate().publicKey;
-    const entryId = anchor.web3.Keypair.generate().publicKey;
-    const recipient = anchor.web3.Keypair.generate().publicKey;
     const program = await helpers.getAwardsProgram(authority);
 
     await helpers.requestAirdrop(authority.publicKey);
@@ -55,48 +53,58 @@ describe.only("Awards", () => {
       0
     );
 
-    await program.methods
-      .giveAward(
-        Array.from(merkleTreeAccount.getCurrentRoot()),
-        Array.from(leafHash),
-        leafEvent.nonce.toNumber()
-      )
-      .accounts({
-        entryId,
-        treasury,
-        recipient,
-        payer: authority.publicKey,
-        award: accounts.awardPda,
-        claim: null,
-        merkleTree: accounts.merkleTree,
-        forumMerkleTree: forumMerkleTree.publicKey,
-        treeAuthority: accounts.treeAuthorityPda,
-        collectionAuthorityRecordPda: accounts.collectionAuthorityRecordPda,
-        collectionMint: accounts.collectionMint,
-        collectionMetadata: accounts.collectionMetadata,
-        editionAccount: accounts.editionPda,
-        logWrapper: SPL_NOOP_PROGRAM_ID,
-        bubblegumSigner: bubblegumSignerPda,
-        compressionProgram: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
-        tokenMetadataProgram: METADATA_PROGRAM_ID,
-        bubblegumProgram: BUBBLEGUM_PROGRAM_ID,
-      })
-      .remainingAccounts(
-        proof.proof.map((pubkey) => ({
-          pubkey: new anchor.web3.PublicKey(pubkey),
-          isSigner: false,
-          isWritable: false,
-        }))
-      )
-      .rpc();
+    const recipientAccountInfoBefore =
+      await program.provider.connection.getAccountInfo(leafEvent.author);
+
+    try {
+      await program.methods
+        .giveAward(
+          Array.from(merkleTreeAccount.getCurrentRoot()),
+          leafEvent.createdAt,
+          leafEvent.editedAt,
+          leafEvent.dataHash,
+          leafEvent.nonce.toNumber()
+        )
+        .accounts({
+          entryId: leafEvent.id,
+          treasury,
+          recipient: leafEvent.author,
+          payer: authority.publicKey,
+          award: accounts.awardPda,
+          claim: null,
+          merkleTree: accounts.merkleTree,
+          forumMerkleTree: forumMerkleTree.publicKey,
+          treeAuthority: accounts.treeAuthorityPda,
+          collectionAuthorityRecordPda: accounts.collectionAuthorityRecordPda,
+          collectionMint: accounts.collectionMint,
+          collectionMetadata: accounts.collectionMetadata,
+          editionAccount: accounts.editionPda,
+          logWrapper: SPL_NOOP_PROGRAM_ID,
+          bubblegumSigner: bubblegumSignerPda,
+          compressionProgram: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
+          tokenMetadataProgram: METADATA_PROGRAM_ID,
+          bubblegumProgram: BUBBLEGUM_PROGRAM_ID,
+        })
+        .remainingAccounts(
+          proof.proof.map((pubkey) => ({
+            pubkey: new anchor.web3.PublicKey(pubkey),
+            isSigner: false,
+            isWritable: false,
+          }))
+        )
+        .rpc();
+    } catch (err) {
+      console.log(err);
+      throw err;
+    }
 
     const recipientAccountInfo =
-      await program.provider.connection.getAccountInfo(recipient);
+      await program.provider.connection.getAccountInfo(leafEvent.author);
     const treasuryAccountInfo =
       await program.provider.connection.getAccountInfo(treasury);
 
     assert.equal(
-      recipientAccountInfo.lamports,
+      recipientAccountInfo.lamports - recipientAccountInfoBefore.lamports,
       amount / 2,
       "recipient.balance"
     );
@@ -131,8 +139,6 @@ describe.only("Awards", () => {
     const amount = anchor.web3.LAMPORTS_PER_SOL / 100;
     const authority = anchor.web3.Keypair.generate();
     const treasury = anchor.web3.Keypair.generate().publicKey;
-    const entryId = anchor.web3.Keypair.generate().publicKey;
-    const recipient = anchor.web3.Keypair.generate().publicKey;
     const program = await helpers.getAwardsProgram(authority);
 
     await helpers.requestAirdrop(authority.publicKey);
@@ -148,10 +154,6 @@ describe.only("Awards", () => {
       amount,
       matchingAward.awardPda
     );
-    const claimPda = await helpers.findClaimPda(
-      matchingAward.awardPda,
-      recipient
-    );
     const bubblegumSignerPda = await helpers.findBubblegumSignerPda();
 
     const forumMerkleTree = anchor.web3.Keypair.generate();
@@ -163,6 +165,10 @@ describe.only("Awards", () => {
         nsfw: false,
       },
     });
+    const claimPda = await helpers.findClaimPda(
+      matchingAward.awardPda,
+      leafEvent.author
+    );
     const leafHash = helpers.computeCompressedEntryHash(
       leafEvent.id,
       leafEvent.author,
@@ -183,13 +189,15 @@ describe.only("Awards", () => {
     await program.methods
       .giveAward(
         Array.from(merkleTreeAccount.getCurrentRoot()),
-        Array.from(leafHash),
+        leafEvent.createdAt,
+        leafEvent.editedAt,
+        leafEvent.dataHash,
         leafEvent.nonce.toNumber()
       )
       .accounts({
-        entryId,
         treasury,
-        recipient,
+        entryId: leafEvent.id,
+        recipient: leafEvent.author,
         payer: authority.publicKey,
         award: award.awardPda,
         claim: claimPda,
@@ -222,13 +230,11 @@ describe.only("Awards", () => {
   it("Allows the recipient to claim an award", async () => {
     const amount = anchor.web3.LAMPORTS_PER_SOL / 100;
     const authority = anchor.web3.Keypair.generate();
+    const author = anchor.web3.Keypair.generate();
     const treasury = anchor.web3.Keypair.generate().publicKey;
-    const entryId = anchor.web3.Keypair.generate().publicKey;
-    const recipient = anchor.web3.Keypair.generate();
     const program = await helpers.getAwardsProgram(authority);
 
     await helpers.requestAirdrop(authority.publicKey);
-    await helpers.requestAirdrop(recipient.publicKey);
 
     const matchingAward = await helpers.createAward(
       authority,
@@ -241,24 +247,28 @@ describe.only("Awards", () => {
       amount,
       matchingAward.awardPda
     );
-    const claimPda = await helpers.findClaimPda(
-      matchingAward.awardPda,
-      recipient.publicKey
-    );
     const bubblegumSignerPda = await helpers.findBubblegumSignerPda();
 
     const forumMerkleTree = anchor.web3.Keypair.generate();
     await helpers.initForum(authority, forumMerkleTree);
-    const leafEvent = await helpers.addEntry(forumMerkleTree.publicKey, {
-      textPost: {
-        title: "test",
-        uri: "https://example.com",
-        nsfw: false,
+    const leafEvent = await helpers.addEntry(
+      forumMerkleTree.publicKey,
+      {
+        textPost: {
+          title: "test",
+          uri: "https://example.com",
+          nsfw: false,
+        },
       },
-    });
+      author
+    );
+    const claimPda = await helpers.findClaimPda(
+      matchingAward.awardPda,
+      author.publicKey
+    );
     const leafHash = helpers.computeCompressedEntryHash(
       leafEvent.id,
-      leafEvent.author,
+      author.publicKey,
       leafEvent.createdAt,
       leafEvent.editedAt,
       leafEvent.nonce,
@@ -276,13 +286,15 @@ describe.only("Awards", () => {
     await program.methods
       .giveAward(
         Array.from(merkleTreeAccount.getCurrentRoot()),
-        Array.from(leafHash),
+        leafEvent.createdAt,
+        leafEvent.editedAt,
+        leafEvent.dataHash,
         leafEvent.nonce.toNumber()
       )
       .accounts({
-        entryId,
         treasury,
-        recipient: recipient.publicKey,
+        entryId: leafEvent.id,
+        recipient: leafEvent.author,
         payer: authority.publicKey,
         award: award.awardPda,
         claim: claimPda,
@@ -308,12 +320,12 @@ describe.only("Awards", () => {
       )
       .rpc();
 
-    const newProgram = await helpers.getAwardsProgram(recipient);
+    const newProgram = await helpers.getAwardsProgram(author);
     await newProgram.methods
       .claimAward()
       .accounts({
         treasury,
-        recipient: recipient.publicKey,
+        recipient: author.publicKey,
         award: matchingAward.awardPda,
         claim: claimPda,
         merkleTree: matchingAward.merkleTree,
