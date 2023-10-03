@@ -46,6 +46,8 @@ pub struct CreateAwardArgs {
 pub struct Award {
     /// The cost in lamports to mint a reward
     pub amount: u64,
+    /// Whether the award is public
+    pub public: bool,
     /// The amount which goes to the creator
     pub fee_basis_points: u16,
     /// The tree's authority
@@ -63,6 +65,7 @@ pub struct Award {
 impl Award {    
     pub const SIZE: usize = 8 + 
         8 + // amount
+        1 + // public
         2 + // fee_basis_points
         32 + // authority
         32 + // treasury
@@ -437,7 +440,7 @@ pub mod onda_awards {
     
         let creators = vec![
             mpl_bubblegum::state::metaplex_adapter::Creator {
-                address: ctx.accounts.payer.key(),
+                address: award.key(),
                 verified: true,
                 share: 0,
             }, 

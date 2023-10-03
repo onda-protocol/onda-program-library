@@ -119,7 +119,9 @@ describe("Moderation", () => {
       textPost: {
         title: "test",
         uri: "https://example.com",
+        tag: null,
         nsfw: false,
+        spoiler: false,
       },
     });
 

@@ -37,7 +37,9 @@ describe("Compression", () => {
       textPost: {
         title: "test",
         uri: "https://example.com",
+        tag: null,
         nsfw: false,
+        spoiler: false,
       },
     });
     await helpers.addEntry(merkleTree.publicKey, {
@@ -81,7 +83,9 @@ describe("Compression", () => {
           textPost: {
             title: "test",
             uri: "https://example.com",
+            tag: null,
             nsfw: false,
+            spoiler: false,
           },
         },
         admin
@@ -113,7 +117,9 @@ describe("Compression", () => {
         textPost: {
           title: "test",
           uri: "https://example.com",
+          tag: null,
           nsfw: false,
+          spoiler: false,
         },
       },
       admin,
@@ -132,7 +138,9 @@ describe("Compression", () => {
       textPost: {
         title: "test",
         uri: "https://example.com",
+        tag: null,
         nsfw: false,
+        spoiler: false,
       },
     });
     const leafHash = helpers.computeCompressedEntryHash(
@@ -177,7 +185,9 @@ describe("Compression", () => {
         textPost: {
           title: "test",
           uri: "https://example.com",
+          tag: null,
           nsfw: false,
+          spoiler: false,
         },
       },
       author

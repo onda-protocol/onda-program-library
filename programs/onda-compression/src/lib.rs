@@ -22,8 +22,9 @@ pub mod state;
 
 declare_id!("onda1FgCsQMC4zBhsjGjKoHDgGp6q7pK48HQaVXf28d");
 
-pub const MAX_URI_LEN: usize = 128;
 pub const MAX_TITLE_LEN: usize = 300;
+pub const MAX_URI_LEN: usize = 128;
+pub const MAX_TAG_LEN: usize = 42;
 
 #[derive(Accounts)]
 #[instruction(max_depth: u32, max_buffer_size: u32, gate: Option<Vec<Gate>>)]
@@ -186,17 +187,17 @@ pub mod onda_compression {
         let token_account = &ctx.accounts.token_account;
 
         match data.clone() {
-            DataV1::TextPost { title, uri, .. } => {
-                validate_post_schema(&title, &uri)?;
+            DataV1::TextPost { title, uri, tag, .. } => {
+                validate_post_schema(&title, &uri, &tag)?;
             },
-            DataV1::ImagePost { title, uri, .. } => {
-                validate_post_schema(&title, &uri)?;
+            DataV1::ImagePost { title, uri, tag, .. } => {
+                validate_post_schema(&title, &uri, &tag)?;
             },
-            DataV1::LinkPost { title, uri, .. } => {
-                validate_post_schema(&title, &uri)?;
+            DataV1::LinkPost { title, uri, tag, .. } => {
+                validate_post_schema(&title, &uri, &tag)?;
             },
-            DataV1::VideoPost { title, uri, .. } => {
-                validate_post_schema(&title, &uri)?;
+            DataV1::VideoPost { title, uri, tag, .. } => {
+                validate_post_schema(&title, &uri, &tag)?;
             },
             DataV1::Comment { uri, .. } => {
                 require!(is_valid_url(&uri), OndaSocialError::InvalidUri);
@@ -236,7 +237,7 @@ pub mod onda_compression {
                     }
 
                 },
-                Rule::NFT => {
+                Rule::Nft => {
                     if mint.is_some() && token_account.is_some() &&  metadata.is_some() {
                         let mint = mint.clone().unwrap();
                         let token_account = token_account.clone().unwrap();
@@ -268,8 +269,8 @@ pub mod onda_compression {
                         }
                     }
                 },
-                Rule::Pass => {
-                    // TODO: Implement pass
+                Rule::CompressedNft => {
+                    // TODO: Implement compressed nft gate
                 },
                 Rule::AdditionalSigner => {
                     if ctx.accounts.additional_signer.is_some() {
@@ -281,7 +282,7 @@ pub mod onda_compression {
                             for address in addresses {
                                 if additional_signer.key().eq(&address) {
                                     match gate.operator {
-                                        Operator::NOT => {
+                                        Operator::Not => {
                                             operation.result = false;
                                             break;
                                         },
@@ -531,10 +532,13 @@ pub fn is_valid_nft(
     is_valid_collection
 }
 
-pub fn validate_post_schema(title: &str, uri: &str) -> Result<bool> {
+pub fn validate_post_schema(title: &str, uri: &str, tag: &Option<String>) -> Result<bool> {
     require!(is_valid_url(&uri), OndaSocialError::InvalidUri);
     require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
     require_gte!(MAX_TITLE_LEN, title.len(), OndaSocialError::TitleTooLong);
+    if tag.is_some() {
+        require_gte!(MAX_TAG_LEN, tag.clone().unwrap().len(), OndaSocialError::TagTooLong);
+    }
     Ok(true)
 }
 
@@ -548,17 +552,17 @@ pub fn evaluate_operations(operations: Vec<OperationResult>) -> bool {
     
     for op in operations {
         match op.operator {
-            Operator::AND => {
+            Operator::And => {
                 overall_result &= op.result;
                 or_case_result &= op.result;
             }
-            Operator::OR => {
+            Operator::Or => {
                 if op.result {
                     or_case_result = true;
                 }
                 overall_result |= or_case_result;
             },
-            Operator::NOT => {
+            Operator::Not => {
                 if op.result == false {
                     overall_result = false;
                     break;

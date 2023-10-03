@@ -7,6 +7,8 @@ pub enum OndaSocialError {
   InvalidUri,
   #[msg("Title too long")]
   TitleTooLong,
+  #[msg("Tag too long")]
+  TagTooLong,
   #[msg("Insufficient post capacity")]
   InsufficientPostCapacity,
   #[msg("Unauthorized")]

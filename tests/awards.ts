@@ -10,7 +10,7 @@ import {
   SPL_NOOP_PROGRAM_ID,
 } from "@solana/spl-account-compression";
 
-describe.only("Awards", () => {
+describe("Awards", () => {
   it("Creates a new award", async () => {
     const authority = anchor.web3.Keypair.generate();
 
@@ -33,7 +33,9 @@ describe.only("Awards", () => {
       textPost: {
         title: "test",
         uri: "https://example.com",
+        tag: null,
         nsfw: false,
+        spoiler: false,
       },
     });
     const leafHash = helpers.computeCompressedEntryHash(
@@ -163,6 +165,8 @@ describe.only("Awards", () => {
         title: "test",
         uri: "https://example.com",
         nsfw: false,
+        tag: null,
+        spoiler: false,
       },
     });
     const claimPda = await helpers.findClaimPda(
@@ -257,7 +261,9 @@ describe.only("Awards", () => {
         textPost: {
           title: "test",
           uri: "https://example.com",
+          tag: null,
           nsfw: false,
+          spoiler: false,
         },
       },
       author
