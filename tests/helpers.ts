@@ -38,6 +38,7 @@ export type DataV1 = OndaCompressionTypes["DataV1"];
 export type LeafSchemaV1 = SnakeToCamelCaseObj<
   OndaCompressionTypes["LeafSchema"]["v1"]
 >;
+export type Flair = OndaCompressionTypes["Flair"];
 export type Gate = OndaCompressionTypes["Gate"];
 
 export const compressionProgram = anchor.workspace
@@ -182,6 +183,16 @@ export function findBubblegumSignerPda() {
 export async function initForum(
   admin: anchor.web3.Keypair,
   merkleTree: anchor.web3.Keypair,
+  flair: Flair[] = [
+    {
+      name: "test",
+      color: [255, 255, 255],
+    },
+    {
+      name: "test2",
+      color: [55, 55, 55],
+    },
+  ],
   gates: Gate[] = null
 ) {
   const program = await getCompressionProgram(admin);
@@ -204,7 +215,7 @@ export async function initForum(
   });
 
   const initForumIx = await program.methods
-    .initForum(maxDepth, bufferSize, gates)
+    .initForum(maxDepth, bufferSize, flair, gates)
     .accounts({
       payer: admin.publicKey,
       forumConfig,

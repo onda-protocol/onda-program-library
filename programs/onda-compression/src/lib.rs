@@ -24,10 +24,10 @@ declare_id!("onda1FgCsQMC4zBhsjGjKoHDgGp6q7pK48HQaVXf28d");
 
 pub const MAX_TITLE_LEN: usize = 300;
 pub const MAX_URI_LEN: usize = 128;
-pub const MAX_TAG_LEN: usize = 42;
+pub const MAX_FLAIR_LEN: usize = 42;
 
 #[derive(Accounts)]
-#[instruction(max_depth: u32, max_buffer_size: u32, gate: Option<Vec<Gate>>)]
+#[instruction(max_depth: u32, max_buffer_size: u32, flair: Vec<Flair>, gate: Option<Vec<Gate>>)]
 pub struct InitForum<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -35,7 +35,7 @@ pub struct InitForum<'info> {
         init,
         seeds = [merkle_tree.key().as_ref()],
         payer = payer,
-        space = ForumConfig::get_size(gate),
+        space = ForumConfig::get_size(flair, gate),
         bump,
     )]
     pub forum_config: Account<'info, ForumConfig>,
@@ -129,6 +129,7 @@ pub mod onda_compression {
         ctx: Context<InitForum>,
         max_depth: u32,
         max_buffer_size: u32,
+        flair: Vec<Flair>,
         gate: Option<Vec<Gate>>,
     ) -> Result<()> {
         let forum_config = &mut ctx.accounts.forum_config;
@@ -141,6 +142,7 @@ pub mod onda_compression {
             admin: ctx.accounts.payer.key(),
             total_capacity: 1 << max_depth,
             post_count: 0,
+            flair,
             gate: gate.unwrap_or(vec![]),
         });
         
@@ -187,17 +189,21 @@ pub mod onda_compression {
         let token_account = &ctx.accounts.token_account;
 
         match data.clone() {
-            DataV1::TextPost { title, uri, tag, .. } => {
-                validate_post_schema(&title, &uri, &tag)?;
+            DataV1::TextPost { title, uri, flair, .. } => {
+                validate_flair(&forum_config, &flair)?;
+                validate_post_schema(&title, &uri)?;
             },
-            DataV1::ImagePost { title, uri, tag, .. } => {
-                validate_post_schema(&title, &uri, &tag)?;
+            DataV1::ImagePost { title, uri, flair, .. } => {
+                validate_flair(&forum_config, &flair)?;
+                validate_post_schema(&title, &uri)?;
             },
-            DataV1::LinkPost { title, uri, tag, .. } => {
-                validate_post_schema(&title, &uri, &tag)?;
+            DataV1::LinkPost { title, uri, flair, .. } => {
+                validate_flair(&forum_config, &flair)?;
+                validate_post_schema(&title, &uri)?;
             },
-            DataV1::VideoPost { title, uri, tag, .. } => {
-                validate_post_schema(&title, &uri, &tag)?;
+            DataV1::VideoPost { title, uri, flair, .. } => {
+                validate_flair(&forum_config, &flair)?;
+                validate_post_schema(&title, &uri)?;
             },
             DataV1::Comment { uri, .. } => {
                 require!(is_valid_url(&uri), OndaSocialError::InvalidUri);
@@ -532,13 +538,21 @@ pub fn is_valid_nft(
     is_valid_collection
 }
 
-pub fn validate_post_schema(title: &str, uri: &str, tag: &Option<String>) -> Result<bool> {
+pub fn validate_flair(config: &ForumConfig, flair: &Option<String>) -> Result<bool> {
+    if flair.is_none() {
+        return Ok(true);
+    }
+
+    let flair = flair.clone().unwrap();
+    require!(flair.len() <= MAX_FLAIR_LEN, OndaSocialError::FlairTooLong);
+    require!(config.flair.iter().find(|f| f.name.eq(&flair)).is_some(), OndaSocialError::InvalidFlair);
+    Ok(true)
+}
+
+pub fn validate_post_schema(title: &str, uri: &str) -> Result<bool> {
     require!(is_valid_url(&uri), OndaSocialError::InvalidUri);
     require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
     require_gte!(MAX_TITLE_LEN, title.len(), OndaSocialError::TitleTooLong);
-    if tag.is_some() {
-        require_gte!(MAX_TAG_LEN, tag.clone().unwrap().len(), OndaSocialError::TagTooLong);
-    }
     Ok(true)
 }
 

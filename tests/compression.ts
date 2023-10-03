@@ -37,7 +37,7 @@ describe("Compression", () => {
       textPost: {
         title: "test",
         uri: "https://example.com",
-        tag: null,
+        flair: null,
         nsfw: false,
         spoiler: false,
       },
@@ -74,7 +74,7 @@ describe("Compression", () => {
         or: {},
       },
     };
-    await helpers.initForum(admin, merkleTree, [gate]);
+    await helpers.initForum(admin, merkleTree, undefined, [gate]);
 
     try {
       await helpers.addEntry(
@@ -83,7 +83,7 @@ describe("Compression", () => {
           textPost: {
             title: "test",
             uri: "https://example.com",
-            tag: null,
+            flair: null,
             nsfw: false,
             spoiler: false,
           },
@@ -117,7 +117,7 @@ describe("Compression", () => {
         textPost: {
           title: "test",
           uri: "https://example.com",
-          tag: null,
+          flair: null,
           nsfw: false,
           spoiler: false,
         },
@@ -138,7 +138,7 @@ describe("Compression", () => {
       textPost: {
         title: "test",
         uri: "https://example.com",
-        tag: null,
+        flair: "test",
         nsfw: false,
         spoiler: false,
       },
@@ -185,7 +185,7 @@ describe("Compression", () => {
         textPost: {
           title: "test",
           uri: "https://example.com",
-          tag: null,
+          flair: null,
           nsfw: false,
           spoiler: false,
         },

@@ -32,25 +32,32 @@ pub struct Gate {
     pub rule_type: Rule,
     pub operator: Operator,
     pub address: Vec<Pubkey>,
-}   
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
+pub struct Flair {
+    pub name: String,
+    pub color: [u8; 3],
+}
 
 #[account]
 pub struct ForumConfig {
     pub total_capacity: u64,
     pub post_count: u64,
     pub admin: Pubkey,
+    pub flair: Vec<Flair>,
     pub gate: Vec<Gate>
 }
 
 impl ForumConfig {
-    pub fn get_size(gate: Option<Vec<Gate>>) -> usize {
+    pub fn get_size(flair: Vec<Flair>, gate: Option<Vec<Gate>>) -> usize {
         let base_size = BASE_FORUM_CONFIG_SIZE;
-
-        let size = gate.unwrap_or(Vec::new()).iter().fold(base_size, |acc, gate| {
+        let flair_size = 4 + flair.iter().fold(0, |acc, flair| acc + 4 + flair.name.len() + 3);
+        let gate_size = gate.unwrap_or(Vec::new()).iter().fold(0, |acc, gate| {
             acc + BASE_GATE_SIZE + gate.address.len() * 32
         });
     
-        size
+        base_size + flair_size + gate_size
     }
 
     pub fn increment_post_count(&mut self) {
@@ -117,10 +124,10 @@ impl Version {
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
 pub enum DataV1 {
-    TextPost { title: String, uri: String, tag: Option<String>, nsfw: bool, spoiler: bool },
-    ImagePost { title: String, uri: String, tag: Option<String>, nsfw: bool, spoiler: bool },
-    LinkPost { title: String, uri: String, tag: Option<String>, nsfw: bool, spoiler: bool },
-    VideoPost { title: String, uri: String, tag: Option<String>, nsfw: bool, spoiler: bool },
+    TextPost { title: String, uri: String, flair: Option<String>, nsfw: bool, spoiler: bool },
+    ImagePost { title: String, uri: String, flair: Option<String>, nsfw: bool, spoiler: bool },
+    LinkPost { title: String, uri: String, flair: Option<String>, nsfw: bool, spoiler: bool },
+    VideoPost { title: String, uri: String, flair: Option<String>, nsfw: bool, spoiler: bool },
     Comment { post: Pubkey, parent: Option<Pubkey>, uri: String },
 }
 

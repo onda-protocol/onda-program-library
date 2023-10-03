@@ -33,7 +33,7 @@ describe("Awards", () => {
       textPost: {
         title: "test",
         uri: "https://example.com",
-        tag: null,
+        flair: null,
         nsfw: false,
         spoiler: false,
       },
@@ -165,7 +165,7 @@ describe("Awards", () => {
         title: "test",
         uri: "https://example.com",
         nsfw: false,
-        tag: null,
+        flair: null,
         spoiler: false,
       },
     });
@@ -261,7 +261,7 @@ describe("Awards", () => {
         textPost: {
           title: "test",
           uri: "https://example.com",
-          tag: null,
+          flair: null,
           nsfw: false,
           spoiler: false,
         },
