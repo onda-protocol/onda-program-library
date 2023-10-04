@@ -39,6 +39,7 @@ pub struct AwardClaims {
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
 pub struct CreateAwardArgs {
     pub amount: u64,
+    pub public: bool,
     pub fee_basis_points: u16,
 }   
 
@@ -251,6 +252,7 @@ pub mod onda_awards {
         }
 
         award.amount = args.amount;
+        award.public = args.public;
         award.fee_basis_points = args.fee_basis_points;
         award.authority = ctx.accounts.payer.key();
         award.treasury = ctx.accounts.treasury.key();
@@ -340,6 +342,13 @@ pub mod onda_awards {
         let entry = &ctx.accounts.entry_id;
         let recipient = &ctx.accounts.recipient;
         let treasury = &ctx.accounts.treasury;
+
+        if award.public == false {
+            msg!("Award is not public");
+            return err!(
+                OndaAwardsError::Unauthorized
+            );
+        }
 
         // Handle any claims
         if award.matching.is_some() {
