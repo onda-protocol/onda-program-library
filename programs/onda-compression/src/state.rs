@@ -34,25 +34,19 @@ pub struct Gate {
     pub address: Vec<Pubkey>,
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
-pub struct Flair {
-    pub name: String,
-    pub color: [u8; 3],
-}
-
 #[account]
 pub struct ForumConfig {
     pub total_capacity: u64,
     pub post_count: u64,
     pub admin: Pubkey,
-    pub flair: Vec<Flair>,
+    pub flair: Vec<String>,
     pub gate: Vec<Gate>
 }
 
 impl ForumConfig {
-    pub fn get_size(flair: Vec<Flair>, gate: Option<Vec<Gate>>) -> usize {
+    pub fn get_size(flair: Vec<String>, gate: Option<Vec<Gate>>) -> usize {
         let base_size = BASE_FORUM_CONFIG_SIZE;
-        let flair_size = 4 + flair.iter().fold(0, |acc, flair| acc + 4 + flair.name.len() + 3);
+        let flair_size = 4 + flair.iter().fold(0, |acc, flair| acc + 4 + flair.len());
         let gate_size = gate.unwrap_or(Vec::new()).iter().fold(0, |acc, gate| {
             acc + BASE_GATE_SIZE + gate.address.len() * 32
         });

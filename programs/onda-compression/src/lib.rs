@@ -27,7 +27,7 @@ pub const MAX_URI_LEN: usize = 128;
 pub const MAX_FLAIR_LEN: usize = 42;
 
 #[derive(Accounts)]
-#[instruction(max_depth: u32, max_buffer_size: u32, flair: Vec<Flair>, gate: Option<Vec<Gate>>)]
+#[instruction(max_depth: u32, max_buffer_size: u32, flair: Vec<String>, gate: Option<Vec<Gate>>)]
 pub struct InitForum<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -129,7 +129,7 @@ pub mod onda_compression {
         ctx: Context<InitForum>,
         max_depth: u32,
         max_buffer_size: u32,
-        flair: Vec<Flair>,
+        flair: Vec<String>,
         gate: Option<Vec<Gate>>,
     ) -> Result<()> {
         let forum_config = &mut ctx.accounts.forum_config;
@@ -545,7 +545,7 @@ pub fn validate_flair(config: &ForumConfig, flair: &Option<String>) -> Result<bo
 
     let flair = flair.clone().unwrap();
     require!(flair.len() <= MAX_FLAIR_LEN, OndaSocialError::FlairTooLong);
-    require!(config.flair.iter().find(|f| f.name.eq(&flair)).is_some(), OndaSocialError::InvalidFlair);
+    require!(config.flair.iter().find(|name| **name == flair).is_some(), OndaSocialError::InvalidFlair);
     Ok(true)
 }
 
