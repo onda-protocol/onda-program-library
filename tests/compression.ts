@@ -27,7 +27,7 @@ describe("Compression", () => {
     assert.equal(forumConfigAccount.gate.length, 0, "forum.gate");
   });
 
-  it.only("Adds a post and comment", async () => {
+  it("Adds a post and comment", async () => {
     const admin = anchor.web3.Keypair.generate();
     const merkleTree = anchor.web3.Keypair.generate();
 
@@ -37,7 +37,9 @@ describe("Compression", () => {
       textPost: {
         title: "test",
         uri: "https://example.com",
+        flair: null,
         nsfw: false,
+        spoiler: false,
       },
     });
     await helpers.addEntry(merkleTree.publicKey, {
@@ -49,7 +51,7 @@ describe("Compression", () => {
     });
   });
 
-  it.only("Gates entry to an spl-token", async () => {
+  it("Gates entry to an spl-token", async () => {
     const admin = anchor.web3.Keypair.generate();
     const merkleTree = anchor.web3.Keypair.generate();
 
@@ -72,7 +74,7 @@ describe("Compression", () => {
         or: {},
       },
     };
-    await helpers.initForum(admin, merkleTree, [gate]);
+    await helpers.initForum(admin, merkleTree, undefined, [gate]);
 
     try {
       await helpers.addEntry(
@@ -81,7 +83,9 @@ describe("Compression", () => {
           textPost: {
             title: "test",
             uri: "https://example.com",
+            flair: null,
             nsfw: false,
+            spoiler: false,
           },
         },
         admin
@@ -113,7 +117,9 @@ describe("Compression", () => {
         textPost: {
           title: "test",
           uri: "https://example.com",
+          flair: null,
           nsfw: false,
+          spoiler: false,
         },
       },
       admin,
@@ -132,7 +138,9 @@ describe("Compression", () => {
       textPost: {
         title: "test",
         uri: "https://example.com",
+        flair: "test",
         nsfw: false,
+        spoiler: false,
       },
     });
     const leafHash = helpers.computeCompressedEntryHash(
@@ -177,7 +185,9 @@ describe("Compression", () => {
         textPost: {
           title: "test",
           uri: "https://example.com",
+          flair: null,
           nsfw: false,
+          spoiler: false,
         },
       },
       author

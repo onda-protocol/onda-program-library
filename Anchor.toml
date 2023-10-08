@@ -4,11 +4,10 @@ anchor_version = "0.28.0"
 url = "https://anchor.projectserum.com"
 
 [programs.localnet]
-onda_compression = "onda1FgCsQMC4zBhsjGjKoHDgGp6q7pK48HQaVXf28d"
+onda_compression = "ondaTPaRbk5xRJiqje7DS8n6nFu7Hg6jvKthXNemsHg"
 onda_moderation = "5o1PS9vW57YUezjCuN7aycLnACKkaxGyb7Ak7pdcK6sw"
-onda_awards = "AwrdSLTcfNkVSARz8YoNYcVhknD7oxm7t3EqyYZ9bPK5"
-onda_profile = "ondapcq2qXTSynRieMCE9BjRsZ2XALEEZZunkwbhCPF"
-onda_namespace = "ona67gSygPUkb34U5sgPZK7AkgXDJJrNoi5nrraEHvE"
+onda_awards = "Awrdi1SPuntNpnm1hvDVDNsLnxg4zVotHsYF4FWNyaFj"
+onda_namespace = "namev2tpRrZEN9VWNKoktWxTJ9bYxkyVXCJJqZtuMuG"
 
 [provider]
 cluster = "localnet"

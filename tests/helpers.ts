@@ -33,6 +33,7 @@ type SnakeToCamelCaseObj<T> = T extends object
     }
   : T;
 type OndaCompressionTypes = anchor.IdlTypes<OndaCompression>;
+type OndaAwardTypes = anchor.IdlTypes<OndaAwards>;
 export type DataV1 = OndaCompressionTypes["DataV1"];
 export type LeafSchemaV1 = SnakeToCamelCaseObj<
   OndaCompressionTypes["LeafSchema"]["v1"]
@@ -154,6 +155,16 @@ export function findAwardPda(merkleTree: anchor.web3.PublicKey) {
   )[0];
 }
 
+export function findClaimPda(
+  matchingAward: anchor.web3.PublicKey,
+  recipient: anchor.web3.PublicKey
+) {
+  return anchor.web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("claim"), matchingAward.toBuffer(), recipient.toBuffer()],
+    awardsProgram.programId
+  )[0];
+}
+
 export function findTreeAuthorityPda(merkleTree: anchor.web3.PublicKey) {
   return anchor.web3.PublicKey.findProgramAddressSync(
     [merkleTree.toBuffer()],
@@ -171,6 +182,7 @@ export function findBubblegumSignerPda() {
 export async function initForum(
   admin: anchor.web3.Keypair,
   merkleTree: anchor.web3.Keypair,
+  flair: string[] = ["test", "test2"],
   gates: Gate[] = null
 ) {
   const program = await getCompressionProgram(admin);
@@ -193,7 +205,7 @@ export async function initForum(
   });
 
   const initForumIx = await program.methods
-    .initForum(maxDepth, bufferSize, gates)
+    .initForum(maxDepth, bufferSize, flair, gates)
     .accounts({
       payer: admin.publicKey,
       forumConfig,
@@ -309,7 +321,12 @@ export function computeCompressedEntryHash(
   return Buffer.from(keccak_256.digest(message));
 }
 
-export async function createAward(authority: anchor.web3.Keypair) {
+export async function createAward(
+  authority: anchor.web3.Keypair,
+  treasury: anchor.web3.PublicKey = anchor.web3.Keypair.generate().publicKey,
+  amount: number = anchor.web3.LAMPORTS_PER_SOL / 100,
+  matchingAward: anchor.web3.PublicKey = null
+) {
   const maxDepth = 14;
   const bufferSize = 64;
   const canopyDepth = maxDepth - 3;
@@ -328,10 +345,6 @@ export async function createAward(authority: anchor.web3.Keypair) {
     programId: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
   });
 
-  const program = await getAwardsProgram(authority);
-  const awardPda = findAwardPda(merkleTree.publicKey);
-  const treeAuthorityPda = findTreeAuthorityPda(merkleTree.publicKey);
-
   const metaplex = new Metaplex(connection).use(keypairIdentity(authority));
 
   const { mintAddress, masterEditionAddress } = await metaplex.nfts().create({
@@ -341,6 +354,10 @@ export async function createAward(authority: anchor.web3.Keypair) {
     sellerFeeBasisPoints: 0,
     isCollection: true,
   });
+
+  const program = await getAwardsProgram(authority);
+  const awardPda = findAwardPda(merkleTree.publicKey);
+  const treeAuthorityPda = findTreeAuthorityPda(merkleTree.publicKey);
 
   const metadataPda = await metaplex
     .nfts()
@@ -356,11 +373,13 @@ export async function createAward(authority: anchor.web3.Keypair) {
 
   const createRewardIx = await program.methods
     .createAward(maxDepth, bufferSize, {
-      symbol: "ONDA",
-      name: "Onda",
-      uri: "https://example.com",
+      amount: new anchor.BN(amount),
+      feeBasisPoints: 5000,
+      public: true,
     })
     .accounts({
+      treasury,
+      matchingAward,
       award: awardPda,
       collectionMint: mintAddress,
       collectionMetadata: metadataPda,
@@ -381,7 +400,7 @@ export async function createAward(authority: anchor.web3.Keypair) {
   try {
     await program.provider.sendAndConfirm(tx, [merkleTree], {
       commitment: "confirmed",
-      skipPreflight: true,
+      // skipPreflight: true,
     });
   } catch (err) {
     console.log(err);

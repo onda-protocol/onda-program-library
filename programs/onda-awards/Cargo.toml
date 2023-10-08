@@ -17,7 +17,10 @@ default = []
 
 [dependencies]
 anchor-lang = { version="0.28.0", features = ["init-if-needed"] }
+anchor-spl = { version="0.28.0" }
+spl-account-compression = { version="0.2.0", features = ["cpi"] }
 mpl-bubblegum = { version="0.10.1", features = ["cpi"] }
 mpl-token-metadata = { version = "2.0.0-beta.1", features = ["no-entrypoint"] }
-gpl-session = { version = "2.0.0", features = ["no-entrypoint"] }
+onda-compression = { path = "../onda-compression", features = ["cpi"]}
+
 

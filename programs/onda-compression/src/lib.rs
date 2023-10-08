@@ -20,13 +20,14 @@ use crate::{
 pub mod error;
 pub mod state;
 
-declare_id!("onda1FgCsQMC4zBhsjGjKoHDgGp6q7pK48HQaVXf28d");
+declare_id!("ondaTPaRbk5xRJiqje7DS8n6nFu7Hg6jvKthXNemsHg");
 
-pub const MAX_URI_LEN: usize = 128;
 pub const MAX_TITLE_LEN: usize = 300;
+pub const MAX_URI_LEN: usize = 128;
+pub const MAX_FLAIR_LEN: usize = 42;
 
 #[derive(Accounts)]
-#[instruction(max_depth: u32, max_buffer_size: u32, gate: Option<Vec<Gate>>)]
+#[instruction(max_depth: u32, max_buffer_size: u32, flair: Vec<String>, gate: Option<Vec<Gate>>)]
 pub struct InitForum<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
@@ -34,7 +35,7 @@ pub struct InitForum<'info> {
         init,
         seeds = [merkle_tree.key().as_ref()],
         payer = payer,
-        space = ForumConfig::get_size(gate),
+        space = ForumConfig::get_size(flair, gate),
         bump,
     )]
     pub forum_config: Account<'info, ForumConfig>,
@@ -128,6 +129,7 @@ pub mod onda_compression {
         ctx: Context<InitForum>,
         max_depth: u32,
         max_buffer_size: u32,
+        flair: Vec<String>,
         gate: Option<Vec<Gate>>,
     ) -> Result<()> {
         let forum_config = &mut ctx.accounts.forum_config;
@@ -140,6 +142,7 @@ pub mod onda_compression {
             admin: ctx.accounts.payer.key(),
             total_capacity: 1 << max_depth,
             post_count: 0,
+            flair,
             gate: gate.unwrap_or(vec![]),
         });
         
@@ -186,16 +189,20 @@ pub mod onda_compression {
         let token_account = &ctx.accounts.token_account;
 
         match data.clone() {
-            DataV1::TextPost { title, uri, .. } => {
+            DataV1::TextPost { title, uri, flair, .. } => {
+                validate_flair(&forum_config, &flair)?;
                 validate_post_schema(&title, &uri)?;
             },
-            DataV1::ImagePost { title, uri, .. } => {
+            DataV1::ImagePost { title, uri, flair, .. } => {
+                validate_flair(&forum_config, &flair)?;
                 validate_post_schema(&title, &uri)?;
             },
-            DataV1::LinkPost { title, uri, .. } => {
+            DataV1::LinkPost { title, uri, flair, .. } => {
+                validate_flair(&forum_config, &flair)?;
                 validate_post_schema(&title, &uri)?;
             },
-            DataV1::VideoPost { title, uri, .. } => {
+            DataV1::VideoPost { title, uri, flair, .. } => {
+                validate_flair(&forum_config, &flair)?;
                 validate_post_schema(&title, &uri)?;
             },
             DataV1::Comment { uri, .. } => {
@@ -236,7 +243,7 @@ pub mod onda_compression {
                     }
 
                 },
-                Rule::NFT => {
+                Rule::Nft => {
                     if mint.is_some() && token_account.is_some() &&  metadata.is_some() {
                         let mint = mint.clone().unwrap();
                         let token_account = token_account.clone().unwrap();
@@ -268,8 +275,8 @@ pub mod onda_compression {
                         }
                     }
                 },
-                Rule::Pass => {
-                    // TODO: Implement pass
+                Rule::CompressedNft => {
+                    // TODO: Implement compressed nft gate
                 },
                 Rule::AdditionalSigner => {
                     if ctx.accounts.additional_signer.is_some() {
@@ -281,7 +288,7 @@ pub mod onda_compression {
                             for address in addresses {
                                 if additional_signer.key().eq(&address) {
                                     match gate.operator {
-                                        Operator::NOT => {
+                                        Operator::Not => {
                                             operation.result = false;
                                             break;
                                         },
@@ -531,6 +538,17 @@ pub fn is_valid_nft(
     is_valid_collection
 }
 
+pub fn validate_flair(config: &ForumConfig, flair: &Option<String>) -> Result<bool> {
+    if flair.is_none() {
+        return Ok(true);
+    }
+
+    let flair = flair.clone().unwrap();
+    require!(flair.len() <= MAX_FLAIR_LEN, OndaSocialError::FlairTooLong);
+    require!(config.flair.iter().find(|name| **name == flair).is_some(), OndaSocialError::InvalidFlair);
+    Ok(true)
+}
+
 pub fn validate_post_schema(title: &str, uri: &str) -> Result<bool> {
     require!(is_valid_url(&uri), OndaSocialError::InvalidUri);
     require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
@@ -548,17 +566,17 @@ pub fn evaluate_operations(operations: Vec<OperationResult>) -> bool {
     
     for op in operations {
         match op.operator {
-            Operator::AND => {
+            Operator::And => {
                 overall_result &= op.result;
                 or_case_result &= op.result;
             }
-            Operator::OR => {
+            Operator::Or => {
                 if op.result {
                     or_case_result = true;
                 }
                 overall_result |= or_case_result;
             },
-            Operator::NOT => {
+            Operator::Not => {
                 if op.result == false {
                     overall_result = false;
                     break;

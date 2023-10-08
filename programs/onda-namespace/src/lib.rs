@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use onda_compression::{self, state::ForumConfig};
 
-declare_id!("ona67gSygPUkb34U5sgPZK7AkgXDJJrNoi5nrraEHvE");
+declare_id!("namev2tpRrZEN9VWNKoktWxTJ9bYxkyVXCJJqZtuMuG");
 
 pub const MAX_NAME_LENGTH: usize = 32;
 pub const MAX_URI_LENGTH: usize = 200;

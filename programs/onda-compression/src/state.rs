@@ -9,9 +9,8 @@ pub const BASE_GATE_SIZE: usize = 8 + 1 + 1 + 4;
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
 pub enum Rule {
     Token,
-    NFT,
-    /// Passes can be used to verify ownership of cNFTs and support cold storage
-    Pass,
+    Nft,
+    CompressedNft,
     AdditionalSigner,
 }
 
@@ -22,9 +21,9 @@ pub struct OperationResult {
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
 pub enum Operator {
-    AND,
-    OR,
-    NOT,
+    And,
+    Or,
+    Not,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
@@ -33,25 +32,26 @@ pub struct Gate {
     pub rule_type: Rule,
     pub operator: Operator,
     pub address: Vec<Pubkey>,
-}   
+}
 
 #[account]
 pub struct ForumConfig {
     pub total_capacity: u64,
     pub post_count: u64,
     pub admin: Pubkey,
+    pub flair: Vec<String>,
     pub gate: Vec<Gate>
 }
 
 impl ForumConfig {
-    pub fn get_size(gate: Option<Vec<Gate>>) -> usize {
+    pub fn get_size(flair: Vec<String>, gate: Option<Vec<Gate>>) -> usize {
         let base_size = BASE_FORUM_CONFIG_SIZE;
-
-        let size = gate.unwrap_or(Vec::new()).iter().fold(base_size, |acc, gate| {
+        let flair_size = 4 + flair.iter().fold(0, |acc, flair| acc + 4 + flair.len());
+        let gate_size = gate.unwrap_or(Vec::new()).iter().fold(0, |acc, gate| {
             acc + BASE_GATE_SIZE + gate.address.len() * 32
         });
     
-        size
+        base_size + flair_size + gate_size
     }
 
     pub fn increment_post_count(&mut self) {
@@ -65,27 +65,6 @@ impl ForumConfig {
 
     pub fn set_admin(&mut self, admin: Pubkey) {
         self.admin = admin;
-    }
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
-pub enum DelegateActionType {
-    Delete,
-}
-
-#[account]
-pub struct DelegateAction {
-    pub delegate: Pubkey,
-    pub action: DelegateActionType,
-    pub expiry: i64,
-    pub nonce: u64,
-}
-
-impl DelegateAction {
-    pub const PREFIX: &'static str = "delegate_action";
-
-    pub fn get_size() -> usize {
-        8 + 32 + 1
     }
 }
 
@@ -139,10 +118,10 @@ impl Version {
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Eq, Debug, Clone)]
 pub enum DataV1 {
-    TextPost { title: String, uri: String, nsfw: bool },
-    ImagePost { title: String, uri: String, nsfw: bool },
-    LinkPost { title: String, uri: String, nsfw: bool },
-    VideoPost { title: String, uri: String, nsfw: bool },
+    TextPost { title: String, uri: String, flair: Option<String>, nsfw: bool, spoiler: bool },
+    ImagePost { title: String, uri: String, flair: Option<String>, nsfw: bool, spoiler: bool },
+    LinkPost { title: String, uri: String, flair: Option<String>, nsfw: bool, spoiler: bool },
+    VideoPost { title: String, uri: String, flair: Option<String>, nsfw: bool, spoiler: bool },
     Comment { post: Pubkey, parent: Option<Pubkey>, uri: String },
 }
 
