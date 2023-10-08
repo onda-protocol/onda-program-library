@@ -4,7 +4,7 @@ use mpl_bubblegum::program::Bubblegum;
 use mpl_token_metadata::instruction::approve_collection_authority;
 use onda_compression::state::LeafSchema;
 
-declare_id!("AwrdSLTcfNkVSARz8YoNYcVhknD7oxm7t3EqyYZ9bPK5");
+declare_id!("Awrdi1SPuntNpnm1hvDVDNsLnxg4zVotHsYF4FWNyaFj");
 
 pub const MAX_NAME_LENGTH: usize = 32;
 pub const MAX_SYMBOL_LENGTH: usize = 10;

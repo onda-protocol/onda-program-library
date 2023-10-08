@@ -20,7 +20,7 @@ use crate::{
 pub mod error;
 pub mod state;
 
-declare_id!("onda1FgCsQMC4zBhsjGjKoHDgGp6q7pK48HQaVXf28d");
+declare_id!("ondaTPaRbk5xRJiqje7DS8n6nFu7Hg6jvKthXNemsHg");
 
 pub const MAX_TITLE_LEN: usize = 300;
 pub const MAX_URI_LEN: usize = 128;
