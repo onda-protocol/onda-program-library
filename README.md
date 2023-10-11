@@ -3,11 +3,10 @@ On-chain community moderated forums
 
 ## Programs
 This project contains the following programs:
-- [onda_compression](https://github.com/onda-protocol/onda-program-library/tree/main/programs/onda-compression) `onda1FgCsQMC4zBhsjGjKoHDgGp6q7pK48HQaVXf28d`
-- [onda_namespace](https://github.com/onda-protocol/onda-program-library/tree/main/programs/onda-namespace) `ona67gSygPUkb34U5sgPZK7AkgXDJJrNoi5nrraEHvE`
-- [onda_awards](https://github.com/onda-protocol/onda-program-library/tree/main/programs/onda-awards) `AwrdSLTcfNkVSARz8YoNYcVhknD7oxm7t3EqyYZ9bPK5`
-- [onda_moderation](https://github.com/onda-protocol/onda-program-library/tree/main/programs/onda-moderation) (TBD)
-- [onda_profile](https://github.com/onda-protocol/onda-program-library/tree/main/programs/onda-profile) `ondapcq2qXTSynRieMCE9BjRsZ2XALEEZZunkwbhCPF`
+- [onda_compression](https://github.com/onda-protocol/onda-program-library/tree/main/programs/onda-compression) 
+- [onda_namespace](https://github.com/onda-protocol/onda-program-library/tree/main/programs/onda-namespace) 
+- [onda_awards](https://github.com/onda-protocol/onda-program-library/tree/main/programs/onda-awards) 
+- [onda_moderation](https://github.com/onda-protocol/onda-program-library/tree/main/programs/onda-moderation)
 
 ___
 
@@ -24,7 +23,4 @@ Onda Awards is built on top of Bubblegum and provides a simple interface for cre
 
 ### Onda Moderation
 Supports team member moderation of Onda Compression entries by setting the ForumConfig authority as the `Team` pda. Members can be added to a team with `Admin` or `Editor` roles.
-
-### Onda Profile 
-A simple and temporary program to allow users to set a username and a pfp. This program will eventually be deprecated and replaced by a shared social-graph.
 
