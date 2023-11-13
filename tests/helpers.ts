@@ -1,7 +1,12 @@
 import * as anchor from "@project-serum/anchor";
 import { keypairIdentity, Metaplex } from "@metaplex-foundation/js";
 import { PROGRAM_ID as METADATA_PROGRAM_ID } from "@metaplex-foundation/mpl-token-metadata";
-import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "@metaplex-foundation/mpl-bubblegum";
+import {
+  createCreateTreeInstruction,
+  createMintToCollectionV1Instruction,
+  MetadataArgs,
+  PROGRAM_ID as BUBBLEGUM_PROGRAM_ID,
+} from "@metaplex-foundation/mpl-bubblegum";
 import {
   getConcurrentMerkleTreeAccountSize,
   SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
@@ -416,4 +421,172 @@ export async function createAward(
     editionPda: masterEditionAddress,
     merkleTree: merkleTree.publicKey,
   };
+}
+
+export async function initBubblegumTree(
+  authority: anchor.web3.Keypair,
+  merkleTree: anchor.web3.Keypair
+) {
+  const maxDepth = 14;
+  const bufferSize = 64;
+  const canopyDepth = maxDepth - 3;
+  const treeAuthority = findTreeAuthorityPda(merkleTree.publicKey);
+  const space = getConcurrentMerkleTreeAccountSize(
+    maxDepth,
+    bufferSize,
+    canopyDepth
+  );
+  const lamports = await connection.getMinimumBalanceForRentExemption(space);
+  const allocTreeIx = anchor.web3.SystemProgram.createAccount({
+    lamports,
+    space: space,
+    fromPubkey: authority.publicKey,
+    newAccountPubkey: merkleTree.publicKey,
+    programId: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
+  });
+
+  const createTreeIx = createCreateTreeInstruction(
+    {
+      treeAuthority,
+      merkleTree: merkleTree.publicKey,
+      payer: authority.publicKey,
+      treeCreator: authority.publicKey,
+      logWrapper: SPL_NOOP_PROGRAM_ID,
+      compressionProgram: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
+    },
+    {
+      maxDepth: 14,
+      maxBufferSize: 64,
+      public: true,
+    }
+  );
+
+  let latestBlockhash = await connection.getLatestBlockhash();
+  const messageV0 = new anchor.web3.TransactionMessage({
+    payerKey: authority.publicKey,
+    recentBlockhash: latestBlockhash.blockhash,
+    instructions: [allocTreeIx, createTreeIx],
+  }).compileToV0Message();
+  const transaction = new anchor.web3.VersionedTransaction(messageV0);
+  transaction.sign([merkleTree, authority]);
+
+  try {
+    const signature = await connection.sendTransaction(transaction);
+    await connection.confirmTransaction({
+      signature,
+      ...latestBlockhash,
+    });
+  } catch (err) {
+    console.log(err);
+    throw err;
+  }
+}
+
+export async function initCollection(authority: anchor.web3.Keypair) {
+  const metaplex = new Metaplex(connection).use(keypairIdentity(authority));
+
+  const { mintAddress, masterEditionAddress, nft } = await metaplex
+    .nfts()
+    .create({
+      symbol: "ONDA",
+      name: "Onda",
+      uri: "https://example.com",
+      sellerFeeBasisPoints: 0,
+      isCollection: true,
+      collectionAuthority: authority,
+    });
+
+  await metaplex.nfts().approveCollectionAuthority({
+    mintAddress,
+    collectionAuthority: authority.publicKey,
+  });
+
+  const metadataPda = await metaplex
+    .nfts()
+    .pdas()
+    .metadata({ mint: mintAddress });
+  const collectionAuthorityRecordPda = await metaplex
+    .nfts()
+    .pdas()
+    .collectionAuthorityRecord({
+      mint: mintAddress,
+      collectionAuthority: authority.publicKey,
+    });
+
+  return {
+    mintAddress,
+    masterEditionAddress,
+    metadataPda,
+    collectionAuthorityRecordPda,
+  };
+}
+
+export async function mintToCollection(
+  collectionMint: anchor.web3.PublicKey,
+  merkleTree: anchor.web3.PublicKey,
+  authority: anchor.web3.Keypair,
+  owner: anchor.web3.PublicKey,
+  metadataArgs: MetadataArgs
+) {
+  const treeAuthority = findTreeAuthorityPda(merkleTree);
+  const metaplex = new Metaplex(connection).use(keypairIdentity(authority));
+
+  const collectionMetadata = await metaplex
+    .nfts()
+    .pdas()
+    .metadata({ mint: collectionMint });
+  const editionAccount = await metaplex
+    .nfts()
+    .pdas()
+    .edition({ mint: collectionMint });
+  const collectionAuthorityRecordPda = await metaplex
+    .nfts()
+    .pdas()
+    .collectionAuthorityRecord({
+      mint: collectionMint,
+      collectionAuthority: authority.publicKey,
+    });
+
+  const mintIx = createMintToCollectionV1Instruction(
+    {
+      merkleTree,
+      treeAuthority,
+      leafOwner: owner,
+      leafDelegate: owner,
+      payer: authority.publicKey,
+      treeDelegate: authority.publicKey,
+      collectionAuthority: authority.publicKey,
+      collectionAuthorityRecordPda,
+      collectionMint,
+      collectionMetadata,
+      editionAccount,
+      bubblegumSigner: findBubblegumSignerPda(),
+      logWrapper: SPL_NOOP_PROGRAM_ID,
+      compressionProgram: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
+      tokenMetadataProgram: METADATA_PROGRAM_ID,
+    },
+    {
+      metadataArgs,
+    }
+  );
+
+  let latestBlockhash = await connection.getLatestBlockhash();
+  const messageV0 = new anchor.web3.TransactionMessage({
+    payerKey: authority.publicKey,
+    recentBlockhash: latestBlockhash.blockhash,
+    instructions: [mintIx],
+  }).compileToV0Message();
+  const transaction = new anchor.web3.VersionedTransaction(messageV0);
+  transaction.sign([authority]);
+
+  try {
+    const signature = await connection.sendTransaction(transaction);
+    await connection.confirmTransaction({
+      signature,
+      ...latestBlockhash,
+    });
+  } catch (err) {
+    console.log(err);
+    throw err;
+  }
 }

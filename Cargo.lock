@@ -1492,6 +1492,7 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "gpl-session",
+ "mpl-bubblegum",
  "mpl-token-metadata",
  "spl-account-compression",
  "url",

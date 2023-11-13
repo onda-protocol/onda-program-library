@@ -7,6 +7,7 @@ use anchor_spl::token::{Mint, TokenAccount};
 use spl_account_compression::{
     program::SplAccountCompression, wrap_application_data_v1, Node, Noop,
 };
+use mpl_bubblegum::{state::leaf_schema, utils::get_asset_id, hash_metadata};
 use mpl_token_metadata::{
     state::Metadata,
     pda::find_metadata_account
@@ -15,7 +16,7 @@ use gpl_session::{SessionError, SessionToken, session_auth_or, Session};
 
 use crate::{
     error::OndaSocialError,
-    state::*,
+    state::{*, metaplex_adapter::*},
 };
 pub mod error;
 pub mod state;
@@ -97,6 +98,28 @@ pub struct AddEntry<'info> {
     #[account(mut)]
     /// CHECK: constrained by seeds
     pub merkle_tree: UncheckedAccount<'info>,
+    /// CHECK: verified in merkle tree
+    pub nft_merkle_tree: Option<UncheckedAccount<'info>>,
+    pub log_wrapper: Program<'info, Noop>,
+    pub compression_program: Program<'info, SplAccountCompression>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct AddEntryWithCompressedNft<'info> {
+    #[account(mut)]
+    pub author: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [merkle_tree.key().as_ref()],
+        bump,
+    )]
+    pub forum_config: Account<'info, ForumConfig>,
+    #[account(mut)]
+    /// CHECK: constrained by seeds
+    pub merkle_tree: UncheckedAccount<'info>,
+    /// CHECK: verified in merkle tree
+    pub nft_merkle_tree: UncheckedAccount<'info>,
     pub log_wrapper: Program<'info, Noop>,
     pub compression_program: Program<'info, SplAccountCompression>,
     pub system_program: Program<'info, System>,
@@ -276,7 +299,8 @@ pub mod onda_compression {
                     }
                 },
                 Rule::CompressedNft => {
-                    // TODO: Implement compressed nft gate
+                    msg!("Use add_entry_with_compressed_nft instruction for compressed nft gating");
+                    operation.result = false;
                 },
                 Rule::AdditionalSigner => {
                     if ctx.accounts.additional_signer.is_some() {
@@ -342,6 +366,143 @@ pub mod onda_compression {
         Ok(())
     }
 
+    pub fn add_entry_with_compressed_nft<'info>(
+        ctx: Context<'_, '_, '_, 'info, AddEntryWithCompressedNft<'info>>,
+        data: DataV1,
+        root: [u8; 32],
+        index: u32,
+        nonce: u64,
+        creator_hash: [u8; 32],
+        metadata_args: MetadataArgs,
+    ) -> Result<()> {
+        let author =  ctx.accounts.author.key();
+        let forum_config = &mut ctx.accounts.forum_config;
+        let forum_config_bump = *ctx.bumps.get("forum_config").unwrap();
+        let merkle_tree = &ctx.accounts.merkle_tree;
+        let log_wrapper = &ctx.accounts.log_wrapper;
+        let compression_program = &ctx.accounts.compression_program;
+
+        match data.clone() {
+            DataV1::TextPost { title, uri, flair, .. } => {
+                validate_flair(&forum_config, &flair)?;
+                validate_post_schema(&title, &uri)?;
+            },
+            DataV1::ImagePost { title, uri, flair, .. } => {
+                validate_flair(&forum_config, &flair)?;
+                validate_post_schema(&title, &uri)?;
+            },
+            DataV1::LinkPost { title, uri, flair, .. } => {
+                validate_flair(&forum_config, &flair)?;
+                validate_post_schema(&title, &uri)?;
+            },
+            DataV1::VideoPost { title, uri, flair, .. } => {
+                validate_flair(&forum_config, &flair)?;
+                validate_post_schema(&title, &uri)?;
+            },
+            DataV1::Comment { uri, .. } => {
+                require!(is_valid_url(&uri), OndaSocialError::InvalidUri);
+                require_gte!(MAX_URI_LEN, uri.len(), OndaSocialError::InvalidUri);
+            },
+        }
+
+        // Check if cNFT is valid gate
+        if metadata_args.collection.is_none() {
+            return err!(OndaSocialError::InvalidCollection);
+        }
+
+        let collection = metadata_args.collection.clone().unwrap();
+        let gates = forum_config.gate.clone();
+        let result = gates.iter().any(|gate| {
+            gate.address.iter().any(|a| a.eq(&collection.key)) &&
+            gate.rule_type == Rule::CompressedNft
+        });
+
+        if result == false {
+            return err!(OndaSocialError::Unauthorized);
+        }
+
+        let cpi_ctx = CpiContext::new(
+            ctx.accounts.compression_program.to_account_info(),
+            spl_account_compression::cpi::accounts::VerifyLeaf {
+                merkle_tree: ctx.accounts.nft_merkle_tree.to_account_info()
+            }
+        ).with_remaining_accounts(ctx.remaining_accounts.to_vec());
+        let asset_id = get_asset_id(&merkle_tree.key(), nonce);
+ 
+        let token_standard = if metadata_args.token_standard.is_some() {
+            Some(metadata_args.token_standard.unwrap().adapt())
+        } else {
+            None
+        };
+        let collection = if metadata_args.collection.is_some() {
+            Some(metadata_args.collection.unwrap().adapt())
+        } else {
+            None
+        };
+        let uses = if metadata_args.uses.is_some() {
+            Some(metadata_args.uses.unwrap().adapt())
+        } else {
+            None
+        };
+        let creators = metadata_args.creators.iter().map(|c| c.adapt()).collect::<Vec<_>>();
+        let data_hash = hash_metadata(&mpl_bubblegum::state::metaplex_adapter::MetadataArgs {
+            name: metadata_args.name,
+            symbol: metadata_args.symbol,
+            uri: metadata_args.uri,
+            seller_fee_basis_points: metadata_args.seller_fee_basis_points,
+            primary_sale_happened: metadata_args.primary_sale_happened,
+            is_mutable: metadata_args.is_mutable,
+            edition_nonce: metadata_args.edition_nonce,
+            token_standard: token_standard,
+            collection: collection,
+            uses: uses,
+            token_program_version: metadata_args.token_program_version.adapt(),
+            creators: creators,
+        })?;
+        let leaf = leaf_schema::LeafSchema::new_v0(
+            asset_id,
+            author.key(),
+            author.key(),
+            nonce,
+            data_hash,
+            creator_hash,
+        ).to_node();
+        spl_account_compression::cpi::verify_leaf(
+            cpi_ctx,
+            root,
+            leaf,
+            index
+        )?;
+        
+        let entry_id = get_entry_id(&merkle_tree.key(), forum_config.post_count);
+        let created_at = Clock::get()?.unix_timestamp;
+        let data_hash = keccak::hashv(&[&data.try_to_vec()?]);
+        let leaf = LeafSchema::new_v0(
+            entry_id,
+            author,
+            created_at,
+            None,
+            forum_config.post_count,
+            data_hash.to_bytes(),
+        );
+
+        wrap_application_data_v1(leaf.to_event().try_to_vec()?, log_wrapper)?;
+
+        append_leaf(
+            &merkle_tree.key(),
+            forum_config_bump,
+            &compression_program.to_account_info(),
+            &forum_config.to_account_info(),
+            &merkle_tree.to_account_info(),
+            &log_wrapper.to_account_info(),
+            leaf.to_node(),
+        )?;
+
+        forum_config.increment_post_count();
+
+        Ok(())
+    }
+ 
     pub fn delete_entry<'info>(
         ctx: Context<'_, '_, '_, 'info, DeleteEntry<'info>>,
         root: [u8; 32],

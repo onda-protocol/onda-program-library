@@ -13,6 +13,10 @@ pub enum OndaSocialError {
   InvalidFlair,
   #[msg("Insufficient post capacity")]
   InsufficientPostCapacity,
+  #[msg("Invalid collection")]
+  InvalidCollection,
+  #[msg("Invalid method")]
+  InvalidMethod,
   #[msg("Unauthorized")]
   Unauthorized,
 }

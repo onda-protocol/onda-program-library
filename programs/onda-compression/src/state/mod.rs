@@ -1,6 +1,9 @@
+pub mod metaplex_adapter;
+
 use anchor_lang::{prelude::*, solana_program::keccak};
 use borsh::{BorshDeserialize, BorshSerialize};
 use spl_account_compression::Node;
+
 
 pub const ENTRY_PREFIX: &str = "entry";
 pub const BASE_FORUM_CONFIG_SIZE: usize = 8 + 8 + 8 + 32 + 4;

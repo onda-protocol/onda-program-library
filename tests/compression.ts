@@ -6,11 +6,16 @@ import {
   SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
   SPL_NOOP_PROGRAM_ID,
 } from "@solana/spl-account-compression";
+import {
+  getLeafAssetId,
+  computeCompressedNFTHash,
+  computeCreatorHash,
+} from "@metaplex-foundation/mpl-bubblegum";
 import * as splToken from "@solana/spl-token";
 import * as anchor from "@project-serum/anchor";
 import * as helpers from "./helpers";
 
-describe("Compression", () => {
+describe.only("Compression", () => {
   it("Inits a forum", async () => {
     const admin = anchor.web3.Keypair.generate();
     const merkleTree = anchor.web3.Keypair.generate();
@@ -126,6 +131,111 @@ describe("Compression", () => {
       mintAddress,
       tokenAccount.address
     );
+  });
+
+  it.only("Gates entry to a cNFT collection", async () => {
+    const admin = anchor.web3.Keypair.generate();
+    const author = anchor.web3.Keypair.generate();
+    const nftMerkleTree = anchor.web3.Keypair.generate();
+    const forumMerkleTree = anchor.web3.Keypair.generate();
+    await helpers.requestAirdrop(admin.publicKey);
+    await helpers.requestAirdrop(author.publicKey);
+
+    const collection = await helpers.initCollection(admin);
+    const gate: helpers.Gate = {
+      amount: new anchor.BN(1),
+      address: [collection.mintAddress],
+      ruleType: {
+        compressedNft: {},
+      },
+      operator: {
+        or: {},
+      },
+    };
+    await helpers.initBubblegumTree(admin, nftMerkleTree);
+    await helpers.initForum(admin, forumMerkleTree, ["test"], [gate]);
+    const metadataArgs = {
+      name: "Test",
+      symbol: "TEST",
+      uri: "https://example.com",
+      sellerFeeBasisPoints: 500,
+      primarySaleHappened: true,
+      isMutable: false,
+      editionNonce: null,
+      tokenStandard: null,
+      collection: {
+        verified: true,
+        key: collection.mintAddress,
+      },
+      uses: null,
+      tokenProgramVersion: 0,
+      creators: [
+        {
+          address: admin.publicKey,
+          verified: true,
+          share: 100,
+        },
+      ],
+    };
+    await helpers.mintToCollection(
+      collection.mintAddress,
+      nftMerkleTree.publicKey,
+      admin,
+      author.publicKey,
+      metadataArgs
+    );
+    const assetId = await getLeafAssetId(
+      nftMerkleTree.publicKey,
+      new anchor.BN(0)
+    );
+    const creatorHash = computeCreatorHash(metadataArgs.creators);
+    const compressedNftHash = computeCompressedNFTHash(
+      assetId,
+      author.publicKey,
+      author.publicKey,
+      new anchor.BN(0),
+      metadataArgs
+    );
+    const merkleTreeAccount =
+      await ConcurrentMerkleTreeAccount.fromAccountAddress(
+        helpers.connection,
+        nftMerkleTree.publicKey
+      );
+    const proof = MerkleTree.sparseMerkleTreeFromLeaves(
+      [compressedNftHash],
+      merkleTreeAccount.getMaxDepth()
+    ).getProof(0);
+    console.log("assetId: ", assetId.toString());
+    console.log("hash: ", compressedNftHash);
+    console.log("proof: ", proof);
+
+    const program = await helpers.getCompressionProgram(author);
+    await program.methods
+      .addEntryWithCompressedNft(
+        {
+          textPost: {
+            title: "Hello World",
+            uri: "https://example.com",
+            flair: "test",
+            nsfw: false,
+            spoiler: false,
+          },
+        },
+        Array.from(proof.root),
+        0,
+        new anchor.BN(0),
+        Array.from(creatorHash),
+        metadataArgs
+      )
+      .accounts({
+        author: author.publicKey,
+        forumConfig: helpers.findForumConfigPda(forumMerkleTree.publicKey),
+        merkleTree: forumMerkleTree.publicKey,
+        nftMerkleTree: nftMerkleTree.publicKey,
+        logWrapper: SPL_NOOP_PROGRAM_ID,
+        compressionProgram: SPL_ACCOUNT_COMPRESSION_PROGRAM_ID,
+      })
+      .rpc();
   });
 
   it("Verifies an entry", async () => {
